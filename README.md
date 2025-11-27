@@ -22,7 +22,9 @@ Consists of small projects I did while taking DataCamp's 'Associate Data Analyst
 ## Completed Certifications
 
 DataCamp: [Professional Data Scientist in Python](https://www.datacamp.com/certificate/DS0022248383145)
+
 DataCamp: [Associate Data Scientist in Python](https://www.datacamp.com/certificate/DSA0011469658847)
+
 DataCamp: [SQL Associate](https://www.datacamp.com/certificate/SQA0012144135318)
 
 ## In Progress Certifications
