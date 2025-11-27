@@ -1,0 +1,121 @@
+\documentclass[12pt,oneside,letterpaper]{book}
+% \usepackage{natbib}
+\usepackage[french, english]{babel}  %support francais et anglais
+\usepackage[T1]{fontenc}
+% Pour utiliser des fichiers UTF-8
+\usepackage[utf8]{inputenc}
+\usepackage{times}
+\usepackage{mathptmx}
+%\usepackage[pdftex]{thumbpdf}
+\usepackage[mathscr]{euscript}
+\usepackage{xspace}
+\usepackage[final]{pdfpages}
+%\usepackage{subfigure}  %package for optimizing subfigures
+\usepackage{amsmath,esint,amssymb}
+\usepackage{lscape}  %for the landscape table
+\usepackage{caption}
+\usepackage{dcolumn}
+\usepackage{multicol}
+\usepackage{subcaption}
+\usepackage{threeparttable} %for footnotes within a table
+\usepackage{stackengine} %pour derives partielles bornee
+\usepackage{physics}
+\usepackage{xfrac}
+\usepackage{udem_these_eng} %package pour une th�se de l'UdeM en Francais
+
+\usepackage{longtable}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\usepackage{lscape} %change in landscape mode page
+\usepackage{epsfig}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{array}
+\usepackage{wrapfig}
+\usepackage{multirow}
+\usepackage{tabu}
+\usepackage{flafter}
+\usepackage{graphicx}
+%\usepackage{csquotes}
+%\usepackage[backend=biber,style=numeric,sorting=none,citationstyles=numeric-comp,autolang=other,maxnames=10]{biblatex}
+
+%\usepackage{url}
+\usepackage{doi}
+\usepackage{soul} % Enable strikthrough for text - JF
+%to prevent errors from the colour
+%\newcommand{\color}[2]{}
+\usepackage[export]{adjustbox}  % To automatically add numbering to subfigures...
+
+% remplir les champs...
+
+
+\Auteur{James}{Fraser}
+
+\President{M.}{Richard}{Leonelli}{Ph.D.}
+
+\Directeur{M.}{Andrea }{Bianchi}{Ph.D.}
+\CoDirecteur{M.}{William }{Witczak-Krempa}{Ph.D.}
+%omettre si il n'y a pas de codirecteur
+%\CoDirecteur{M.}{Mauris}{ Proin}{Ph.D.}
+
+\Membres{1}{M.}{Michel}{Côté}{Ph.D.}
+
+
+%Pour un doctorat, changer simplement \MSc par \PhD
+%titre: 15 mots, max. 175 caracteres
+\MSc{Broken Fermi Surface Symmetry Observed via Angle-Resolved Magnetoresistance Oscillations in Weyl-Kondo Candidate YbPdBi}
+    {}
+    {de Physique}
+   {Condensed Matter Physics}
+    {Automne}
+    {2024}
+
+% Cette commande definit \ell'espacement entre les lignes. Ceci permet
+% de reduire le nombre de pages pour les version preliminaires.
+% Pour la version finale, choisir entre 1.4 et 2, selon le gout.
+\setstretch{1.4}
+\begin{document}
+
+
+
+\setcounter{page}{1}
+ \PagesCouverture
+
+\include{abstract}
+\include{resume}
+
+\selectlanguage{english}
+% \tableofcontents
+\tabledesmatieres
+% Can just change the names of these in udem_these_eng.sty
+\listedestableaux
+
+\listedesfigures
+
+\listedesannexes
+
+\include{abbreviation}
+\include{notation}
+\include{dedicace}
+\include{thanks}
+% \include{preface}
+
+\debutchapitres
+\include{Chapter1}
+\include{Chapter2}
+\include{Chapter3}
+\include{Chapter4}
+\include{Chapter5}
+\include{Chapter6}
+
+
+% Changed biblio style
+\bibliographystyle{nserc}
+% \bibliographystyle{unsrt}
+\bibliography{references}
+% \bibliography{references_master}
+
+\include{Appendices}
+
+
+\end{document}

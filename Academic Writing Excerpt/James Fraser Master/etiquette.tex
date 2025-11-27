@@ -1,0 +1,34 @@
+% ----------------------------------------------------------------
+% LETTER Address
+% ----------------------------------------------------------------
+\documentclass[12pt,letterpaper]{article}
+%\usepackage{graphicx}
+\usepackage{labels}
+\usepackage[latin1]{inputenc}
+\usepackage[french, english]{babel}
+\numberoflabels=3  % changer pour le nombre d'etiquettes voulu
+\LabelCols=2%
+\LabelRows=5%
+\LeftBorder=2mm%
+\RightBorder=1mm%
+\TopBorder=14mm%
+\BottomBorder=11mm%
+%\LabelInfotrue \LabelSetup %\LabelGridtrue
+% ----------------------------------------------------------------
+\begin{document}
+
+%\addresslabel{tl \hfill tr \\ \vfill sdf \\ bl \hfill br }
+
+\addresslabel{\parbox{4in}{
+\begin{center}
+\textbf{Cras Semper Lorem nec Pede}\\ %titre de l'ouvrage
+\vspace{5mm}
+D�partement d'informatique et de recherche op\'erationnelle \\
+\vspace{5mm}
+Facult\'e des arts et des sciences \\
+\vspace{5mm}
+Duis Laciniat %auteur
+\end{center}}}
+
+\end{document}
+% ----------------------------------------------------------------

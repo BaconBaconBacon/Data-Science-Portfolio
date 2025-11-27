@@ -1,0 +1,339 @@
+\chapter{Angle-Resolved Magnetoresistance Oscillations}\label{CH:AMRO_main}
+
+% \subsection{Procedure}
+In this chapter, we present angle-resolved magnetoresistance oscillation (AMRO) data performed on single crystals of YbPdBi. The goal of this is to probe the symmetry of the material's Fermi surface. Shown in Fig.~\ref{fig:AMRO_geo} are the two rotational geometries that were used. On the left is the “perpendicular” geometry ($\perp$), where the current vector is held parallel to the \textit{y}-axis but is orthogonal to both the applied field and the plane of rotation. On the right is the “parallel” geometry  ($\parallel$), where the current vector is rotated through the plane of rotation and passes parallel to the applied magnetic field. Throughout this chapter, we will often refer to these two experimental geometries using the $\perp$ and $\parallel$ symbols, as well as their sample numbers. Sample Puck 11 refers to a puck wired up in the $\perp$ geometry, whereas Sample Puck 13 refers to a puck in the $\parallel$ geometry.\\
+
+All samples were grown in a Bi-flux and were prepared by spot welding gold wires onto the surface such that $I$ ran along the [100] crystal axis. Microscope sample puck photos and the crystal dimensions are presented in App.~\ref{app:puck_dims_photos}. \\
+
+\noindent  To obtain a data set at a given field strength $H$, one full rotation of resistivity measurements was taken at $ +H$ and then repeated at $-H$. These two data sets were then averaged together to account for unwanted Hall resistance contributions caused by small alignment errors in the sample mounting. Experimental temperatures were chosen to be primarily below the heavy fermion coherence temperatures found for $\mu_0 H \neq 0$~T via resistivity measurements (see Sec.~\ref{sec:resistivity}). This ensures that the material is in the heavy fermion state. Some measurements were taken above these temperatures for comparison. Magnetic field values $H$ were chosen to represent the range of accessible strengths. \\
+
+% \noindent \textbf{re-iterate benefits of AMRO for FS investigation. Can we also use it as a simpler means of eliminating current jetting for WSM candidates? The squeeze test requires a rather intricate wiring scheme, which can require significant time investment for graduate students who are inexperienced in wiring samples.}\\
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{Figures_Ch5_AMRO_Results/AMRO Experiment Geometries.pdf}
+    \caption[AMRO Experimental Geometries $\parallel$ and $\perp$]{Geometries of angle-resolved magnetoresistance oscillation (AMRO) experiments. On the left is the perpendicular geometry $\perp$, and on the right is the parallel geometry $\parallel$. The direction of the applied magnetic field $H$ is shown in blue, and the current vector $I$ is always directed along the [100] crystallographic direction. The rotation, traced by the red arc parametrized by $\theta$, occurs in the $xz$-plane.}
+    \label{fig:AMRO_geo}
+\end{figure}
+
+
+% \subsection{Sample Characteristics}
+
+% Despite extensive efforts to avoid misalignment of the current vector, it was not possible to totally avoid it with the tools available. Therefore, we measured the offsets
+% Parallel offsets: 12=$3.9^\circ$ ($(\cos(0^\circ)-\cos(3.9^\circ))/\cos(0^\circ) =0.23\%$ change in the $E\cdot B$ term, and 13=$2.6^\circ \sim 0.10\%$. These angles are the offset of the sample's current vector from the plane of rotation.  \\
+
+% \noindent Perpendicular offsets: 11= $90-89.328 =0.672^\circ$ offset from normal vector of the plane of rotation. 14= $2.06^\circ$ offset from the normal vector of the plane of rotation.\\
+
+% \noindent For a perfectly square cross-section, the ratio of demagnetization factors would be $D_{010}/D_{001}=1$. \\
+
+\noindent We will describe the AMRO symmetries as being $n$-fold, where $n$ is the number of times a pattern is repeated during a single revolution. Thus, within our terminology, a two-fold pattern is one that begins to repeat after $180^\circ$ of rotation; a four-fold rotation repeats after $90^\circ$. \\
+
+\noindent For the $\perp$ geometry, we expect the AMRO symmetry to reflect the symmetries of the Fermi surface, which itself reflects the symmetries of the unit cell. Based on the half-Heusler unit cell's rotational symmetry, we expect a two-fold oscillation to dominate the $\perp$ AMRO for YbPdBi. Previous $\perp$ AMRO measurements on the half-Heusler compounds HoPtBi~\cite{pavlosiuk_anomalous_2020, chen_anomalous_2023} and TbPtBi~\cite{chen_anisotropic_2023} have observed just such a two-fold symmetry to be dominant when the samples were in their normal metal phase. A transition from two-fold to four-fold symmetry was observed in AMRO data for TbPtBi~\cite{chen_anisotropic_2023}, and HoPtBi~\cite{chen_anomalous_2023}. \\ %$\perp$ AMRO data taken for LuPtBi where $I||\left[11\bar{2}\right]$ showed an $H$- and $T$-dependent transition between six-fold and two-fold symmetry~\cite{xu_angle_2017}. \\
+
+\noindent For the $\parallel$ geometry, we expect there to be a two-fold symmetry as well, but for different reasons. AMRO experiments require there to be a current to measure, which necessitates the application of an electric field. This electric field breaks the symmetry of the system, and it is for this reason that we expect there to be a two-fold symmetry in the AMRO data for this geometry. This two-fold symmetry for the $\parallel$ AMRO has been seen for DyPdBi for $2~\text{K} \leq T\leq 300~\text{K}$ at $\mu_0 H=14$~T~\cite{pavlosiuk_negative_2019} and for ScPtBi for$2~\text{K} \leq T\leq 300~\text{K}$  at $\mu_0 H=14$~T~\cite{pavlosiuk_magnetotransport_2021}.  \\
+
+
+\noindent Since the Yb$^{3+}$ ion possesses a strong magnetic moment, it was important to minimize the influence of demagnetization effects. We did so by preparing the samples by sanding them to maximize the squareness of their cross-section in the plane of rotation. The influence of these effects was eliminated quantitatively by checking the relationship between magnetoresistivity and magnetization (see App.~\ref{app:demag}).\\
+
+% \noindent An analysis demonstrating the minimal influence of demagnetization effects on the AMRO data can be found in App.~\ref{app:demag}, and microscope photos of the samples mounted to their pucks can be found in App.~\ref{app:puck_dims_photos}.\\
+%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%
+\section{AMRO Measurements}\label{sec:AMRO_measurements}
+
+Shown in Fig.~\ref{fig:actrot11_AMRO_full_grid} is a grid of AMRO data plotted in polar coordinates for Sample Puck 11 $\perp$. The oscillations are plotted as the percentage difference from the oscillation's mean resistivity~:
+\begin{equation}\label{eq:AMRO_radius}
+    \Delta\rho(H,T,\theta)=\left(\frac{\rho(H,T,\theta)-\bar\rho(H,T, \theta)}{\bar\rho(H,T, \theta)}\right)*100
+\end{equation} 
+\noindent where $\bar\rho(H,T,\theta)$ is the mean value of the oscillation. Each column and colour represents a different field strength $H$, increasing from $\mu_0H=0.5$~T at the leftmost column to $\mu_0H=9$~T at the rightmost. Each row represents a new temperature $T$, decreasing from $T=30$~K at the top row to $T=1.9$~K at the bottom row, indicated by the titles of each plot. Let us first examine the trends seen in the extremal oscillations. \\
+
+\noindent As we increase $H$ for the top row, the $T=30$~K data shows a noisy, possibly two-fold oscillation change into a small, clearly two-fold oscillation with minima and maxima that respect the symmetries of the unit cell. If we interpret the red $\mu_0H=0.5$~T as a two-fold oscillation, one may note that the lobes of the oscillation (and the positions of the maxima and minima) rotate counter-clockwise as $H$ increases, while the amplitudes of the oscillations increase by an order of magnitude.\\
+
+\noindent Following the oscillations of the leftmost and rightmost columns downwards, we can see they exhibit very different behaviours. For the $\mu_0H=0.5$~T column, we can see that the noise decreases with decreasing temperature. At $T=1.9$~K, we can clearly observe a two-fold oscillation comparable to the one present along the top row, which appears to be rotated by about $45^\circ$ with respect to what we would expect from the unit cell. For the $\mu_0H=9$~T column on the right, the oscillation dramatically shifts from the expected two-fold symmetry to a four-fold symmetry at or near $T=10$~K. Between $T=30$~K and $T=10$~K, the lobes of the oscillation appear to rotate counter-clockwise. At $T=1.9$~K, the apparent angular offset of the rotation is qualitatively similar to that of $T=30$~K. The amplitudes of the oscillations exhibit a strong $T$-dependence as well. We again see an increase in the amplitude by an order of magnitude for $\mu_0H=0.5$~T. Most notably, the amplitudes increase by two orders of magnitude for $\mu_0H=9$~T, reaching about $10$~\% of the mean resistivity by $T=5$~K. \\
+
+\noindent Following the bottom row at $T=1.9$~K, we note that the four-fold symmetry itself exhibits a dependence on $H$. Not only does the symmetry of the oscillation change at weaker fields, but we can see at this $T$ that the rounded lobes at $\mu_0H=3$~T sharpen and distort as the field is increased to $\mu_0H=9$~T. We again see the amplitude increase by about two orders of magnitude as $H$ is increased at this $T$. \\
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{Figures_Ch5_AMRO_Results/Polar Plots/ACTRot11 AMRO Polar Grid Full Temps.pdf}
+    \caption[Grid of Sample Puck 11 $\perp$ Polar Plots]{Polar plots of AMRO data from Sample Puck 11 $\perp$. The magnetic field strengths vary by column: (Red) $\mu_0H=0.5$~T; (Green) $\mu_0H=3$~T; (Orange) $\mu_0H=7$~T; (Blue) $\mu_0H=9$~T. The temperatures vary by row. %and include $T\in \{30~\text{K}, 15~\text{K}, 10~\text{K}, 5~\text{K}, 2~\text{K}, 1.9~\text{K}\}$. 
+    Each column is labelled by $H$ and each row is labelled by $T$.  Rotations are shown relative to $H\perp I=0^\circ$, and the radial units were calculated according to Eqn.~\ref{eq:AMRO_radius}.}
+    \label{fig:actrot11_AMRO_full_grid}
+\end{figure}
+
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{Figures_Ch5_AMRO_Results/Polar Plots/ACTRot13 AMRO Polar Grid Full temps.pdf}
+    \caption[Grid of Sample Puck 13 $\parallel$ Polar Plots]{Polar plots of AMRO data from Sample Puck 13 $\parallel$. The magnetic field strengths vary by column: (Red) $\mu_0H=0.5$~T; (Green) $\mu_0H=3$~T; (Orange) $\mu_0H=7$~T; (Blue) $\mu_0H=9$~T. The temperatures vary by row. %and include $T\in \{30~\text{K}, 15~\text{K}, 10~\text{K}, 5~\text{K}, 2~\text{K}, 1.9~\text{K}\}$. 
+    Each column is labelled by $H$ and each row is labelled by $T$. Rotations are shown relative to $H\perp I=0^\circ$, and the radial units were calculated according to Eqn.~\ref{eq:AMRO_radius}.}
+    \label{fig:actrot13_AMRO_full_grid}
+\end{figure}
+
+
+\noindent  Similar results found for Sample Puck 13 $\parallel$ are plotted in Fig.~\ref{fig:actrot13_AMRO_full_grid}. The temperature ranges from $T=60$~K along the top row (above the coherence temperature $T^*$) to $T=1.9$~K along the bottom row. The columns and colours again correspond to the magnetic field strengths $H$. Overall, the data is much less noisy than for Sample Puck 11 $\perp$. The cause of noise in the $\perp$ data was likely imperfect wiring. The rotational symmetry is two-fold in the majority of this data. Once again, this switches to four-fold as $H$ is increased at lower $T$. It no longer appears that the switch from one symmetry to another suppresses the oscillations during the transition. If one views the data along the green $\mu_0H=3$~T column, the oscillation at $T=5$~K shows what appears to be a step in the smooth deformation from the two-fold symmetry at $T=10$~K to the four-fold symmetry at $T=2$~K. \\
+
+
+\noindent The four-fold symmetry is unexpected for both geometries. It reflects neither the symmetries of the YbPdBi unit cell nor the influence of the electric field. As well, the positions of the maxima of the oscillations exhibit a $T$- and $H$-dependent rotation. There appears to be a strong correlation between the amplitude of the oscillation and with decreasing $T$ or increasing $H$. Based on the data taken at $\mu_0H=9$~T and $T=10$~K, the oscillation as a whole appears to be suppressed while the symmetry changes. The rotational symmetry of the magnetoresistivity appears to be isotropic. AMRO data at orientations between $\perp$ and $\parallel$ could verify this. We will next try to quantify these behaviours by taking the Fourier transform of the AMRO data.\\
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%
+\section{AMRO Fourier Transforms}
+
+
+To facilitate curve fitting of the AMRO data, a set of rotational symmetries was extracted using Fourier transforms (FTs) with each oscillation. An example of this is shown in Fig.~\ref{fig:FT_ACTRot13} for Sample Puck 13 $\parallel$. The right column of each figure shows the AMRO oscillation, and the left column shows the results of the FT. The strength of the rotational symmetry is presented relative to that of the strongest symmetry. Fig.~\ref{fig:FT_ACTRot13_3T} shows the transition across $T$ for $\mu_0H=3$~T, while Fig.~\ref{fig:FT_ACTRot13_5K} shows the transition across $H$ for $T=5$~K.\\
+
+\noindent We observed the presence of symmetries beyond the two-fold and four-fold that were visible. A six-fold symmetry is present in each oscillation except for $\mu_0H=3$~T at $T=2$~K. A weaker eight-fold symmetry is present, most visibly at higher $H$. These additional symmetries will be accounted for during the best-fit process. Additional symmetries are visible in many of the FTs, including a 12-fold symmetry that appears to be stronger than the background noise. See App.~\ref{app:amro_FT_grids} for grids of Fourier transforms of the AMRO data plotted similarly to Fig.~\ref{fig:actrot11_AMRO_full_grid} and Fig.~\ref{fig:actrot13_AMRO_full_grid}.\\
+
+
+% \begin{figure}[H]
+%     \centering
+%     \begin{subfigure}[t]{0.01\textwidth}
+%         \textbf{a)}
+%     \end{subfigure}    
+%     \centering
+%     \begin{subfigure}[t]{0.45\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/nice ACTRot13 FT plot at H = 3T.pdf}
+%     \end{subfigure}
+%   \centering
+%     \begin{subfigure}[t]{0.01\textwidth}
+%         \textbf{b)}
+%     \end{subfigure}    
+%     \centering
+%     \begin{subfigure}[t]{0.45\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/nice ACTRot13 FT plot at T=5K.pdf}
+%     \end{subfigure}
+%     \caption[AMRO Fourier Transform Examples]{Example Fourier transform results for Sample Puck 13 $\perp$. (a) $T$ increases from top to bottom for $\mu_0H=3$~T, (b) $H$ increases from top to bottom for $T=5$~K. Fourier transform amplitudes are shown as a fraction of the strongest symmetry. The vertical units of each AMRO plot were calculated according to Eqn.~\ref{eq:AMRO_radius}.}
+%     \label{fig:FT_ACTRot13}
+% \end{figure}
+
+
+\begin{figure}[h]
+    \centering
+        \includegraphics[width=\linewidth]{Figures_Ch5_AMRO_Results/nice ACTRot13 FT plot at H = 3T.pdf}
+    \caption[AMRO Fourier Transform Examples for $\mu_0H=3$~T]{Example Fourier transform results for Sample Puck 13 $\perp$ for $\mu_0H=3$~T. $T$ increases from top to bottom. Fourier transform amplitudes are shown as a fraction of the strongest symmetry. The vertical units of each AMRO plot were calculated according to Eqn.~\ref{eq:AMRO_radius}.}
+    \label{fig:FT_ACTRot13_3T}
+\end{figure}
+
+
+\begin{figure}[h]
+    \centering
+        \includegraphics[width=\linewidth]{Figures_Ch5_AMRO_Results/nice ACTRot13 FT plot at T=5K.pdf}
+    \caption[AMRO Fourier Transform Examples for $T=5$~K]{Example Fourier transform results for Sample Puck 13 $\perp$ for $T=5$~K. $H$ increases from top to bottom. Fourier transform amplitudes are shown as a fraction of the strongest symmetry. The vertical units of each AMRO plot were calculated according to Eqn.~\ref{eq:AMRO_radius}.}
+    \label{fig:FT_ACTRot13_5K}
+\end{figure}
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{AMRO Best Fits}
+
+Based on the results of the FTs, we decided to perform best-fits of the AMRO data using only two-, four-, six-, and eight-fold symmetries. Additionally, each of these symmetries had to have a normalized amplitude of $0.2$ in their respective FTs and be one of the five strongest symmetries. This was imposed to exclude the symmetries that are less dominant, which could be interpreted as noise. We found that the aforementioned symmetries, subject to such restrictions, were sufficient to describe the AMRO data. Strengthening the restrictions and/or reducing the number of symmetries used worsened the fit results.\\
+
+\noindent Fits of the AMRO data were performed using a function of the form~:
+\begin{equation}\label{eq:AMRO_sym_eqn}
+\rho_{AMRO}\left(H, T, \theta\right) = \bar{\rho}(H,T,\theta)\left( 1+\sum_{n\in\{2,4,6,8\}} a_n\sin(n\theta +\phi_n)\right)
+\end{equation}
+\noindent where $\theta$ is the sample position relative to $H\perp I$, $n$ is one of the set of symmetries being fitted, $a_n$ represents the relative strength of each symmetry contribution, and $\phi_n$ is a phase offset. $\bar{\rho}(H,T)$ is an average across $\theta$ of the resistivity of the oscillation. The initial guesses for the fitted parameters of each oscillation were taken from their respective FTs. Qualitatively speaking, the macroscopic behaviour of the AMRO data is well-represented by Eqn.~\ref{eq:AMRO_sym_eqn}.\\
+%In the interest of conciseness, we present here a representative subset which demonstrates the fidelity of the fits; the full set of fits may be found in App.~\ref{app:fitted_AMRO_app}. \\
+
+% \noindent Shown in Fig.~\ref{fig:AMRO_ACTRot11_Best_fit_slice_1p9K} is a representative selection of best fits for Sample Puck 11 at $T=1.9$~K. Shown in Fig.~\ref{fig:AMRO_ACTRot13_Best_fit_slice_1p9K} is a representative selection of best fits for Sample Puck 13 taken at $T=1.9$~K. for both sample geometries, the data is well captured by the best fits. The fits do not fully capture the warping and sharpening of the four-fold symmetries at $T=7$~T and $T=9$~T. Nonetheless, it is clear that Eqn.~\ref{eq:AMRO_sym_eqn} adequately represents the two-fold and four-fold oscillations.\\
+
+
+\noindent Shown in Fig.~\ref{fig:fitted_actrot11_4x4grid} are the best fits of Sample Puck 11 $\perp$. Although there is good agreement between the measurements and their fits, there are a few minor issues with the fit quality. Noise is being fitted at smaller values of $H$, and the fits do not fully capture the sharpening of the waveforms at $\mu_0H=7$~T and $\mu_0H=9$~T at the lowest $T$.  Smaller features, such as the sharp peaks near $135^\circ$ at $T=5$~K when $\mu_0H=7$~T and $\mu_0H=9$~T are not captured. When viewing the blue $\mu_0H=9$~T column on the right, the data taken as the oscillation transitions from two-fold to four-fold is not well described by Eqn.~\ref{eq:AMRO_sym_eqn}, and the fit quality is comparable to those for the noisy $\mu_0H=0.5$~T fits. The symmetries used for fitting are listed in Table~\ref{tab:actrot11_fitted_sym}. Any unlisted oscillations were fitted with all four symmetries mentioned above. \\
+
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{Figures_Appendices/AMRO raw petals and fits app/AMRO ACTRot11 JF038 Best Fit Grid.pdf}
+    \caption[AMRO Fits for Sample Puck 11 $\perp$]{Angle-resolved magnetoresistance oscillations (AMRO) data from Sample Puck 11 $\parallel$ fitted with Eqn.~\ref{eq:AMRO_sym_eqn}. Colouring corresponds to field strengths: (Red) $\mu_0H=0.5$~T; (Green) $\mu_0H=3$~T; (Orange) $\mu_0H=7$~T; (Blue) $\mu_0H=9$~T.}
+    \label{fig:fitted_actrot11_4x4grid}
+\end{figure}
+
+
+
+\begin{table}[]
+    \centering
+    \begin{tabular}{c|c|c}
+    H (T) & T (K) & Fitted Symmetries $n$ \\\hline
+        & 5     & 2, 4, 6             \\
+    0.5   & 15    & 2                 \\
+          & 30    & 2, 4, 6           \\\hline
+          & 5     & 2, 4, 6           \\
+    3     & 10    & 2, 4, 6           \\
+          & 30    & 2, 4, 6           \\\hline
+          & 1.9   & 4, 6, 8           \\
+     7     & 5     & 2, 4, 6           \\
+         & 10    & 2, 6, 8           \\
+          & 30    & 2, 4, 6           \\\hline
+    9     & 30    & 2, 4, 6          
+    \end{tabular}
+    \caption[Fitted Symmetries for Sample Puck 11 $\perp$]{Symmetries used for fits of Sample Puck 11 $\perp$ AMRO data using Fig.~\ref{fig:fitted_actrot11_4x4grid}. For $H$ and $T$ values not shown here, all symmetries in $n\in\{2, 4, 6, 8\}$ were included in the fits. }
+    \label{tab:actrot11_fitted_sym}
+\end{table}
+
+\noindent All oscillations for Sample Puck 13 $\parallel$ were fitted using two-, four-, six-, and eight-fold symmetries, except for $\mu_0H=9$~T at $T=10$~K where the eight-fold symmetry was omitted. The macroscopic behaviour data is again well-described by Eqn.~\ref{eq:AMRO_sym_eqn}, as shown in Fig.~\ref{fig:fitted_actrot13_4x4grid}. The reduced noise lets the two-fold oscillations for the red $\mu_0H=0.5$~T column be better fitted. Once again, the fits capture the macroscopic qualities of each oscillation but fail for details like the sharpness of certain peaks. The reduced noise of these data sets also allows the fits to capture the symmetry transition, as can be seen along the blue $\mu_0H=9$~T column. \\
+
+\begin{figure}[h]
+   \centering
+   \includegraphics[width=\linewidth]{Figures_Appendices/AMRO raw petals and fits app/AMRO ACTRot13 JF039 Best Fit Grid.pdf}
+   \caption[AMRO Fits for Sample Puck 13 $\parallel$]{Angle-resolved magnetoresistance oscillations (AMRO) data from Sample Puck 13 $\parallel$ fitted with Eqn.~\ref{eq:AMRO_sym_eqn}. Colouring corresponds to field strengths: (Red) $\mu_0H=0.5$~T; (Green) $\mu_0H=3$~T; (Orange) $\mu_0H=7$~T; (Blue) $\mu_0H=9$~T.}
+   \label{fig:fitted_actrot13_4x4grid}
+\end{figure}
+
+% \begin{figure}[H]
+%     \centering
+%     \begin{subfigure}[t]{0.49\textwidth}
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot11 best fit slice 15.0K 7T.pdf}
+%     \end{subfigure}    
+%     \centering
+%     \begin{subfigure}[t]{0.49\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot11 best fit slice 10.0K 7T.pdf}
+%     \end{subfigure}
+%   \centering
+%     \begin{subfigure}[t]{0.49\textwidth}
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot11 best fit slice 5.0K 7T.pdf}
+%     \end{subfigure}    
+%     \centering
+%     \begin{subfigure}[t]{0.49\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot11 best fit slice 2.0K 7T.pdf}
+%     \end{subfigure}
+%     \centering
+%     \begin{subfigure}[t]{0.49\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot11 best fit slice 1.9K 7T.pdf}
+%     \end{subfigure}
+%     \caption[Example $\parallel$ AMRO Fits at $\mu_0H=7$~T]{Example AMRO data from Sample Puck 11 of the $\perp$ geometry, fitted with Eqn.~\ref{eq:AMRO_sym_eqn}. For this data, $\mu_0H=7$~T and the transition from two-fold symmetry to four-fold symmetry as the temperature is lowered is clearly visible.}
+%     \label{fig:AMRO_ACTRot11_Best_fit_slice_7T}
+% \end{figure}
+
+% \begin{figure}[H]
+%    \centering
+%     \begin{subfigure}[t]{0.49\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot11 best fit slice 1.9K 0.5T.pdf}
+%     \end{subfigure}
+%   \centering
+%     \begin{subfigure}[t]{0.49\textwidth}
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot11 best fit slice 1.9K 3T.pdf}
+%     \end{subfigure}    
+%     \centering
+%     \begin{subfigure}[t]{0.49\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot11 best fit slice 1.9K 7T.pdf}
+%     \end{subfigure}
+%     \centering
+%     \begin{subfigure}[t]{0.49\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot11 best fit slice 1.9K 9T.pdf}
+%     \end{subfigure}
+%     \caption[Example $\perp$ AMRO Fits at $T=1.9$~K]{Example AMRO data from Sample Puck 11 of the $\perp$ geometry at $T=1.9$~K, fitted with Eqn.~\ref{eq:AMRO_sym_eqn}.}
+%     \label{fig:AMRO_ACTRot11_Best_fit_slice_1p9K}
+% \end{figure}
+
+% % \begin{figure}[H]
+% %     \centering
+% %     \begin{subfigure}[t]{0.49\textwidth}
+% %         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot13 best fit slice 15.0K 7T.pdf}
+% %     \end{subfigure}    
+% %     \centering
+% %     \begin{subfigure}[t]{0.49\textwidth}  
+% %         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot13 best fit slice 10.0K 7T.pdf}
+% %     \end{subfigure}
+% %   \centering
+% %     \begin{subfigure}[t]{0.49\textwidth}
+% %         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot13 best fit slice 5.0K 7T.pdf}
+% %     \end{subfigure}    
+% %     \centering
+% %     \begin{subfigure}[t]{0.49\textwidth}  
+% %         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot13 best fit slice 2.0K 7T.pdf}
+% %     \end{subfigure}
+% %     \centering
+% %     \begin{subfigure}[t]{0.49\textwidth}  
+% %         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot13 best fit slice 1.9K 7T.pdf}
+% %     \end{subfigure}
+% %     \caption[Example $\parallel$ AMRO Fits at $\mu_0H=7$~T]{Example AMRO data from Sample Puck 13 of the $\parallel$ geometry, fitted with Eqn.~\ref{eq:AMRO_sym_eqn}. For this data, $\mu_0H=7$~T and the transition from two-fold symmetry to four-fold symmetry as the temperature is lowered is clearly visible.}
+% %     \label{fig:AMRO_ACTRot13_Best_fit_slice_7T}
+% % \end{figure}
+
+% \begin{figure}[H]
+%    \centering
+%     \begin{subfigure}[t]{0.49\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot13 best fit slice 1.9K 0.5T.pdf}
+%     \end{subfigure}
+%   \centering
+%     \begin{subfigure}[t]{0.49\textwidth}
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot13 best fit slice 1.9K 3T.pdf}
+%     \end{subfigure}    
+%     \centering
+%     \begin{subfigure}[t]{0.49\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot13 best fit slice 1.9K 7T.pdf}
+%     \end{subfigure}
+%     \centering
+%     \begin{subfigure}[t]{0.49\textwidth}  
+%         \includegraphics[width=\linewidth, valign=t]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/AMRO ACTRot13 best fit slice 1.9K 9T.pdf}
+%     \end{subfigure}
+%     \caption[Example $\parallel$ AMRO Fits at $T=1.9$~K]{Example AMRO data from Sample Puck 13 of the $\parallel$ geometry at $T=1.9$~K, fitted with Eqn.~\ref{eq:AMRO_sym_eqn}.}
+%     \label{fig:AMRO_ACTRot13_Best_fit_slice_1p9K}
+% \end{figure}
+
+
+\subsection{Symmetry Amplitudes}
+
+Shown in Fig.~\ref{fig:AMRO_best_fit_amp_dependencies_13_11} are the two-fold ($a_2$), four-fold ($a_4$), six-fold ($a_6$), and eight-fold ($a_8$) symmetry amplitudes of the fits of Eqn.~\ref{eq:AMRO_sym_eqn} to the AMRO data. These amplitudes are shown as a percentage of each oscillation's mean resistivity, $\bar\rho(H,T,\theta)$. The left column shows the amplitudes for Sample Puck 11 $\perp$, and the right column shows Sample Puck 13 $\parallel$. For Sample Puck 13 $\parallel$, the symmetry amplitudes for $T=60$~K are omitted due to their similarity with those for $T=20$~K. The vertical error bars represent the standard deviation of each fit parameter. For plots of the $T$-dependence of the symmetry amplitudes in terms of absolute change of resistivity and plots of the associated phase shifts $\phi_n$, see App.~\ref{app:fitted_AMRO_app}. The symmetry amplitudes for symmetries omitted according to the exclusion criteria given in the previous section have been set to zero in the graphs.\\
+
+\noindent Overall, the behaviour of the symmetry amplitudes is quite similar for both sample geometries. Almost all symmetry amplitudes grow as $T$ is lowered and as $H$ is increased. At $\mu_0H=0.5$~T, the symmetry amplitudes are negligible, except for $a_2$ in the $\perp$ geometry. For both geometries, $a_4$ grows much more than the other amplitudes, which is evident in the previous AMRO figures. This quantifies how the four-fold symmetry begins to dominate over the other symmetries.\\
+
+\noindent Notably, for Sample Puck 11 $\perp$, all symmetry amplitudes except for $a_4$ drop significantly at $T=1.9$~K. This sharp reduction does not occur for Sample Puck 13 $\parallel$. For Sample Puck 13 $\parallel$ at $\mu_0H=3$~T, $a_2$ breaks the general trends, dipping below the $\mu_0H=0.5$~T data points as $T$ is lowered. Further, $a_2$ is the only symmetry amplitude which exhibits a non-negligible amplitude at $\mu_0H=0.5$~T, showing a fairly constant contribution at all $H$ and $T$ for the $\parallel$ geometry.\\
+
+
+
+\begin{figure}[h]
+    \includegraphics[width=\linewidth]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/YbPdBi, best fit Amp Plot, actrot11 actrot13, sym combined.pdf}
+    \caption[AMRO Symmetry Amplitudes]{Symmetry amplitudes from best fits of Eqn.~\ref{eq:AMRO_sym_eqn} to angle-resolved magnetoresistance oscillation (AMRO) data for Sample Puck 11 $\perp$ and Sample Puck 13 $\parallel$. Amplitudes are plotted as a percentage of each oscillation's mean resistivity, $\bar\rho(H,T)$. The vertical error bars correspond to the standard deviations of the fits. Amplitudes for Sample Puck 13 $\parallel$ at $T=60$~K are omitted due to similarity with the values at $T=20$~K.}\label{fig:AMRO_best_fit_amp_dependencies_13_11}
+\end{figure}
+
+
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=\linewidth]{Figures_Ch5_AMRO_Results/AMRO Fitted Plots/YbPdBi, best fit phase Plot, actrot11 actrot13, sym combined.pdf}
+%     \caption{Phases of best fit plotted, error bars given by the standard deviation provided by the fit.}
+%     \label{fig:AMRO_best_fit_phase_dependencies_13_11}
+% \end{figure}
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Symmetry Discussion} 
+
+
+The observed four-fold AMRO symmetry reflects neither the two-fold symmetry of the unit cell (associated with the $\perp$ geometry) nor the two-fold symmetry due to the electric field (associated with the $\parallel$ geometry). Per the discussion in Sec.~\ref{sec:fermiology}, this suggests that the FS is potentially changing its shape. We can conclude that this symmetry change is induced by $H$ because the symmetry amplitudes grow with increasing $H$. Only the two-fold symmetry amplitudes are present for $\mu_0H=0.5$~T, but the other symmetry amplitudes grow with $H$. 
+
+
+
+
+% \noindent If we view the AMRO data within an analogy to sound waves, we can view the two-fold and four-fold oscillations each as a fundamental frequency. Thus, at least some of the observed four-fold symmetry would be an overtone of the two-fold symmetry, and the eight-fold symmetry would be an overtone for both the two-fold and four-fold symmetries. The six-fold symmetry would not be analogous to a beat frequency since a beat frequency is the difference of two frequencies rather than their sum. The six-fold symmetry would therefore have to be treated as a fundamental frequency and so have an origin independent of the other symmetries.\\
+
+
+
+% %%%%% higher symmetries %%%%%
+% \noindent An interesting thought is that the change in symmetry stems from a competition between the neighbours of YbPdBi, and their interactions with the magnetic moment of the Yb$^{3+}$ ion. Shown in Fig.~\ref{fig:2_sym_example}a is an octahedron connecting the yellow bismuth (Bi) atoms nearest the purple ytterbium (Yb) atom. Shown in Fig.~\ref{fig:2_sym_example}b are four tetrahedrons surrounding grey palladium (Pd) atoms which are themselves arranged tetrahedronally around the Yb atom. As one can see, the octahedron has a four-fold rotational symmetry, while the tetrahedrons have a two-fold rotational symmetry. \\
+
+
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=\linewidth]{Figures_Ch4_Synth_Charac/Half heusler Sublattice Symmetry.pdf}
+%     \caption[Sublattice Rotational Symmetries]{Sublattice symmetries within the unit cell of YbPdBi, where purple shows the magnetic ytterbium (Yb) atoms, yellow shows the bismuth (Bi) atoms, and grey are the palladium (Pd) atoms. (a) Octahedron connecting the Bi atoms nearest to the central Yb atom. (b) Tetrahedrons arranged in a tetrahedron, each surrounding one of the Pd atoms that are nearest to the central Yb atom. Figure adapted from~\cite{mikaeilzadeh_electronic_2019}. }
+%     \label{fig:2_sym_example}
+% \end{figure}
+

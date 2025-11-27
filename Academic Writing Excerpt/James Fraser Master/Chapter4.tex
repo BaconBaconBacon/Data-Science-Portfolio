@@ -1,0 +1,175 @@
+\chapter{Evidence for Weyl semimetal Behaviour in Magnetotransport Measurements}\label{ch:topology}
+% TODO:
+% \begin{enumerate}
+%     \item re-check the units for the chiral fits
+%     \item fix the chiral fitting $\sigma_0 =/= 1/\rho_0$...?
+%     \item Make the language be a bit more firm regarding the non-trivial topology for YbPdBi
+% \end{enumerate}
+
+
+In this section, we use magnetotransport measurements to check for the presence of a chiral anomaly. Evidence of a chiral anomaly is necessary to consider a material a candidate Weyl semimetal (WSM). Observation of such chiral behaviour would make YbPdBi a candidate Weyl-Kondo semimetal (WKSM), which is a fairly new class of material that exhibits both heavy fermion behaviour and the non-trivial topology of a WSM. Recall that we were able to extract a topological Hall effect (THE) term from the transverse resistivity $\rho_{xy}(H)$ in Sec.~\ref{sec:hall_AHE_THE}.\\
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Evidence of the Chiral Anomaly in Magnetoconductance $\sigma_{xx}(H)$}\label{sec:chiral_mc}
+
+Due to the possibility that YbPdBi exhibits Weyl semimetal (WSM) behaviour (see Sec.~\ref{sec:YbPdBi_WSM_candidacy}), the magnetoconductance $\sigma_{xx}(H)$ was examined for signs of the chiral anomaly (CA) associated with Weyl nodes. The CA is briefly discussed in Sec.~\ref{sec:WSM_exp_signatures}. For these experiments, the sample of YbPdBi is mounted such that the current vector $I$ sweeps through the plane of rotation: $H\perp I$ corresponds to $0^\circ$ whereas $H||I $ corresponds to  $90^\circ$.  We assume the off-diagonal terms of the resistivity tensor are sufficiently small such that we may set $\sigma_{xx}(H, T) = \rho^{-1}_{xx}(H, T)$. We closely mimic a previous analysis performed by Guo \emph{et al}.~\cite{guo_evidence_2018}, who found evidence of Kondo-Weyl semimetal (WKSM) behaviour in the isostructural compound YbPtBi. \\
+
+\noindent When $H$ is parallel to the current $I$ in a WSM, the CA manifests as a large, positive change in $\sigma_{xx}(H)$ with a quadratic dependence on $H$~\cite{son_chiral_2013}. Experimentally, this has been probed using an equation that considers contributions due to WAL effects and the normal conduction bands~\cite{ kim_dirac_2013, huang_observation_2015}~:
+\begin{align}\label{eq:MC_chiral}
+    \sigma_{xx}(H) &= (1+c_aH^2)\sigma_{WAL}+\sigma_N\\
+    \sigma_{WAL} &= \sigma_0+a\sqrt{H}\\
+    \sigma_N^{-1} &= \rho_0 + AH^2
+\end{align}
+\noindent where $c_a$ is a positive value called the chiral coefficient, $\sigma_{WAL}$ is the contribution due to WAL effects~\cite{bergmann_weak_nodate}, and $\sigma_N$ is the contribution from trivial bands near the Fermi energy~\cite{pippard_magnetoresistance_1989, kittel_introduction_2005}. $\rho_0 = 1/\sigma_0$ is the zero-field resistivity, which we treated as a fit parameter along with $a$ and $A$. This quadratic behaviour is expected to fall off as $I$ is rotated away from $H$.\\
+
+
+
+\noindent Shown in Fig.~\ref{fig:chiral_MC_unsym} is $\sigma_{xx}(H)$ for YbPdBi at a range of temperatures and sample orientation angles. For these measurements, we used Sample Puck 12 $||$, for which the dimensions and microscope photos can be found in App.~\ref{app:puck_dims_photos}. The asymmetry of the data is due to a misalignment of approximately $3.9^\circ$ away from the plane of rotation. This will be dealt with by symmetrizing the data. As seen previously in Sec.~\ref{sec:magnetoresistivity}, WAL effects appear in zero-field and are overwhelmed by a large positive magnetoconductance. The magnetoconductance appears to increase quadratically, the strength of which grows as $T$ is lowered. The data for $T=2$~K behaves differently at small $H$, showing a dip near zero-field rather than a peak from the rest, showing saturating behaviour at high field strengths and a dip near zero-field rather than a peak. The presence of quadratic behaviour encourages us to examine the data for evidence of a CA, which we will do by fitting the data to Eqn.~\ref{eq:MC_chiral}. First, we symmetrized the magnetoconductance for $T\geq 10$~K via~:
+\begin{equation}\label{eq:sym_MC}
+    \sigma_{sym}(H)=\frac{\sigma_{xx}(+H)+\sigma_{xx}(-H)}{2}
+\end{equation}
+\noindent to minimize the influence of any sample mounting misalignment.\\
+
+% See App.~\ref{app:MR_plots} for plots of the raw magnetoresistance.\\
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Figures_Ch4_Synth_Charac/Resistivity/YbPdBi, actrot12, chiral Anomaly MC.pdf}
+    \caption[Magnetoconductance $\sigma_{xx}(H, \theta)$ for $2\text{~K}\leq T \leq 150\text{~K}$]{Magnetoconductance $\sigma_{xx}(H)$ where $0^\circ$  corresponds to $H\perp I$ and $90^\circ$ corresponds to $H||I$. $T$-dependent quadratic behaviour at high-$H$ and peaks due to weak-antilocalization (WAL) at low-$H$ are visible throughout the data. The dramatic change in the character of the magnetoconductance for $T=2$~K suggests the physics governing electron transport has changed.}
+    \label{fig:chiral_MC_unsym}
+\end{figure}
+
+
+\noindent Shown in Fig.~\ref{fig:sym_Mc_angle_dependence} are example fits of Eqn.~\ref{eq:MC_chiral} to $\sigma_{sym}(H)$ at $\theta\in\{0^\circ, 45^\circ, 90^\circ\}$ and a selection of $T$. See App.~\ref{app:T_dependence_chiral_constant} for graphs of fits for all orientations and temperatures. The data for all sample orientations appears to be well described by Eqn.~\ref{eq:MC_chiral} equation. %The insets at lower $T$ show that at low-$H$, the fits have trouble accounting for the apparent disappearance of WAL effects. 
+Temperatures below $T=10$~K were not well-fitted by Eqn.~\ref{eq:MC_chiral}, which correlates with the shifting Schottky-like anomaly seen in the specific heat in Sec.~\ref{sec:Schottky_CEF_fitting}. It is unexpected that Eqn.~\ref{eq:MC_chiral} should adequately fit the data at all orientations~\cite{son_chiral_2013}, but we may assess the chiral nature of these fits by examining the temperature dependence of $c_a$. \\
+
+
+% \begin{figure}[H]
+%     \centering
+%     \begin{subfigure}{\linewidth}  
+%     \includegraphics[width=\linewidth]{Figures_Ch4_Synth_Charac/Resistivity/YbPdBi_actrot12_sym_chiral_fitting_for_0deg_SUBSET.pdf}
+%     \end{subfigure}
+%     \centering
+%      \begin{subfigure}{\linewidth} 
+%      \includegraphics[width=\linewidth]{Figures_Ch4_Synth_Charac/Resistivity/YbPdBi_actrot12_sym_chiral_fitting_for_45deg_SUBSET.pdf} 
+%     \end{subfigure}
+%     \centering
+%      \begin{subfigure}{\linewidth} 
+%      \includegraphics[width=\linewidth]{Figures_Ch4_Synth_Charac/Resistivity/YbPdBi_actrot12_sym_chiral_fitting_for_90deg_SUBSET.pdf}
+%     \end{subfigure}
+%     \caption[Example Fits of Chiral Anomaly in $\sigma_{sym}(H)$]{(Blue) Symmetrized magnetoconductance $\sigma_{sym}(H)$ for a selection of $T$ and $\theta$. The angle $\theta$ measures the angle separating $I$ and $H$, with zero defined as $H\perp I$. (Red) Best Fits of Eqn.~\ref{eq:MC_chiral} to the magnetoconductance. Note that there is a $3.9^\circ$ of $I$ from the plane of rotation due to misalignment during sample mounting. The data appears well-fitted for all $\theta$ and $T$, contrary to the expected $\theta$ dependence.}
+%     \label{fig:sym_Mc_angle_dependence}
+% \end{figure}
+
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{Figures_Appendices/chiral_fitting_app/YbPdBi_actrot12_sym_chiral_fitting_for_SUBSET.pdf}
+    \caption[Example Fits of Chiral Anomaly in $\sigma_{sym}(H)$]{(Blue Markers) Symmetrized magnetoconductance $\sigma_{sym}(H)$ for a selection of $T$ and $\theta$. The angle $\theta$ measures the angle separating $I$ and $H$, with zero defined as $H\perp I$. (Red Line) Best fits of Eqn.~\ref{eq:MC_chiral} to the magnetoconductance. The data appears well-fitted for all $\theta$ and $T$, contrary to the expected $\theta$ dependence.}
+    \label{fig:sym_Mc_angle_dependence}
+\end{figure}
+
+
+\noindent Shown in Fig.~\ref{fig:sym_MC_fit_params} is the temperature dependence of the various fit parameters for all orientations $\theta$. The top left shows the chiral coefficient $c_a$ behaving like that seen previously for WSM's~\cite{guo_evidence_2018, huang_observation_2015,li_chiral_2016}. The coefficient characterizing the WAL contributions, $a_{WAL}$, is negative, as is expected~\cite{zhang_signatures_2016}.  Since $\rho_0$ is the zero-field resistivity, it is expected that $\rho_0$ does not exhibit a dependence on $\theta$. Nonetheless, it should be noted that the shape of the $\rho_0$ curve differs from our observations of $\rho_{xx}(T)$ in Sec.~\ref{sec:thermoresistivity}. The maximum value associated with the heavy fermion phase at $T^*$ is absent. Unfortunately, we have been unable to locate a source regarding the expected temperature dependence of $A_\mathrm{FL}$. It behaves in a fairly consistent manner across sample orientations, and we present it here only for reference.\\
+
+
+% The top right plot shows that as the temperature is lowered, the Fermi liquid contribution to the magnetoconductance increases before disappearing at $T=10$~K. For smaller $\theta$, this contribution begins at a higher temperature and reaches a smaller maximum than at larger $\theta$. The bottom left shows that the sign of the localization contribution is negative, which is appropriate for WAL effects~\cite{bergmann_weak_nodate}. It is interesting that the magnitude of the WAL contribution increases at low $T$. This may be the fitting function attempting to counterbalance the influence of the larger quadratic behaviour at these temperatures. The bottom right shows the zero-field resistivity that was produced by the fit, which shows a qualitatively similar behaviour as seen in Sec.~\ref{sec:thermoresistivity}. Despite showing the drop in resistivity expected for the heavy fermion phase, it shows no indication of the resistivity maximum near $T^*=34$~K. This perhaps suggests a different scattering mechanism than Kondo scattering dominates the magnetoconductance here. \\
+
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{Figures_Ch4_Synth_Charac/Resistivity/YbPdBi nonlinear cond fits.pdf}
+    \caption[$T$-Dependencies of Chiral Anomaly Fit Parameters]{Temperature dependence of fit parameters of Eqn.~\ref{eq:MC_chiral} to the magnetoconductivity $\sigma_{sym}(H)$. (Top Left) The chiral coefficient $c_a$.  (Top Right) The parameter $A_\mathrm{FL}$, which characterizes the influence of conventional Fermi liquid bands. (Bottom Left) The parameter $a_{WAL}$, which characterizes contributions due to weak-antilocalization effects. (Bottom Right) The zero-field resistivity $\rho_0$.}
+    \label{fig:sym_MC_fit_params}
+\end{figure}
+
+\noindent To confirm the validity of these chiral fits, we proceeded to fit the temperature dependence of $c_a$. It is expected to possess the following form~\cite{li_chiral_2016}~
+\footnote{Also via personal correspondence with Dr. Chunyu Guo, the first author of Guo \emph{et al}.~\cite{guo_evidence_2018}}:
+\begin{equation}\label{eq:ca_T_dep}
+    c_a(T) =  \frac{ 3e^4}{8\pi^4\hslash^2 c} \frac{v_\mathrm{F}^3 \tau_v}{((k_\mathrm{B}T)^2+\mu^2/\pi^2)}
+\end{equation}
+\noindent where $e$ is the elementary electronic charge, $v_\mathrm{F}$ is the Fermi velocity, $c$ is the speed of light, $\hslash$ is the reduced Planck's constant, and $k_\mathrm{B}$ is the Boltzmann constant which converts units of temperature to units of energy. $\mu=(\mu_R+\mu_L)/2$ is the average chemical potential of the two Weyl points, which is $E_\mathrm{F}$ for an ideal WSM.  \\
+
+% Should this equation adequately describe the data, it is doubtful that any flat 4f-bands (meaning those involved in forming the heavy fermion phase) are contributing to this phenomenon since $v_\mathrm{F}\propto 1/m^*$.\\
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\linewidth]{Figures_Ch4_Synth_Charac/Resistivity/YbPdBi, Ca of T from MC Fit, COMBINED.pdf}
+    \caption[Best Fit of the Chiral Coefficient $c_a(T)$]{Temperature dependence of the chiral coefficient $c_a$ fitted at by Eqn.~\ref{eq:MC_chiral}, using data from a range of sample orientations of $I$ relative to $H$. Fitted parameter values~: $\mu=(2.58\pm0.07)$~meV and $v_\mathrm{F}^3\tau_v = (48\pm1)$~m$^3$~s$^{-2}$.}
+    \label{fig:MC_ca_fit_combo}
+\end{figure}
+
+
+\noindent Shown in Fig.~\ref{fig:MC_ca_fit_combo} is a fit of Eqn.~\ref{eq:ca_T_dep} to the values of $c_a$ at all sample orientations $\theta$ at once. To emphasize the isotropic nature of the data, we chose to present them fitted at once. Individual plots of the fitting of each individual angle's data set can be found in App.~\ref{app:chiral_fits_to_MC}. For the fit shown in Fig.~\ref{fig:MC_ca_fit_combo} we found parameters of $\mu = (2.58\pm0.07)$~meV and $v_\mathrm{F}^3\tau_v = (48\pm1)$~m$^3$~s$^{-2}$. These are comparable to the values found previously for YbPtBi ($1.5$~meV and $134$~m$^3$~s$^{-2}$)~\cite{guo_evidence_2018} and for HoPtBi ($1.3$~meV and $56$~m$^3$~s$^{-2}$)~\cite{pavlosiuk_anomalous_2020}.\\
+
+\noindent The observed lack of angle dependence for the chiral fits is quite unexpected. The CA has been found to be highly sensitive to deviations from $H\parallel I$~\cite{guo_evidence_2018}. Either this data suggests new topological properties or emphasizes the necessity of ensuring the presence of angle dependence in candidate topological materials. Such angle-independence was not observed with the similar compound YbPtBi~\cite{guo_evidence_2018}, which makes it unlikely that the observed angle-independence is simply due to the presence of heavy fermion behaviour. \\
+
+\noindent The presence of the chiral anomaly can be found in angle-resolved measurements of transverse resistivity as the Planar Hall Effect~\cite{guo_evidence_2018, pavlosiuk_magnetotransport_2021}, which would be an ideal next step for verifying our results herein for the topological nature of YbPdBi.\\
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% \section{Magnetoresistance Scaling}\label{sec:MR_scaling}
+% TODO:
+% \begin{enumerate}
+%     \item If this is being a pain, we can probably just eliminate it...
+%     \item Sort out whatever is going on with App.~\ref{app:kondo_scaling} and however it relates to this section...
+% \end{enumerate}
+% Exploiting the single ion Kondo impurity model's $T$- and $H$- behaviour, we followed a scaling analysis that had previously been performed on the magnetoresistance data for YbPdBi~\cite{pietri_magnetoresistance_2000}. This process has also been used to evaluate the presence of non-trivial transport behaviour~\cite{guo_evidence_2018}. We used a scaling function of the form~\cite{pietri_magnetoresistance_2000, schlottmann_exact_1989}~:
+% \begin{equation}\label{eq:Kondo_scaling}
+%     \Delta\rho_{MR}/\rho_0  = \frac{(T+T^+)}{H}
+% \end{equation}
+% \noindent where $H$ is the applied magnetic field, $T$ is the temperature, and $T^+$ is the parameter characterizing the scaling relationship. $T^+$ is the in-field analog to the zero-field single-ion Kondo temperature ($T_K$)~\cite{pietri_magnetoresistance_2000}. An optimal $T^+$ is determined such that the curves (the isotherms, in our case) have maximal overlap, though they need not perfectly overlap. Where these curves do indeed overlap, the dominant physics of the magnetoresistance is interpreted to be the same for those $T$ and $H$ values. \\
+
+% \noindent We investigate isotherms of $\rho(H,T)$ which were taken for $T\leq150$~K, where the Kondo effect is visible in the zero-field thermoresistivity (see Fig.~\ref{fig:thermo_res_0_field}). To facilitate finding an optimal $T^+$ for our data, a function was written in Python to minimize the sum of the pair-wise distances between data points with $T^+$ as the minimization parameter. Data taken below $T=5$ was excluded from the minimization based on a preliminary attempt at analysis. Rather than $T^+=2.5$~K found in \cite{pietri_magnetoresistance_2000}, we find that $T^+=0.96$~K more optimally scaled our data. \textbf{See App.~\ref{app:kondo_scaling} for the results of this scaling analysis, including all available data sets.}\\
+
+
+% \begin{figure}[h]
+%     \centering
+%     \includegraphics[width=\linewidth]{Figures_Ch4_Synth_Charac/Resistivity/Kondo scaling for T_star 0p96K minT combine.pdf}
+%     \caption[Kondo Scaling For $\rho(H,T)$ Fitted for Chiral Anomaly]{Single ion Kondo impurity scaling for isotherms of $\rho(H, T)$ up to a scaling function value of 40. Overlapping isotherms suggest the dominance of Kondo scattering for the isotherms that overlap; isotherms $T=1.8$~K and $T=2$~K do not overlap. (Inset) The same data plotted up to a scaling function value of 8, which shows $T=5$~K also does not overlap. }
+%     \label{fig:Kondo_scaling_chiral}
+% \end{figure}
+
+% \noindent Shown in Fig.~\ref{fig:Kondo_scaling_chiral} is a subset of isotherms used in the scaling analysis, chosen for their relevance to the chiral anomaly analysis in Sec.~\ref{sec:chiral_mc}. Five isotherms of $\rho(H,T)$ which were able to be fitted in Sec.~\ref{sec:chiral_mc} to Eqn.~\ref{eq:MC_chiral}($T=150$~K, $T=60$~K, $T=40$~K, $T=15$~K, and $T=10$~K), and three ($T=5$~K, $T=2$~K and $T=1.8$~K) which were not able to be fitted. Curiously, the isotherms of $\rho(H,T)$ that scale according to Eqn.~\ref{eq:Kondo_scaling} are also the ones that were able to be fitted for the chialy anomaly using Eqn.~\ref{eq:MC_chiral}. This suggests that any chiral anomaly occurs alongside magnetotransport dominated by Kondo scattering, which is contrary to the residual resistivity fit parameter found in Sec.~\ref{sec:chiral_mc} \textbf{How is it contrary?}.
+
+
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% \section{Conclusions}
+% TODO:
+% \begin{enumerate}
+%     \item Summarize results above.
+%     \begin{enumerate}
+%         \item chiral coefficient lacks $\theta$-dependence, which requires that the presence of chiral anomaly results from something intrinsic to the material, rather than the extrinsic magnetic field.
+%         \item the fitted values are wayyy too large
+%         \item MR scaling results suggest a chiral anomaly would be occurring alongside Kondo scattering
+%     \end{enumerate}
+%     \item Reiterate that SOC is weaker in YbPdBi than YbPtBi
+%     \item recommend measuring PAMR for chiral anomaly
+%     \item recommend verifying lack of current jetting by performing squeeze test
+%     % \item Preliminary ARPES data?
+%     % \begin{enumerate}
+%     %     \item taken in zero field at 13K at CLS on QMSC beamline
+%     %     \item shows the flat 4f-band lays approximately $-0.6$~eV~$=6960$~K below $E_\mathrm{F}$ for 2022CLS D7 disp, but $0.6$~eV for 2023CLS, with a structure resembling a Dirac cone with a node approximately $-0.04$~eV below $E_\mathrm{F}$. Node is basically right on top of the Fermi energy.
+%     %     \item Similar structures for ARPES data for YbPtBi, which has flat f-band at approximately $0.9$~eV. Similar structure to YbPtBi, hard to say
+%     % \end{enumerate}
+% \end{enumerate}
+
+% \begin{figure}[h]
+%     \centering
+%     \includegraphics[widt=0.6\linewidth]{Figures_Appendices/YbPdBi, ARPES2022, Fitted Bands.png}
+%     \caption[Preliminary ARPES Dispersion]{Preliminary ARPES data for YbPdBi. Units of the vertical axis are the binding energy relative to the Fermi energy. The horizontal axis units are coordinates within the analyzer's frame of reference. Likely taken along the $\Gamma$ point of the first Brillouin zone, but this has not yet been corroborated by DFT calculations. \textbf{What photon energy? note: UV range is 1eV to 100eV.}}
+%     \label{fig:prelim_ARPES}
+% \end{figure}
