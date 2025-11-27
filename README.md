@@ -1,2 +1,18 @@
-# DSPortfolio
-Personal data science portfolio.
+# Data Science Portfolio
+Personal data science portfolio showcasing Python and Power BI projects (and eventually SQL).
+
+
+## Python
+The Python projects showcase one example from my M.Sc. in physics (soon to be more once I fix tidy the code), one project which uses machine learning on census data to predict wildfire risk for properties in the United States, and case studies from DataCamp's 'Data Analyst in Python' and 'Data Scientist in Python' courses, through which I obtained certifications by DataCamp. 
+
+N.B: Some of the Python projects require re-factoring and so appear empty for now.
+
+
+
+## Power BI
+The Power BI projects consist of case studies performed while studying DataCamp's 'Data Analyst in Power BI' course.
+
+
+
+## SQL (TBD)
+Consists of small projects I did while taking DataCamp's 'Associate Data Analyst in SQL' course. I am currently tidying it up, as well, so it is currently omitted.
