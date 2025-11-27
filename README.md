@@ -18,3 +18,15 @@ The Power BI projects consist of case studies performed while studying DataCamp'
 
 ## SQL (TBD)
 Consists of small projects I did while taking DataCamp's 'Associate Data Analyst in SQL' course. I am currently tidying it up, as well, so it is currently omitted.
+
+## Completed Certifications
+
+DataCamp: [Professional Data Scientist in Python](https://www.datacamp.com/certificate/DS0022248383145)
+DataCamp: [Associate Data Scientist in Python](https://www.datacamp.com/certificate/DSA0011469658847)
+DataCamp: [SQL Associate](https://www.datacamp.com/certificate/SQA0012144135318)
+
+## In Progress Certifications
+
+Power BI PL-300, Data Analyst Associate, Microsoft
+
+AWS Cloud Practitioner, Foundational, Amazon
