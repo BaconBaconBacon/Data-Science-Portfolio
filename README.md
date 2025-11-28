@@ -5,7 +5,7 @@ To verify completion of my DataCamp coursework, please visit my DataCamp portfol
 
 
 ## Python
-The Python projects showcase one example from my M.Sc. in physics (soon to be more once I fix tidy the code), one project which uses machine learning on census data to predict wildfire risk for properties in the United States, and case studies from DataCamp's 'Data Analyst in Python' and 'Data Scientist in Python' courses, through which I obtained certifications by DataCamp. 
+The Python project section showcases (or will showcase) one example from my M.Sc. in physics, one project which uses machine learning on census data to predict wildfire risk for properties in the United States, and case studies from DataCamp's 'Data Analyst in Python' and 'Data Scientist in Python' courses, through which I obtained certifications by DataCamp. 
 
 N.B: Some of the Python projects require re-factoring and so appear empty for now.
 
