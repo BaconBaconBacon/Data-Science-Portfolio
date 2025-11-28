@@ -1,0 +1,1 @@
+Placeholder for the GIS Insurance analysis project once I refactor and tidy the code.
