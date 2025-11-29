@@ -1,3 +1,4 @@
+import censusdata
 import os
 import numpy as np
 import pandas as pd
@@ -5,85 +6,161 @@ import sqlalchemy as sql
 import geopandas as gpd
 
 
-DESIRED_COLS = [
-	'LATITUDE', # Center of nominal 375 m fire pixel
-	'LONGITUDE', # Center of nominal 375 m fire pixel
-	# 'BRIGHTNESS', 
-	# 'SCAN', 
-	# 'TRACK', 
-	'ACQ_DATE',
-	# 'ACQ_TIME', 
-	'SATELLITE',  # N21 = NOAA-21, N=SNPP
-	# 'INSTRUMENT', 
-	'CONFIDENCE', # It is intended to help users gauge the quality of individual hotspot/fire pixels. 
-	# 'VERSION',
-	'BRIGHT_T31',  # T31 Channel brightness temperature of the fire pixel measured in Kelvin
-	'FRP',  # FRP depicts the pixel-integrated fire radiative power in MW (megawatts)
-	# 'DAYNIGHT',
-	'TYPE',   # Inferred hot spot type: 0 is presumed vegetation fire
-	'geometry'
-]
+class GISData():
+	DESIRED_COLS = [
+		'LATITUDE', # Center of nominal 375 m fire pixel
+		'LONGITUDE', # Center of nominal 375 m fire pixel
+		# 'BRIGHTNESS', 
+		# 'SCAN', 
+		# 'TRACK', 
+		'ACQ_DATE',
+		# 'ACQ_TIME', 
+		'SATELLITE',  # N21 = NOAA-21, N=SNPP
+		# 'INSTRUMENT', 
+		'CONFIDENCE', # It is intended to help users gauge the quality of individual hotspot/fire pixels. 
+		# 'VERSION',
+		'BRIGHT_T31',  # T31 Channel brightness temperature of the fire pixel measured in Kelvin
+		'FRP',  # FRP depicts the pixel-integrated fire radiative power in MW (megawatts)
+		# 'DAYNIGHT',
+		'TYPE',   # Inferred hot spot type: 0 is presumed vegetation fire
+		'geometry'
+	]
 
-class LoadGIS():
+	# Set the coordinate system
+	CRS = 5070
 
+	self.DATA = None
+	self.SQL_ENGINE = None
+	self.SQL_CONN = None
 
-
-	def __init__(self, filepaths:list):
+	def __init__(self, filepaths:list|str):
 
 		# TODO: If sql db doesn't exist, load data
-		raw_data = self.extract(filepaths)
-		clean_data = self.transform(raw_data)
-		self.load(clean_data)
+		raw_data = self._extract(filepaths)
+		self.DATA = self._transform(raw_data)
+		# Save in SQL db
+		self._load(clean_data)
+
 		# Else: just load sql db 
-		return clean_data
+		return self
 
-	def extract(self, filepaths:list):
-		"""
-			Extracts GIS data from VIIRS sources downloaded manually and fixes data type issues.
+	def _extract(self, filepaths:list|str): -> gpd.GeoDataFrame
+		'''
+			Takes as input a string or a list of strings consisting
+			of filenames or filepaths to wildfire GIS data.
 
-			TODO: Query the data directly from a website API.
-		"""
-		#########
+			TODO: It would be neat to query regions and years, and
+			use a gov't API to get that data. 
+		'''
 
-		# Extract VIIRS NOAA-20 Point Data
+		data = gpd.GeoDataFrame()
 
-		fp=os.path.join("Data","VIIRS NOAA20 375m","fire_archive_J1V-C2_633153.shp")
-		noaa20 = gpd.read_file(fp)[desired_cols]
+		if isinstance(filepaths, str):
+			if filepaths.endswith(".csv") or filepaths.endswith(".shp"):
+				return
+			else :
+				temp_list = []
+				for file in os.listdir():
+					if filepaths.endswith(".csv") or filepaths.endswith(".shp"):
+						temp_list.append(file)
+				filepaths = temp_list
 
-		noaa20['ACQ_DATE'] =pd.to_datetime(noaa20['ACQ_DATE'])
+		for fp in filepaths:
+			sat_name = fp.split('.')[0]
 
-		noaa20['year'] = noaa20['ACQ_DATE'].dt.year
+			sat_data = gpd.read_file(fp)[DESIRED_COLS]
+			sat_data['SAT_ID']  = sat_name
+			
+			# 0 is 'probable wildfire', h is high confidence
+			sat_data = sat_data.query('TYPE==0 & CONFIDENCE=="h"')
 
-		# 0 is 'probable wildfire', h is high confidence
-		noaa20 = noaa20.query('TYPE==0 & CONFIDENCE=="h"')
+			# Set coordinate system
+			sat_data = sat_data.to_crs(CRS)
+			data.append(sat_data)
 
-		#########
+		return data
 
-		# Extract VIIRS S-NPP Data
-		fp=os.path.join("Data","VIIRS SNPP 375m","fire_archive_SV-C2_633155.shp")
-		snpp= gpd.read_file(fp)
+	def _transform(self, raw_data: gpd.GeoDataFrame): -> gpd.GeoDataFrame
+		
+		raw_data['ACQ_DATE'] =pd.to_datetime(sat_data['ACQ_DATE'])
+		raw_data['year'] = raw_data['ACQ_DATE'].dt.year
 
-		snpp['ACQ_DATE'] = pd.to_datetime(snpp['ACQ_DATE'])
-		snpp['ACQ_TIME'] = pd.to_datetime(snpp['ACQ_DATE'])
+		return raw_data
 
-		snpp['year'] = snpp['ACQ_DATE'].dt.year
+	def _load(self, clean_data: gpd.GeoDataFrame):
+		'''
+			Save the data as a SQL db.
+		'''
+		return
 
-		# 0 is probably wildfire, h is high confidence
-		snpp = snpp.query('TYPE==0 & CONFIDENCE=="h"')
-		#########
-		# ^ This can be simplified
+	def visualize_data(self):
+		'''
+			Helper function for visualizing the data using Folium.
+
+			Needs adaptation.
+		'''
+
+		# 	legend_html = '''
+		# 		<div style="position: fixed; 
+		# 		     bottom: 50px; left: 50px; width: 200px; height: 150px; 
+		# 		     border:2px solid grey; z-index:9999; font-size:14px;
+		# 		     background-color:white; opacity: 0.85;">
+		# 		     &nbsp; <b>Legend</b> <br>
+		# 		     &nbsp; NOAA-20 &nbsp; <i class="fa fa-circle" style="color:red"></i><br>
+		# 		     &nbsp; S-NPP &nbsp; <i class="fa fa-circle" style="color:purple"></i><br>
+		# 		     &nbsp; MTBS &nbsp; <i class="fa fa-square" style="color:red"></i><br>
+		# 		     &nbsp; MADIS &nbsp; <i class="fa fa-square" style="color:orange"></i><br>
+		# 		     &nbsp; WFIGS &nbsp; <i class="fa fa-square" style="color:blue"></i><br>
+		# 		</div>
+		# 	'''
 
 
+		#     centre = [pred_df['latitude'].mean(), pred_df['longitude'].mean()]
+		#     m=folium.Map(centre, zoom_start=5)
+
+		#     # Perimeters
+		#     i=0
+		#     for df in perims_lst:
+		#         for _, r in df.iterrows():
+		#             fill_color = per_color_lst[i]  # Issue with Python closures
+		#             sim_geo = gpd.GeoSeries(r["geometry"]).simplify(tolerance=0.001)
+		#             geo_j = sim_geo.to_json()
+		#             geo_j = folium.GeoJson(
+		#                 data=geo_j, 
+		#                 style_function=make_style(fill_color)
+		#             )
+		#             geo_j.add_to(m)
+		#         i+=1
+		        
+		#     # Points
+		#     i=0
+		#     for df in points_lst:
+		#         for _, r in df.iterrows():
+		#             folium.CircleMarker(
+		#                 location=[r['LATITUDE'], r['LONGITUDE']],
+		#                 radius=3,
+		#                 fill=True,
+		#                 fill_opacity=0.7,
+		#                 weight=1,
+		#                 fill_color=pts_color_lst[i],
+		#                 color=pts_color_lst[i]
+		     
+		#             ).add_to(m)
+
+		#         i+=1
+		#     # State map
+		#     geo_j = folium.GeoJson(data=usa_map.to_json()) 
+		#     geo_j.add_to(m)
+
+		#     # add legend
+		#     m.get_root().html.add_child(folium.Element(legend_html))
+
+
+		# IFrame(src=save_path, width=1000, height=600)
 
 		return
 
-	def transform(self, raw_data):
-		# Need to make sure we're not double counting the VIIRS data
-		return
 
-	def load(self, clean_data):
-		# Store it in a local SQL database
-
-		return
-
-
+if __name__ == "__main__":
+	test_obj = LoadGIS("Data")
+	test_obj.visualize_data()

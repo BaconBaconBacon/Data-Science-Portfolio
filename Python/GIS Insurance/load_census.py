@@ -6,44 +6,67 @@ import sqlalchemy as sql
 import geopandas as gpd
 
 
-class LoadCensus():
+class CensusData():
 	DESIRED_COLS = [
-		'LATITUDE', # Center of nominal 375 m fire pixel
-		'LONGITUDE', # Center of nominal 375 m fire pixel
-		# 'BRIGHTNESS', 
-		# 'SCAN', 
-		# 'TRACK', 
-		'ACQ_DATE',
-		# 'ACQ_TIME', 
-		'SATELLITE',  # N21 = NOAA-21, N=SNPP
-		# 'INSTRUMENT', 
-		'CONFIDENCE', # It is intended to help users gauge the quality of individual hotspot/fire pixels. 
-		# 'VERSION',
-		'BRIGHT_T31',  # T31 Channel brightness temperature of the fire pixel measured in Kelvin
-		'FRP',  # FRP depicts the pixel-integrated fire radiative power in MW (megawatts)
-		# 'DAYNIGHT',
-		'TYPE',   # Inferred hot spot type: 0 is presumed vegetation fire
-		'geometry'
+	
 	]
 
-	def __init__(self, filepaths:list):
+	# Set the coordinate system
+	CRS = 5070
+
+	self.DATA = None
+	self.SQL_ENGINE = None
+	self.SQL_CONN = None
+
+	def __init__(self, tracts:list|str):
 
 		# TODO: If sql db doesn't exist, load data
-		raw_data = self.extract(filepaths)
-		clean_data = self.transform(raw_data)
-		self.load(clean_data)
-		# Else: just load sql db 
-		return clean_data
+		raw_data = self._extract(tracts)
+		self.DATA = self._transform(raw_data)
+		# Save in SQL db
+		self._load(clean_data)
 
-	def extract(self, filepaths:list): -> gpd.GeoDataFrame
+		# Else: just load sql db 
+		return self
+
+	def extract_from_tracts(self, tracts:list|str): -> gpd.GeoDataFrame
+		'''
+			Takes in a region or list of regions for which to pull (USA) census data.
+		'''
+		data = gpd.GeoDataFrame()
+
+		if isinstance(filepaths, str):
+			if filepaths.endswith(".csv") or filepaths.endswith(".shp"):
+				return
+			else :
+				temp_list = []
+				for file in os.listdir():
+					if filepaths.endswith(".csv") or filepaths.endswith(".shp"):
+						temp_list.append(file)
+				filepaths = temp_list
+
 		for fp in filepaths:
 			pass
+		return data
+
+	def extract_from_regions(self, tracts:list|str): -> gpd.GeoDataFrame
+		'''
+			Can add this functionality at another time.
+		'''
+		return
+	def _transform(self, raw_data: gpd.GeoDataFrame): -> gpd.GeoDataFrame
 		return
 
-	def transform(self, raw_data):
+	def _load(self, clean_data: gpd.GeoDataFrame):
+		'''
+			Save the data as a SQL db.
+		'''
 		return
 
-	def load(self, clean_data):
+	def visualize_data(self):
 		return
 
 
+if __name__ == "__main__":
+	test_obj = LoadCensus("Data")
+	test_obj.visualize_data()
