@@ -45,7 +45,7 @@ class CensusData():
 		tmp_list = []
 		for t in tracts:
 				tmp_list.append()
-		data = gpd.GeoDataFrame(tmp_list).to_crs(CRS)
+		data = gpd.GeoDataFrame(tmp_list, crs=CRS)
 
 		return data
 
@@ -69,4 +69,5 @@ class CensusData():
 
 if __name__ == "__main__":
 	test_obj = LoadCensus("Data")
+	print(test_obj.C.tables())
 	test_obj.visualize_data()
