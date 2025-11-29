@@ -1,8 +1,12 @@
 Python/DC_Materials
 Python/Masters Example/References
 .ipynb_checkpoints
+.virtual_documents
+__pycache__
 /Python/references
 /Written Analysis Excerpt/James Fraser Master
 /SQL/DataCamp Projects/Manufacturing Process Analysis/info.txt
 /SQL/
 *.csv
+data/
+Data/
