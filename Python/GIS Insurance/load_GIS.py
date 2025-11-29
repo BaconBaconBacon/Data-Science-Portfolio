@@ -1,4 +1,4 @@
-import censusdata
+import census
 import os
 import numpy as np
 import pandas as pd
@@ -29,22 +29,24 @@ class GISData():
 	# Set the coordinate system
 	CRS = 5070
 
-	self.DATA = None
-	self.SQL_ENGINE = None
-	self.SQL_CONN = None
 
 	def __init__(self, filepaths:list|str):
 
 		# TODO: If sql db doesn't exist, load data
+		self.SQL_ENGINE = None
+		self.SQL_CONN = None
+
+
 		raw_data = self._extract(filepaths)
 		self.DATA = self._transform(raw_data)
+
 		# Save in SQL db
-		self._load(clean_data)
+		self._load(self.DATA)
 
 		# Else: just load sql db 
 		return self
 
-	def _extract(self, filepaths:list|str): -> gpd.GeoDataFrame
+	def _extract(self, filepaths:list|str) -> gpd.GeoDataFrame:
 		'''
 			Takes as input a string or a list of strings consisting
 			of filenames or filepaths to wildfire GIS data.
@@ -70,7 +72,7 @@ class GISData():
 
 			sat_data = gpd.read_file(fp)[DESIRED_COLS]
 			sat_data['SAT_ID']  = sat_name
-			
+
 			# 0 is 'probable wildfire', h is high confidence
 			sat_data = sat_data.query('TYPE==0 & CONFIDENCE=="h"')
 
@@ -80,7 +82,7 @@ class GISData():
 
 		return data
 
-	def _transform(self, raw_data: gpd.GeoDataFrame): -> gpd.GeoDataFrame
+	def _transform(self, raw_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 		
 		raw_data['ACQ_DATE'] =pd.to_datetime(sat_data['ACQ_DATE'])
 		raw_data['year'] = raw_data['ACQ_DATE'].dt.year

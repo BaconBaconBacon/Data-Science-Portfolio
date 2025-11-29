@@ -1,4 +1,4 @@
-import censusdata
+import census
 import os
 import numpy as np
 import pandas as pd
@@ -14,47 +14,47 @@ class CensusData():
 	# Set the coordinate system
 	CRS = 5070
 
-	self.DATA = None
-	self.SQL_ENGINE = None
-	self.SQL_CONN = None
 
-	def __init__(self, tracts:list|str):
+
+	def __init__(self, tracts:list|str, year :int):
+
+		self.C = census.Census(
+				os.environ.get('US_CENSUS_API_KEY'),
+				year = year
+			).acs5
+
 
 		# TODO: If sql db doesn't exist, load data
-		raw_data = self._extract(tracts)
+		self.SQL_ENGINE = None
+		self.SQL_CONN = None
+
+		raw_data = self._extract_from_tracts(tracts, year)
 		self.DATA = self._transform(raw_data)
 		# Save in SQL db
-		self._load(clean_data)
+		self._load(self.DATA)
 
 		# Else: just load sql db 
 		return self
 
-	def extract_from_tracts(self, tracts:list|str): -> gpd.GeoDataFrame
+	def _extract_from_tracts(self, tracts:list|str) -> gpd.GeoDataFrame:
 		'''
-			Takes in a region or list of regions for which to pull (USA) census data.
+			Takes in a list of tracts to get from the US Census API.
 		'''
-		data = gpd.GeoDataFrame()
+		
 
-		if isinstance(filepaths, str):
-			if filepaths.endswith(".csv") or filepaths.endswith(".shp"):
-				return
-			else :
-				temp_list = []
-				for file in os.listdir():
-					if filepaths.endswith(".csv") or filepaths.endswith(".shp"):
-						temp_list.append(file)
-				filepaths = temp_list
+		tmp_list = []
+		for t in tracts:
+				tmp_list.append()
+		data = gpd.GeoDataFrame(tmp_list).to_crs(CRS)
 
-		for fp in filepaths:
-			pass
 		return data
 
-	def extract_from_regions(self, tracts:list|str): -> gpd.GeoDataFrame
+	def extract_from_regions(self, tracts:list|str) -> gpd.GeoDataFrame:
 		'''
 			Can add this functionality at another time.
 		'''
 		return
-	def _transform(self, raw_data: gpd.GeoDataFrame): -> gpd.GeoDataFrame
+	def _transform(self, raw_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 		return
 
 	def _load(self, clean_data: gpd.GeoDataFrame):
