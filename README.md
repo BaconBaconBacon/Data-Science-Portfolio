@@ -53,8 +53,11 @@ Case study of a hypothetical telecom company looking to reduce customer churn.
 Just some small snippets of SQL queries I wrote while taking DataCamp's 'Associate Data Analyst in SQL' course. I am currently tidying it up, as well.
 
 
-## M.Sc. Thesis Excerpt
+### Manufacturing Process Analysis
+Somewhat simple SQL query creating upper and lower control limits for an industrial process. Stored in a Python notebook.
 
+
+## M.Sc. Thesis Excerpt
 A chapter from my thesis introducing background information relevant to the results.
 
 
