@@ -15,7 +15,7 @@ Machine learning case study involving a hypothetical food recipe website seeking
 
 
 
-### House Sale Price Prediction
+### Predicting House Sale Prices
 Machine learning case study predicting the sale price of houses for a hypothetical real estate company seeking to reduce the time to sale.
 
 
@@ -26,7 +26,7 @@ Machine learning project to predict wildfire risk for US properties using US cen
 
 
 
-### M.Sc. Example (Needs Refactoring)
+### AMRO Fourier Transform and Fit (Needs Refactoring)
 
 An example of a Python data analysis I performed on angle-resolved magnetoresistance oscillation (AMRO) data. Currently needs significant tidying. 
 
@@ -52,6 +52,10 @@ Case study of a hypothetical telecom company looking to reduce customer churn.
 ## SQL (TBD)
 Just some small snippets of SQL queries I wrote while taking DataCamp's 'Associate Data Analyst in SQL' course. I am currently tidying it up, as well.
 
+
+## M.Sc. Thesis Excerpt
+
+A chapter from my thesis introducing background information relevant to the results.
 
 
 ## Completed Certifications
