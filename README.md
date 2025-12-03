@@ -56,6 +56,9 @@ Just some small snippets of SQL queries I wrote while taking DataCamp's 'Associa
 ### Manufacturing Process Analysis
 Somewhat simple SQL query creating upper and lower control limits for an industrial process. Stored in a Python notebook.
 
+### NGO Impact Analysis
+Answering questions about a hypothetical NGO's impact on communities.
+
 
 ## M.Sc. Thesis Excerpt
 A chapter from my thesis introducing background information relevant to the results.
