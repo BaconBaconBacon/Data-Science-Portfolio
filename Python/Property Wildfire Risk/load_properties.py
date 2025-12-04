@@ -30,7 +30,7 @@ class Properties():
         
         self.sql_engine = sql_engine
         self.sql_conn = sql_conn
-        self.properties_gpd = self.connect_to_sql()
+        self.properties_gpd = self._connect_to_sql()
     
         self.num_properties = self.properties_gpd.shape[0]
 
@@ -42,8 +42,6 @@ class Properties():
         # TODO: Drop duplicates. Floating point rounding errors in the coords may affect this.
         # Could keep a hash of the address, for privacy?
         
-        # If properties dropped, add more.
-        start = time.now()
 
         temp_lst = [None]*quantity
         for i in range(quantity):
@@ -53,15 +51,12 @@ class Properties():
             lat = coords['lat']
             long = coords['lng']
             block = cg.coordinates(x=long, y=lat)['2020 Census Blocks'][0]
-            LABELS_KEYS_MAP
-            temp_lst[i] = {
-                key :   int(block[LABELS_KEYS_MAP[key]) for key in LABELS_KEYS_MAP.keys()
-            }
+            self.LABELS_KEYS_MAP
+            temp_lst[i] = { key :  int(block[self.LABELS_KEYS_MAP[key]]) for key in self.LABELS_KEYS_MAP.keys()}
             temp_lst[i]['geometry'] = Point(long, lat)
                
         self.properties_gpd = gpd.GeoDataFrame(temp_lst, crs=CRS)
         self.properties_gpd.to_file(filepath, mode='a')
-        print(time.now()-start)
         return
     
     def delete_at_random(self, quantity:int)->None:
@@ -84,21 +79,21 @@ class Properties():
     def _connect_to_sql(self)->None:
             
         # check if properties table exists, and connect
-        if self.engine.dialect.has_table(engine, TABLE_NAME):
-            q = 'SELECT * FROM {}'.format(TABLE_NAME)
+        if self.sql_engine.dialect.has_table(self.sql_conn, self.TABLE_NAME):
+            q = 'SELECT * FROM {}'.format(self.TABLE_NAME)
 
             # TODO: needs to convert to gpd
             data = pd.read_sql(q, con=self.sql_conn)
-            data['geometry'] = Point(data['long', data['lat'])
+            data['geometry'] = Point(data['long'], data['lat'])
             self.properties_gpd = gpd.GeoDataFrame(data.drop(columns=['lat','long']))
             
         else:
             print("Creating empty 'properties' table.")
             self.properties_gpd = gpd.GeoDataFrame(
-                columns=LABELS_KEYS_MAP.keys(),
+                columns=self.LABELS_KEYS_MAP.keys(),
                 geometry='geometry'
             )
-            self.properties_gpd.to_postgis(TABLE_NAME, con=conn,if_exists='fail')
+            self.properties_gpd.to_postgis(self.TABLE_NAME, con=conn,if_exists='fail')
 
         return
         

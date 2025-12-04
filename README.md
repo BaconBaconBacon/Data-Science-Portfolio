@@ -20,7 +20,7 @@ Machine learning case study predicting the sale price of houses for a hypothetic
 
 
 
-### GIS Insurance (Currently Tidying)
+### Property Wildfire Risk (Currently Tidying)
 
 Machine learning project to predict wildfire risk for US properties using US census data. Currently re-writing to remove proprietary information.
 
