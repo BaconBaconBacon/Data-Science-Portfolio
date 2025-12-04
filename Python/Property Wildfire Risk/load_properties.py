@@ -60,11 +60,14 @@ class Properties():
             self.LABELS_KEYS_MAP
             temp_lst[i] = { key :  int(block[self.LABELS_KEYS_MAP[key]]) for key in self.LABELS_KEYS_MAP.keys()}
             temp_lst[i]['geom'] = Point(long, lat)
+            
+        tmp = gpd.GeoDataFrame(temp_lst, geometry='geom', crs=self.DEFAULT_CRS)
         
-        self.properties_gpd = gpd.GeoDataFrame(temp_lst, geometry='geom', crs=self.DEFAULT_CRS)
+        self.properties_gpd = pd.concat([self.properties_gpd,tmp])
 
         # TODO: should find a way to just append
         self.properties_gpd.to_postgis(self.TABLE_NAME, con=self.sql_conn, if_exists='replace')
+        self._commit_database_changes()
         # self.session.commit()
         # self.properties_gpd.to_file(filepath, mode='a')
         return
@@ -100,11 +103,20 @@ class Properties():
             q = 'CREATE TABLE {} ('.format(self.TABLE_NAME)
             for key in self.LABELS_KEYS_MAP.keys():
                 q+= '{} INTEGER,'.format(key)
-            q+= 'geom geometry); COMMIT;'.format(self.DEFAULT_CRS)
+            q+= 'geom geometry); '.format(self.DEFAULT_CRS)
             self.sql_conn.execute(text(q))
+
+            
+            q = 'SELECT * FROM {}'.format(self.TABLE_NAME)
+            self.properties_gpd  = gpd.read_postgis(q, con=self.sql_conn,  geom_col='geom')
             self.add_random_properties(10)
             
         return
+
+
+        
+    def _commit_database_changes(self)->None:
+        self.sql_conn.execute(text('COMMIT;'))
         
     
 if __name__ == "__main__":
