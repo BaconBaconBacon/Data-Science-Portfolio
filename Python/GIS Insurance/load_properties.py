@@ -16,27 +16,25 @@ class Properties():
     '''
     # Set the coordinate system
     DEFAULT_CRS = 5070
+    TABLE_NAME = 'properties'
+    LABELS_KEYS_MAP = {
+        'geoid':  'GEOID',
+        'block_id' :  'BLOCK',
+        'block_grp':  "BLKGRP",
+        'tract_id':  'TRACT',
+        'county_id': 'COUNTY',
+        'state_id': 'STATE'
+    }
     
-    def __init__(self, filepath:list|str, sql_engine, sql_conn):
+    def __init__(self, sql_engine, sql_conn):
         
         self.sql_engine = sql_engine
         self.sql_conn = sql_conn
-
-        
-        self.file_path = filepath
-
-        self.num_properties = -1
-        self.properties_gpd = gpd.GeoDataFrame()
-
-
-        
-        if os.path.exists(self.file_path) and filepath.endswith('.shp'):
-            self.load_property_list(self.file_path)
-        else:
-            print('Existing .shp file not found at filepath. Call \
-                    add_random_properties to populate new .shp file')
-        return self
+        self.properties_gpd = self.connect_to_sql()
     
+        self.num_properties = self.properties_gpd.shape[0]
+
+
     def add_random_properties(self, quantity:int)->None:
         """
             Add 'quantity' many new random addresses
@@ -55,18 +53,11 @@ class Properties():
             lat = coords['lat']
             long = coords['lng']
             block = cg.coordinates(x=long, y=lat)['2020 Census Blocks'][0]
-            
+            LABELS_KEYS_MAP
             temp_lst[i] = {
-                # 'index': i,
-                'geometry' :   Point(long, lat),
-                'geoid': int(block['GEOID']),
-                'block_id' : int(block['BLOCK']),
-                'block_grp': int(block["BLKGRP"]),
-                'tract_id': int(block['TRACT']),
-                'county_id':int(block['COUNTY']),
-                'state_id':int(block['STATE'])
+                key :   int(block[LABELS_KEYS_MAP[key]) for key in LABELS_KEYS_MAP.keys()
             }
-        
+            temp_lst[i]['geometry'] = Point(long, lat)
                
         self.properties_gpd = gpd.GeoDataFrame(temp_lst, crs=CRS)
         self.properties_gpd.to_file(filepath, mode='a')
@@ -85,20 +76,30 @@ class Properties():
     def get_state_subset(self, state:str)->gpd.GeoDataFrame:
         return
     
-    # def propert_count(self) ->int:
+    # def property_count(self) ->int:
     #     '''
     #         Returns how many properties are in the list.
     #     '''
     #     return
-    
-    def read_property_list(self, filepath:str)->None:
-        
-        if os.path.exists(filepath) and filepath.endswith('.shp'):
-            self.properties_gpd = gpd.read_file(self.file_path).to_crs(DEFAULT_CRS)
-            print('.shp file found and loaded.')
+    def _connect_to_sql(self)->None:
+            
+        # check if properties table exists, and connect
+        if self.engine.dialect.has_table(engine, TABLE_NAME):
+            q = 'SELECT * FROM {}'.format(TABLE_NAME)
+
+            # TODO: needs to convert to gpd
+            data = pd.read_sql(q, con=self.sql_conn)
+            data['geometry'] = Point(data['long', data['lat'])
+            self.properties_gpd = gpd.GeoDataFrame(data.drop(columns=['lat','long']))
+            
         else:
-            print('No .shp file found at {filepath}. Creating empty GeoDataFrame.')
-            self.properties_gpd = gpd.GeoDataFrame()
+            print("Creating empty 'properties' table.")
+            self.properties_gpd = gpd.GeoDataFrame(
+                columns=LABELS_KEYS_MAP.keys(),
+                geometry='geometry'
+            )
+            self.properties_gpd.to_postgis(TABLE_NAME, con=conn,if_exists='fail')
+
         return
         
     

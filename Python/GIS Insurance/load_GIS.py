@@ -27,9 +27,9 @@ class GISData():
     ]
     
     # Set the coordinate system
-    CRS = 5070
+    DEFAULT_CRS = 5070
 
-    def __init__(self, filepaths:list|str):
+    def __init__(self,  sql_engine, sql_conn):
         
         # TODO: If sql db doesn't exist, load data
         self.sql_engine = None
