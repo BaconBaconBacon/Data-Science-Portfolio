@@ -75,7 +75,7 @@ class GISData():
             sat_data = sat_data.query('TYPE==0 & CONFIDENCE=="h"')
 
             # Set coordinate system
-            sat_data = sat_data.to_crs(CRS)
+            sat_data = sat_data.to_crs(self.DEFAULT_CRS)
             data.append(sat_data)
 
         return data

@@ -4,7 +4,7 @@ import json
 import numpy as np
 import os
 import pandas as pd
-import pytidycensus as tc
+# import pytidycensus as tc
 import sqlalchemy as sql
 
 
@@ -131,7 +131,7 @@ class CensusData():
         tmp_list = []
         for t in geo_id:
                 tmp_list.append()
-        data = gpd.GeoDataFrame(tmp_list, crs=DEFAULT_CRS)
+        data = gpd.GeoDataFrame(tmp_list, crs=self.DEFAULT_CRS)
         
         return data
         

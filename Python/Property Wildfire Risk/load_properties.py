@@ -7,6 +7,9 @@ import sqlalchemy as sql
 import geopandas as gpd
 
 from random_address import real_random_address
+from shapely.geometry import Point
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 
 
 class Properties():
@@ -30,9 +33,10 @@ class Properties():
         
         self.sql_engine = sql_engine
         self.sql_conn = sql_conn
-        self.properties_gpd = self._connect_to_sql()
-    
-        self.num_properties = self.properties_gpd.shape[0]
+        self.Session = sessionmaker(bind=self.sql_engine)
+
+        self._connect_to_sql()
+        # self.num_properties = self.properties_gpd.shape[0]
 
 
     def add_random_properties(self, quantity:int)->None:
@@ -41,8 +45,10 @@ class Properties():
         """
         # TODO: Drop duplicates. Floating point rounding errors in the coords may affect this.
         # Could keep a hash of the address, for privacy?
-        
+        # self.session = self.Session()
+        print('Adding {} more properties'.format(quantity))
 
+        # TODO: Turn this into a dictionary, should be faster
         temp_lst = [None]*quantity
         for i in range(quantity):
         
@@ -53,10 +59,14 @@ class Properties():
             block = cg.coordinates(x=long, y=lat)['2020 Census Blocks'][0]
             self.LABELS_KEYS_MAP
             temp_lst[i] = { key :  int(block[self.LABELS_KEYS_MAP[key]]) for key in self.LABELS_KEYS_MAP.keys()}
-            temp_lst[i]['geometry'] = Point(long, lat)
-               
-        self.properties_gpd = gpd.GeoDataFrame(temp_lst, crs=CRS)
-        self.properties_gpd.to_file(filepath, mode='a')
+            temp_lst[i]['geom'] = Point(long, lat)
+        
+        self.properties_gpd = gpd.GeoDataFrame(temp_lst, geometry='geom', crs=self.DEFAULT_CRS)
+
+        # TODO: should find a way to just append
+        self.properties_gpd.to_postgis(self.TABLE_NAME, con=self.sql_conn, if_exists='replace')
+        # self.session.commit()
+        # self.properties_gpd.to_file(filepath, mode='a')
         return
     
     def delete_at_random(self, quantity:int)->None:
@@ -80,24 +90,27 @@ class Properties():
             
         # check if properties table exists, and connect
         if self.sql_engine.dialect.has_table(self.sql_conn, self.TABLE_NAME):
+            print("'properties' table found. Loading...")
             q = 'SELECT * FROM {}'.format(self.TABLE_NAME)
 
             # TODO: needs to convert to gpd
-            data = pd.read_sql(q, con=self.sql_conn)
-            data['geometry'] = Point(data['long'], data['lat'])
-            self.properties_gpd = gpd.GeoDataFrame(data.drop(columns=['lat','long']))
-            
+            self.properties_gpd  = gpd.read_postgis(q, con=self.sql_conn,  geom_col='geom')
         else:
-            print("Creating empty 'properties' table.")
-            self.properties_gpd = gpd.GeoDataFrame(
-                columns=self.LABELS_KEYS_MAP.keys(),
-                geometry='geometry'
-            )
-            self.properties_gpd.to_postgis(self.TABLE_NAME, con=conn,if_exists='fail')
-
+            print("Creating new 'properties' table with 10 entries.")
+            q = 'CREATE TABLE {} ('.format(self.TABLE_NAME)
+            for key in self.LABELS_KEYS_MAP.keys():
+                q+= '{} INTEGER,'.format(key)
+            q+= 'geom geometry); COMMIT;'.format(self.DEFAULT_CRS)
+            self.sql_conn.execute(text(q))
+            self.add_random_properties(10)
+            
         return
         
     
 if __name__ == "__main__":
-    test_obj = Properties()
-    # test_obj.visualize_data()
+    import sys
+    engine = sql.create_engine("postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project")
+
+    conn = engine.connect() 
+    props = Properties(engine, conn)
+    props.add_random_properties(int(sys.argv[1]))
