@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import pandas as pd
 
@@ -91,6 +92,7 @@ class LoadAMRO:
 				# LOAD
 				amro_df = pd.concat([amro_df, temp_df], ignore_index=True)
 				amro_df.to_csv(self.file_path, sep=',')
+		print('Done combining AMRO files.')
 		return amro_df
 
 	def _extract(self,file_path:str)->pd.DataFrame:
@@ -111,6 +113,8 @@ class LoadAMRO:
 				temp_df['H'] = H_label
 			elif 'ACT' in label:
 				act_label = label
+				# print(act_label)
+				# raise
 				temp_df['ACT_str']= act_label
 				temp_df['geo'] = self.META_DATA[label]['geo']
 				temp_df['ACT'] = self.META_DATA[label]['ACT']
@@ -129,7 +133,7 @@ class LoadAMRO:
 		self.META_DATA[act_label]['T_vals'] = []
 		self.META_DATA[act_label]['H_vals'] = []
 		self.META_DATA[act_label][H_label] = {}
-		self.META_DATA[act_label][H_label][T_label] = {}
+		self.META_DATA[act_label][H_label][T_label] = {'res. units':{}}
 		
 		# Select desired columns, rename as needed
 		temp_df = temp_df.rename(columns=self.COL_RENAMES)[self.DESIRED_COLS]
@@ -149,17 +153,23 @@ class LoadAMRO:
 
 	def _genMetaData(self, df:pd.DataFrame)->None:
 
-		act_label=str(df['ACT'].values[0])
-		H_label=str(df['H'].values[0])
-		T_label=str(df['T'].values[0])
-		print(act_label, H_label, T_label)
-		
+		# print(self.META_DATA)
+		# raise
+		act_label='ACTRot' + str(df['ACT'].values[0])
+		H_label=df['H'].values[0]
+		T_label=df['T'].values[0]
+		# print(act_label, H_label, T_label)
+
 		# Calc for additional columns as needed
 		mean_res = df['Res. (ohm-cm)'].mean()
 		zero_deg_res= df.loc[df['Sample Position (deg)'].idxmin(), 'Res. (ohm-cm)']
 		
 		# Store additional meta data
+		# print(self.META_DATA[act_label])
+		# print(self.META_DATA[act_label][H_label])
+		# print(self.META_DATA[act_label][H_label][T_label])
 		this_meta_data = self.META_DATA[act_label][H_label][T_label]
+		# print(this_meta_data)
 		this_meta_data['res. units']['mean res (ohm-cm)'] = mean_res
 		this_meta_data['res. units']['0deg res (ohm-cm)'] = zero_deg_res
 		
@@ -169,7 +179,7 @@ class LoadAMRO:
 		'''
 			Calculates alternative resistivity units based on the new meta data
 		'''
-		act_label=df['ACT'].values[0]
+		act_label='ACTRot' + str(df['ACT'].values[0])
 		H_label=df['H'].values[0]
 		T_label=df['T'].values[0]
 
@@ -182,8 +192,8 @@ class LoadAMRO:
 				'Delta Res./R0 {} (ohm-cm)'.format(label),
 				'Delta Res./R0 {} (%)'.format(label)
 			]
-			df[new_labels[0]] =  df['Res. (ohm-cm)'] - mean_res
-			df[new_labels[1]] =  df[new_labels[0]] / mean_res
+			df[new_labels[0]] =  df['Res. (ohm-cm)'] - res_meta_data[key]
+			df[new_labels[1]] =  df[new_labels[0]] / res_meta_data[key]
 			df[new_labels[2]] =  df[new_labels[1]] * 100
 
 		# uohms
@@ -198,4 +208,4 @@ if __name__ == "__main__":
 	import sys
 	load = LoadAMRO(sys.argv[1],sys.argv[2])
 	_ = load.combineAMRO()
-	quit()
+	
