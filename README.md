@@ -31,6 +31,11 @@ Machine learning project to predict wildfire risk for US properties using US cen
 An example of a Python data analysis I performed on angle-resolved magnetoresistance oscillation (AMRO) data. Currently needs significant tidying. 
 
 
+### Demagnetization Analysis (Needs Tidying)
+
+Involves extrapolating magnetization data using a modified Brillouin model.
+
+
 
 ## Power BI
 The Power BI projects consist of case studies performed while studying DataCamp's 'Data Analyst in Power BI' course.
