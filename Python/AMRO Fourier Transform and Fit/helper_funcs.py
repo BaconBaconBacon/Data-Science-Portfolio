@@ -1,8 +1,22 @@
 import numpy as np
 import os
 import pandas as pd
+import itertools
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
+from scipy.fft import fft, fftfreq, rfft, rfftfreq
+
+
+
+
+H_PALETTE = {
+	0.5: 'tab:red',
+	3: 'tab:green',
+	7: 'tab:orange',
+	9: 'tab:blue'
+}
 
 class LoadAMRO:
 	'''
@@ -57,9 +71,14 @@ class LoadAMRO:
 		'''
 		if self.file_name.endswith('.csv'):
 			if os.path.exists(self.file_path):
-
+				print('Loading : {}'.format(self.file_name))
 				self.AMRO = pd.read_csv(self.file_path)
+				# GEt META DATA
+				
 				return self.AMRO
+
+
+
 			elif self.file_name.endswith('.csv') and not os.path.exists(self.file_path):
 				print('Combining AMRO files into: {}'.format(self.file_name))
 				self.AMRO = self.combineAMRO(self.save_folder)
@@ -203,6 +222,149 @@ class LoadAMRO:
 				df[new_col] = df[col]*10**6
 
 		return df
+
+	def QuickPlotAMRO(self)->None:
+		_ = sns.relplot(x='Sample Position (rads)', 
+						y='Delta Res./R0 mean (ohm-cm)', 
+						hue='H',
+						col='T',
+						# hue='ACT',
+						row='ACT',
+						palette = H_PALETTE,
+						facet_kws={'sharey':False},
+						data = self.AMRO)
+
+		return
+
+
+class Fourier:
+
+
+	def __init__(self, amro:LoadAMRO, save_name :str, save_dir:str):
+
+		# Get the AMRO
+		self.amro_data = amro.AMRO
+		self.meta_data = amro.META_DATA
+		self.labels = self.amro_data[['ACT', 'T', 'H']].drop_duplicates()
+
+		# Iterate through DataFrame entries, appending results to a new DataFrame
+		self.FT_results_df = pd.DataFrame()
+		self.save_name = save_name
+		self.save_dir = save_dir
+		self.save_fp = os.path.join(save_dir, save_name)
+
+		if os.path.exists(self.save_fp):
+			print("loading {}".format(save_name))
+			self.FT_results_df = pd.read_csv(self.save_fp)
+			print(self.FT_results_df.columns)
+			return
+		else:
+			# for i in range(len(experiment_labels)):
+			for act_label in self.meta_data.keys():
+				print("FT'ing: " + act_label)
+				print(self.meta_data)
+				act_meta_data = self.meta_data[act_label]
+				print(act_meta_data)
+				# try:
+				t_vals = act_meta_data['T_vals']
+				h_vals = act_meta_data['H_vals']
+				geo_label = act_meta_data['geo']
+				print(t_vals, h_vals, geo_label)
+				for t, h in itertools.product(t_vals, h_vals):
+			
+					ft_df = self._fourier_transform(act_label, t, h)
+
+
+					# Query the correct dataframe using the experiment labels
+					ft_df=self.amro_df.query('ACT_str=="{}" & T =={} & H == {}'.format(act_label, t, h))  # 'ACT_str=="{}"'.format(act_label))  # 
+			
+					# label = act_label+", "+str(t)+"K, "+str(h)+"T"
+			
+					# To FT, we want the oscillation zero'd along the y-axis
+					fftdata = ft_df['Delta Res. Mean (ohm-cm)'].values
+			
+					# Perform the FFT, where yf is the amplitudes and xf are the frequencies
+					yf = rfft(fftdata, n= len(fftdata), norm='ortho')
+					xf = rfftfreq(len(fftdata), 1/len(fftdata))
+			
+					# Package the results
+					freq_df = pd.DataFrame({'freqs (cycles/rot)':xf,
+											'amps':yf,
+											'mag (ohm-cm)':np.abs(yf),
+											'phase':np.angle(yf)
+										   })
+
+					# freq_df.sort_values(by='mag (ohm-cm)', ascending=False, inplace=True)
+
+					freq_df = self._package_ft(freq_df)
+					# Amplitudes relative to the strongest
+					freq_df['amp_ratio'] = freq_df['mag (ohm-cm)']/freq_df['mag (ohm-cm)'].max()
+					freq_df['freqs (cycles/rot)'] = freq_df['freqs (cycles/rot)'].astype(int)
+
+
+					# Force positive phase values
+					if force_pos_phase:
+						freq_df['phase'] = np.select(
+							freq_df['phase']<0,
+							freq_df['phase']+2*np.pi,
+							freq_df['phase']
+						)
+					
+					# freq_df = freq_df.reset_index(drop=True)
+					
+					# Add additional labelling information
+					freq_df['ACT_str'] = act_label 
+					freq_df['ACT'] = float(act_label.replace("ACTRot",""))
+					freq_df['T'] = t 
+					freq_df['H'] = h 
+					freq_df['geo'] = geo_label 
+			
+					# Truncate to get the desired number of frequencies
+					#TODO: separate out, should be called from main script
+
+			
+			
+					# FT_output = FFTAMROPlot(ft_df, n=10) # Want n strongest amplitudes
+					
+					self.FT_results_df = pd.concat([FT_results_df, strongest_freqs], ignore_index=True)#.reset_index(drop=True)
+
+
+				# except KeyError as e:
+				# 	print(e)
+				# 	print('No data for: '+act_label+'. Skipping...')
+					
+				# Save the results of the FT
+				self.FT_results_df.to_csv(self.save_name, sep=',',index=False)
+				print('Results saved to: {}'.format(self.save_name))
+			return
+
+	def GetNStrongest(self, n:int):
+		'''
+			Queries the n strongest contributions for each experiment in the data set.
+		''' 
+		# self.get_n_strongest()
+		# strongest_df = self.FT_results_df.query("`freqs (cycles/rot)`<{}".format(max_sym))
+		# # freq_df = freq_df.reset_index(drop=True)
+		print(self.FT_results_df.head())#.columns)
+		strongest_df = self.FT_results_df.groupby(['ACT','H','T'])
+		strongest_freqs =  strongest_df.sort_values(by='mag (ohm-cm)', ascending=False).head(n)
+
+		return strongest_freqs
+
+	def PlotNStrongest(self, n:int):
+		'''
+		Plots the n-strongest. 
+
+		If n=0, then plots all available contributions.
+		'''
+		return
+
+
+
+# class FitAMRO:
+
+
+
 
 if __name__ == "__main__":
 	import sys
