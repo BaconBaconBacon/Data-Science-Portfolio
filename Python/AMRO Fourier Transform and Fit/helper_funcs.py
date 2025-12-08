@@ -5,11 +5,7 @@ import itertools
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-
 from scipy.fft import fft, fftfreq, rfft, rfftfreq
-
-
-
 
 H_PALETTE = {
 	0.5: 'tab:red',
@@ -46,7 +42,6 @@ class LoadAMRO:
 		'ACTRot13':{'geo':'para', 'ACT':13},
 		'ACTRot14':{'geo':'perp', 'ACT':14}
 	}
-
 	DESIRED_COLS = [
 		'Temperature (K)', 'Sample Position (deg)', #'Magnetic Field (Oe)',
 		'Res. (ohm-cm)', 'ACT', 'ACT_str', 'T', 'H','geo' #, 'L (cm)', 'W (cm)', 'H (cm)'
@@ -55,15 +50,12 @@ class LoadAMRO:
 		'Res. ch2 (ohm-cm)':'Res. (ohm-cm)'
 	}
 
-
-
 	def __init__(self, file_name:str, save_folder:str):
 
 		self.file_name = file_name
 		self.save_folder = save_folder
 		self.file_path = os.path.join(save_folder, file_name)
 		self.AMRO = pd.DataFrame()
-
 
 
 	def getAMRO(self)->pd.DataFrame:
@@ -161,11 +153,8 @@ class LoadAMRO:
 		'''
 
 		self._genMetaData(temp_df)
-
 		temp_df = self._createAltResistanceUnits(temp_df)
-
 		temp_df['Sample Position (rads)'] = temp_df['Sample Position (deg)']*2*np.pi/360
-
 		return temp_df
 
 	def _genMetaData(self, df:pd.DataFrame)->None:
@@ -190,47 +179,8 @@ class LoadAMRO:
 		this_meta_data['res. units']['Mean res (ohm-cm)'] = mean_res
 		this_meta_data['res. units']['0deg res (ohm-cm)'] = zero_deg_res
 		# print(self.META_DATA)
-		
 		return
-	# def _genMetaData(self)->None:
 
-
- #		for act_label in META_DATA.keys():
-
- #			temp_df = self.AMRO.query('ACT_str=="{}"'.format(act_label))
- #			this_meta_data = self.META_DATA[act_label][H_label][T_label]
- #			temp_dict = {}
- #			# TODO: There is surely a better way to do this...
- #			T_vals = []
- #			H_vals = []
- #			for h_val in temp_df['H'].unique():
- #				temp_temp_df = temp_df.query("H=={}".format(h_val))
-				
- #				for t_val in temp_temp_df['T'].unique():
- #					# temp_temp_temp_df = temp_temp_df.query('T=={}'.format(t_val))
- #					T_vals.append(t_val)
- #				temp_
- #			# print(self.META_DATA)
- #			# raise
- #			act_label='ACTRot' + str(df['ACT'].values[0])
- #			H_label=df['H'].values[0]
- #			T_label=df['T'].values[0]
- #			# print(act_label, H_label, T_label)
-	
- #			# Calc for additional columns as needed
- #			mean_res = df['Res. (ohm-cm)'].mean()
- #			zero_deg_res= df.loc[df['Sample Position (deg)'].idxmin(), 'Res. (ohm-cm)']
-			
- #			# Store additional meta data
- #			# print(self.META_DATA[act_label])
- #			# print(self.META_DATA[act_label][H_label])
- #			# print(self.META_DATA[act_label][H_label][T_label])
- #			# print(this_meta_data)
- #			this_meta_data['res. units']['mean res (ohm-cm)'] = mean_res
- #			this_meta_data['res. units']['0deg res (ohm-cm)'] = zero_deg_res
-	# 	# print(self.META_DATA)
-		
-	# 	return
 
 	def _createAltResistanceUnits(self, df:pd.DataFrame)->pd.DataFrame:
 		'''
@@ -261,6 +211,7 @@ class LoadAMRO:
 
 		return df
 
+
 	def QuickPlotAMRO(self)->None:
 		_ = sns.relplot(x='Sample Position (rads)', 
 						y='Delta Res./R0 Mean (ohm-cm)', 
@@ -290,9 +241,10 @@ class Fourier:
 		self.save_fp = os.path.join(save_dir, save_name)
 
 		if os.path.exists(self.save_fp):
+			# TODO: Need to check and make sure it's loading the same data as the AMRO
 			print("loading {}".format(save_name))
 			self.FT_results_df = pd.read_csv(self.save_fp)
-			print(self.FT_results_df.columns)
+
 			return
 		else:
 			for act_label in self.amro_data['ACT_str'].unique():
@@ -322,9 +274,10 @@ class Fourier:
 			# 	print('No data for: '+act_label+'. Skipping...')
 				
 			# Save the results of the FT
-			self.FT_results_df.to_csv(self.save_name, sep=',',index=False)
+			self.FT_results_df.to_csv(self.save_fp, sep=',',index=False)
 			print('Results saved to: {}'.format(self.save_name))
 		return
+
 
 	def GetNStrongest(self, n:int):
 		'''
@@ -333,18 +286,52 @@ class Fourier:
 		# self.get_n_strongest()
 		# strongest_df = self.FT_results_df.query("`freqs (cycles/rot)`<{}".format(max_sym))
 		# # freq_df = freq_df.reset_index(drop=True)
-		print(self.FT_results_df.head())#.columns)
-		strongest_df = self.FT_results_df.groupby(['ACT','H','T'])
-		strongest_freqs =  strongest_df.sort_values(by='mag (ohm-cm)', ascending=False).head(n)
+		# print(self.FT_results_df.head())#.columns)
+		strongest_df = self.FT_results_df.sort_values(by=['ACT','H','T', 'mag (ohm-cm)'], ascending=False)
+		strongest_freqs = strongest_df.groupby(['ACT','H','T']).head(n)
+		# .sort_values(by='mag (ohm-cm)', ascending=False)
+		# strongest_freqs =  strongest_df.head(n)
 
-		return strongest_freqs
+		return strongest_freqs.reset_index(drop=True)
 
-	def PlotNStrongest(self, n:int):
+
+	def PlotNStrongest(self, n:int, T:list|float, H:list|float)->None:
 		'''
 		Plots the n-strongest. 
 
 		If n=0, then plots all available contributions.
 		'''
+		if isinstance(T, list):
+			q = 'T in {}'.format(T)  
+		else: 
+			q = 'T == {}'.format(T)  
+
+		if isinstance(H, list):
+			q += ' & H in {}'.format(H)  
+		else: 
+			q += ' & H == {}'.format(H)  
+
+		print(q)
+
+		plot_df = self.GetNStrongest(n).query(q)
+		# Bypass a formatting bug in catplot
+		hue_choice = 'H'
+		plot_df = plot_df.sort_values(hue_choice)
+		plot_df[hue_choice] = plot_df[hue_choice].astype(str)
+		sns.set_context('poster')
+		g = sns.catplot(
+		    x='freqs (cycles/rot)',
+		    y='amp_ratio',
+		    data=plot_df,
+		    col='T',
+		    row='ACT',    
+		    kind='bar',
+		    hue=hue_choice,
+		    # facet_kws={
+		    #     "sharex":False
+		    # }
+		)
+		g.set(xlim=(0.1,None))
 		return
 
 
