@@ -33,10 +33,9 @@ class Properties():
         
         self.sql_engine = sql_engine
         self.sql_conn = sql_conn
-        self.Session = sessionmaker(bind=self.sql_engine)
+        # self.Session = sessionmaker(bind=self.sql_engine)
 
         self._connect_to_sql()
-        # self.num_properties = self.properties_gpd.shape[0]
 
 
     def add_random_properties(self, quantity:int)->None:
@@ -57,19 +56,18 @@ class Properties():
             lat = coords['lat']
             long = coords['lng']
             block = cg.coordinates(x=long, y=lat)['2020 Census Blocks'][0]
-            self.LABELS_KEYS_MAP
-            temp_lst[i] = { key :  int(block[self.LABELS_KEYS_MAP[key]]) for key in self.LABELS_KEYS_MAP.keys()}
-            temp_lst[i]['geom'] = Point(long, lat)
-            
-        tmp = gpd.GeoDataFrame(temp_lst, geometry='geom', crs=self.DEFAULT_CRS)
-        
-        self.properties_gpd = pd.concat([self.properties_gpd,tmp])
 
-        # TODO: should find a way to just append
-        self.properties_gpd.to_postgis(self.TABLE_NAME, con=self.sql_conn, if_exists='replace')
+            temp_lst[i] = {key : int(block[self.LABELS_KEYS_MAP[key]]) for key in self.LABELS_KEYS_MAP.keys()}
+            temp_lst[i]['geom'] = Point(long, lat)
+
+            
+            if not (i+1)%50: 
+                self._update_gpd_and_sql(temp_lst)
+
+        self._update_gpd_and_sql(temp_lst)       
         self._commit_database_changes()
-        # self.session.commit()
-        # self.properties_gpd.to_file(filepath, mode='a')
+        self._update_property_counts()
+
         return
     
     def delete_at_random(self, quantity:int)->None:
@@ -89,15 +87,36 @@ class Properties():
     #         Returns how many properties are in the list.
     #     '''
     #     return
+    def _update_gpd_and_sql(self, temp_lst:list)->None:
+        print(temp_lst)
+        tmp = gpd.GeoDataFrame(
+            data=temp_lst, geometry='geom', 
+            crs=self.DEFAULT_CRS
+        )
+
+        self.properties_gpd = gpd.GeoDataFrame(
+            pd.concat(
+                [self.properties_gpd, tmp]
+            ).reset_index(drop=True)
+        )
+
+        self.properties_gpd.to_postgis(
+            self.TABLE_NAME, 
+            con=self.sql_conn, 
+            if_exists='replace'
+        )
+        return
+        
     def _connect_to_sql(self)->None:
             
         # check if properties table exists, and connect
         if self.sql_engine.dialect.has_table(self.sql_conn, self.TABLE_NAME):
-            print("'properties' table found. Loading...")
+            print("'properties' table found.")
             q = 'SELECT * FROM {}'.format(self.TABLE_NAME)
 
             # TODO: needs to convert to gpd
             self.properties_gpd  = gpd.read_postgis(q, con=self.sql_conn,  geom_col='geom')
+            print("'properties' table loaded.")
         else:
             print("Creating new 'properties' table with 10 entries.")
             q = 'CREATE TABLE {} ('.format(self.TABLE_NAME)
@@ -110,15 +129,21 @@ class Properties():
             q = 'SELECT * FROM {}'.format(self.TABLE_NAME)
             self.properties_gpd  = gpd.read_postgis(q, con=self.sql_conn,  geom_col='geom')
             self.add_random_properties(10)
-            
+        self._update_property_counts()
         return
 
-
-        
     def _commit_database_changes(self)->None:
+        print("Committing changes to properties SQL db.")
         self.sql_conn.execute(text('COMMIT;'))
+        return
+
+    def _update_property_counts(self):
+        self.num_properties = self.properties_gpd.shape[0]
+        return
+
+    def get_properties_gpd(self):
+        return self.properties_gpd
         
-    
 if __name__ == "__main__":
     import sys
     engine = sql.create_engine("postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project")
@@ -126,3 +151,4 @@ if __name__ == "__main__":
     conn = engine.connect() 
     props = Properties(engine, conn)
     props.add_random_properties(int(sys.argv[1]))
+    print("Job done.")
