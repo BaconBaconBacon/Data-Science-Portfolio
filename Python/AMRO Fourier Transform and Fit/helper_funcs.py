@@ -1,3 +1,4 @@
+import lmfit as lm
 import numpy as np
 import os
 import pandas as pd
@@ -159,26 +160,18 @@ class LoadAMRO:
 
 	def _genMetaData(self, df:pd.DataFrame)->None:
 
-		# print(self.META_DATA)
-		# raise
 		act_label='ACTRot' + str(df['ACT'].values[0])
 		H_label=df['H'].values[0]
 		T_label=df['T'].values[0]
-		# print(act_label, H_label, T_label)
 
 		# Calc for additional columns as needed
 		mean_res = df['Res. (ohm-cm)'].mean()
 		zero_deg_res= df.loc[df['Sample Position (deg)'].idxmin(), 'Res. (ohm-cm)']
 		
 		# Store additional meta data
-		# print(self.META_DATA[act_label])
-		# print(self.META_DATA[act_label][H_label])
-		# print(self.META_DATA[act_label][H_label][T_label])
 		this_meta_data = self.META_DATA[act_label][H_label][T_label]
-		# print(this_meta_data)
 		this_meta_data['res. units']['Mean res (ohm-cm)'] = mean_res
 		this_meta_data['res. units']['0deg res (ohm-cm)'] = zero_deg_res
-		# print(self.META_DATA)
 		return
 
 
@@ -283,15 +276,9 @@ class Fourier:
 		'''
 			Queries the n strongest contributions for each experiment in the data set.
 		''' 
-		# self.get_n_strongest()
-		# strongest_df = self.FT_results_df.query("`freqs (cycles/rot)`<{}".format(max_sym))
-		# # freq_df = freq_df.reset_index(drop=True)
-		# print(self.FT_results_df.head())#.columns)
-		strongest_df = self.FT_results_df.sort_values(by=['ACT','H','T', 'mag (ohm-cm)'], ascending=False)
+		sort_vals = ['ACT','H','T', 'mag (ohm-cm)']
+		strongest_df = self.FT_results_df.sort_values(by=sort_vals, ascending=False)
 		strongest_freqs = strongest_df.groupby(['ACT','H','T']).head(n)
-		# .sort_values(by='mag (ohm-cm)', ascending=False)
-		# strongest_freqs =  strongest_df.head(n)
-
 		return strongest_freqs.reset_index(drop=True)
 
 
@@ -319,13 +306,13 @@ class Fourier:
 		plot_df[hue_choice] = plot_df[hue_choice].astype(str)
 		sns.set_context('poster')
 		g = sns.catplot(
-		    x='freqs (cycles/rot)',
-		    y='amp_ratio',
-		    data=plot_df,
-		    col='T',
-		    row='ACT',    
-		    kind='bar',
-		    hue=hue_choice,
+			x='freqs (cycles/rot)',
+			y='amp_ratio',
+			data=plot_df,
+			col='T',
+			row='ACT',	
+			kind='bar',
+			hue=hue_choice,
 
 		)
 		g.set(xlim=(0.1,None))
@@ -361,24 +348,41 @@ class Fourier:
 
 class FitAMRO:
 
-	def __init__(self):
+	# TODO: Consider removing this functionality.
+	FIT_SYMMETRIES = [2, 4, 6, 8]  # [2,4, 8]  # [2, 4, 6]  #  
 
-
+	def __init__(self, amro:LoadAMRO, fourier_results:pd.DataFrame, save_name:str)->None:
+		self.ft_results_df = fourier_results
+		self.amro_df = amro.AMRO
+		self.save_name = save_name
+		self.save_path = os.path.join('Data', save_name)
+		self.act_choices = self._get_H_T_data()
 		return
 
-	def SineBuilder(rads, amps_list : list, freq_list : list, phase: list, mean):
-	    # Want this to be as fast as possible,
-	    # because it will be called a lot during the curve_fit regression
-	    # Make these amplitudes be as a fraction of the mean
-	    summation = 0
-	    for amp, f, p in zip(amps_list, freq_list, phase):
-	        # res += amp*np.cos(f*rads+ p)# cos(rads, amp, f, phase)
-	        summation += amp*np.sin(f*rads+ p)# cos(rads, amp, f, phase)
-	        # res += amp*np.sin(rads+ p)**f# cos(rads, amp, f, phase)
-	    return mean * summation + mean
+	def SineBuilder(self, rads, amps_list : list, freq_list : list, phase: list, mean:float|int):
+		# TODO: Want this to be as fast as possible,
+		# because it will be called a lot during the curve_fit regression
+		# Make these amplitudes be as a fraction of the mean
+		summation = 0
+		for amp, f, p in zip(amps_list, freq_list, phase):
 
+			summation += amp*np.sin(f*rads+ p)# cos(rads, amp, f, phase)
 
-    def _test_plot_sinebuilder(self):
+		return mean * summation + mean
+
+	def _get_H_T_data(self):
+
+		H_T_dict = {}
+		grouped = self.amro_df[['ACT_str', 'H', 'T']].drop_duplicates()  # .groupby(, as_index=False)
+
+		for act in grouped['ACT_str'].unique():
+		    tmp_list = []
+		    for _, row in grouped.query('ACT_str=="{}"'.format(act)).iterrows():
+		        tmp_list.append((row['T'], row['H']))
+		    H_T_dict[act] = tmp_list
+		return H_T_dict
+
+	def _test_plot_sinebuilder(self):
 		# Test function
 		f = [4, 2]
 		amp = [2, 1]
@@ -386,220 +390,228 @@ class FitAMRO:
 		offset = 1 
 
 		x = np.linspace(0,2*np.pi, 1000)
-		y = SineBuilder(x, amp, f, phase, offset)
+		y = self.SineBuilder(x, amp, f, phase, offset)
 
 		print(max(y))
 		plt.scatter(x, y)
-    	return
+		return
 
-	def ObjFcn(params, deg, res_data):
-	    
-	    amps_list = []
-	    freqs_list = []
-	    phase_list = []
-	    
-	    for key in params.keys():
-	        if 'amp' in key:
-	            amps_list.append(params[key].value)
-	        elif 'freq' in key:
-	            freqs_list.append(params[key].value)
-	        elif 'phase' in key:
-	            phase_list.append(params[key].value)
+	def ObjFcn(self, params, deg, res_data):
+		'''
+			The sinebuilder is fitted by minimizing this objective function.
+		'''
+		amps_list = []
+		freqs_list = []
+		phase_list = []
+		
+		for key in params.keys():
+			if 'amp' in key:
+				amps_list.append(params[key].value)
+			elif 'freq' in key:
+				freqs_list.append(params[key].value)
+			elif 'phase' in key:
+				phase_list.append(params[key].value)
 
-	    offset = params['mean']
-	    
-	    res_model = CosineBuilder(deg, amps_list, freqs_list, phase_list, offset)
+		offset = params['mean']
+		
+		res_model = self.SineBuilder(deg, amps_list, freqs_list, phase_list, offset)
 
-	    # Want to minimize least squares
-	    return (res_model-res_data)**2
-
-
-
-	def FitAMROData(data_df, guesses_df, f_list, ACT, H, T,
-	                print_results = True, plot_results = True, savefig=False, plot_residuals = False):
-	    # raise
-	    sns.set_context("paper")# rc={"axes.labelsize":20}
-	    # Select the experimental data to be fitted
-	    fit_df = data_df.query('ACT == "{}" & H == {} & T== {}'.format(ACT, H, T))
-	    guess_df = guesses_df.query('ACT == "{}" & H == {} & T== {}'.format(ACT, H, T))
-	    
-	    
-	    # Query initial values from FT_guesses using frequencies list
-	    freq_query = ""
-	    for f in f_list:
-	        freq_query += '`freqs (cycles/rot)` == {} '.format(f)
-	    freq_query = freq_query.replace(' `', '|`')  # Add OR operators between query terms
-	    guess_df = guess_df.query(freq_query)
-	    
-	    # raise
-	    # Extract data we are going to fit
-	    x = fit_df['Sample Position (rads)']
-	    y = fit_df['Res. ch2 (ohm-cm)']
-
-	    # Generate a Parameters ordered dictionary, to which we add Parameter objects
-	    initial_p_guesses = lm.Parameters()  
-
-	    # Calculate mean with which we can prepare the amplitudes for the cosine builder function
-	    y_mean = y.mean()
-	    
-	    # Append all Parameter objects, except for the last one (must deal with appended 2)
-	    i=0
-	    while i < (len(f_list)-1):  # Extra 2 will always be at the end of f_list
-	        freq = int(f_list[i])
-	        temp_df = guess_df.query('`freqs (cycles/rot)` == {}'.format(freq))
-	        initial_p_guesses.add('amp'+str(freq),
-	                             value = temp_df['mag (ohm-cm)'].values[0]/y_mean,
-	                            min=0)  # Forcing all amplitudes to be positive, negative values show up as a pi-large phase offset. absolute value
-
-	        initial_p_guesses.add('freq'+str(freq),
-	                            value = temp_df['freqs (cycles/rot)'].values[0],
-	                            vary=False)
-
-	        initial_p_guesses.add('phase'+str(freq),
-	                              value = temp_df['phase'].values[0],
-	                              min = -2*np.pi,
-	                              max=2*np.pi)
-	        i+=1
-	    
-	    # Deal with the final element
-	    if len(f_list)==len(guess_df): 
-	        # print('EQUAL')
-	        
-	        # If nothing has been appended, just add the information for the final FT guess
-	        freq = int(f_list[i])
-	        temp_df = guess_df.query('`freqs (cycles/rot)` == {}'.format(freq))
-	        # print(guess_df)
-	        #amp_frac = 0.1  # Fraction of strongest FT guess amplitude
-	        
-	        # Create last Parameter object
-	        initial_p_guesses.add('amp'+str(freq),
-	                            value = temp_df['mag (ohm-cm)'].values[0]/y_mean,
-	                            min=0)  # Forcing all amplitudes to be positive, negative values show up as a pi-large phase offset. absolute value
-
-	        initial_p_guesses.add('freq'+str(freq),
-	                            value = temp_df['freqs (cycles/rot)'].values[0],
-	                            vary=False)
-
-	        initial_p_guesses.add('phase'+str(freq),
-	                            value = temp_df['phase'].values[0],
-	                            min =  -2*np.pi, 
-	                              max=2*np.pi) 
-	    else:
-	        raise print('UNEQUAL')
-	#         print('UNEQUAL')
-	        # print(f_list)
-
-	        # Deal with the appended 2 and/or 4
-	        num_appended_f = len(f_list) - len(guess_df)
-
-	        appended_freqs = f_list[-num_appended_f:]     
-	        print('appended freqs:', appended_freqs)
-	        
-	        # We'll assume that if 2 wasn't detected by the FT transform,then we can
-	        # definitely/maybe/hopefully use the initial guesses for the strongest frequencies
-	        freq = 2
-	        temp_df = guess_df.query('amp_ratio == 1')#.format())
-	        amp_frac = 0.3  # Fraction of strongest FT guess amplitude
-	        
-	        for f in appended_freqs:
-	            # Create last Parameter object
-	            initial_p_guesses.add('amp'+str(int(f)),
-	                                value=temp_df['mag (ohm-cm)'].values[0]/y_mean*amp_frac,
-	                                min=0)  # Forcing all amplitudes to be positive, negative values show up as a pi-large phase offset. absolute value
-
-	            initial_p_guesses.add('freq'+str(int(f)),
-	                                value=temp_df['freqs (cycles/rot)'].values[0],
-	                                vary=False)
-
-	            initial_p_guesses.add('phase'+str(int(f)),
-	                                value=temp_df['phase'].values[0],
-	                                min=-2*np.pi, 
-	                                  max=2*np.pi) 
+		# Want to minimize least squares
+		return (res_model-res_data)**2
 
 
-	    #print(initial_p_guesses.pretty_print())
-	    initial_p_guesses.add('mean', value = y_mean)
-	    
-	#     x = x[~x.isna()]
-	#     y = y[~y.isna()]
-	    # Perform the minimization
-	    minner = lm.Minimizer(ObjFcn, initial_p_guesses, fcn_args=(x, y))
-	    kws  = {'options': {'maxiter':5000}}
-	    
-	    #try:
-	    results = minner.minimize()
-	    # except ValueError as e:
-	    #     print('Value Error')
-	    #     print('x', x[x.isna()])
-	    #     print('y', y[x.isna()])
-	    if print_results : print(lm.fit_report(results))
-	    
-	#     if plot_residuals:
-	        
-	#         fig, (ax1, ax2) = plt.subplots(2,1, sharex=True)
-	#         PlotFitOverData(fit_df, results.params, title='Best Fit Results', ax=ax1)
-	#         ax2.scatter(x, results.residual)
-	#         #ax2.set_yscale('log')
-	#         ax2.axhline(0)
-	        
-	#         # Formatting
-	#         fig.set_size_inches(10,10)
-	#         title = '{} Best Fit, H={}T, T={}K, f\'s='.format(ACT, H, T)#
-	#         for f in f_list:
-	#             title +=  str(int(f)) + ', '
-	#         title = title[:-2]
 
-	#         fig.suptitle(title, fontsize=30)  
-	#         plt.tight_layout()
-	        
-	#     elif not plot_residuals:
-	#         # Plot fitted parameters next to guessed parameters
-	#         fig, (ax1, ax2) = plt.subplots(1,2)
-	#         PlotFitOverData(fit_df, initial_p_guesses, title='Initial Guesses', ax=ax1)
-	#         PlotFitOverData(fit_df, results.params, title='Best Fit Results', ax=ax2)
+	def FitAMROData(self, #data_df, guesses_df, 
+					f_list, ACT, H, T,
+					print_results = True, plot_results = True, savefig=False, plot_residuals = False):
+		'''
+			TODO: Refactor and encapsulate as much as possible.
+		'''
 
-	#         # Formatting
-	#         fig.set_size_inches(15,5)
-	#         title = '{} Best Fit, H={}T, T={}K, f\'s='.format(ACT, H, T)#
-	#         for f in f_list:
-	#             title +=  str(int(f)) + ', '
-	#         title = title[:-2]
+		# raise
+		sns.set_context("paper")# rc={"axes.labelsize":20}
+		# Select the experimental data to be fitted
+		fit_df = self.amro_df.query('ACT_str == "{}" & H == {} & T== {}'.format(ACT, H, T))
+		guess_df = self.ft_results_df.query('ACT_str == "{}" & H == {} & T== {}'.format(ACT, H, T))
+		
+		
+		# Query initial values from FT_guesses using frequencies list
+		freq_query = ""
+		for f in f_list:
+			freq_query += '`freqs (cycles/rot)` == {} '.format(f)
+		freq_query = freq_query.replace(' `', '|`')  # Add OR operators between query terms
+		guess_df = guess_df.query(freq_query)
+		
+		# raise
+		# Extract data we are going to fit
+		x = fit_df['Sample Position (rads)']
+		y = fit_df['Res. (ohm-cm)']
 
-	#         fig.suptitle(title, fontsize=30)  
-	#         plt.tight_layout()
-	    
+		# Generate a Parameters ordered dictionary, to which we add Parameter objects
+		initial_p_guesses = lm.Parameters()  
 
-	        # Deal with figure based on input parameters
-	    # if savefig : 
-	    #     outdir='./AMRO Best Fit Plots/{} Best Fits/'.format(ACT_label)
-	    #     if not os.path.exists(outdir):
-	    #         os.mkdir(outdir)
-	    #     fig_file_name = outdir+title.replace('=',' ').replace(".","_").replace("\'s","").replace(',','').replace(" ","_")+".pdf"
-	    #     fig.savefig(fig_file_name, dpi=300, transparent=False, bbox_inches='tight')
-	    #     #print(ACT,H,T,'Best Fit Fig Saved')
-	    # if plot_results: 
-	    #     plt.show()
-	    # else:
-	    #     plt.close(fig)
-	    # print(results.params)
-	    # raise
+		# Calculate mean with which we can prepare the amplitudes for the cosine builder function
+		y_mean = y.mean()
+		
+		# Append all Parameter objects, except for the last one (must deal with appended 2)
+		i=0
+		while i < (len(f_list)-1):  # Extra 2 will always be at the end of f_list
+			freq = int(f_list[i])
+			temp_df = guess_df.query('`freqs (cycles/rot)` == {}'.format(freq))
+			initial_p_guesses.add('amp'+str(freq),
+								 value = temp_df['mag (ohm-cm)'].values[0]/y_mean,
+								min=0)  # Forcing all amplitudes to be positive, negative values show up as a pi-large phase offset. absolute value
 
-	    return results
+			initial_p_guesses.add('freq'+str(freq),
+								value = temp_df['freqs (cycles/rot)'].values[0],
+								vary=False)
 
-	    
-	def FitACTExperiments(label, f_rank_min, f_ratio_min_ratio, f_max, show_fig = False): #(label, all_fits_df, f, show_fig=False):
+			initial_p_guesses.add('phase'+str(freq),
+								  value = temp_df['phase'].values[0],
+								  min = -2*np.pi,
+								  max=2*np.pi)
+			i+=1
+		
+		# Deal with the final element
+		if len(f_list)==len(guess_df): 
+			# print('EQUAL')
+			
+			# If nothing has been appended, just add the information for the final FT guess
+			freq = int(f_list[i])
+			temp_df = guess_df.query('`freqs (cycles/rot)` == {}'.format(freq))
+			# print(guess_df)
+			#amp_frac = 0.1  # Fraction of strongest FT guess amplitude
+			
+			# Create last Parameter object
+			initial_p_guesses.add('amp'+str(freq),
+								value = temp_df['mag (ohm-cm)'].values[0]/y_mean,
+								min=0)  # Forcing all amplitudes to be positive, negative values show up as a pi-large phase offset. absolute value
+
+			initial_p_guesses.add('freq'+str(freq),
+								value = temp_df['freqs (cycles/rot)'].values[0],
+								vary=False)
+
+			initial_p_guesses.add('phase'+str(freq),
+								value = temp_df['phase'].values[0],
+								min =  -2*np.pi, 
+								  max=2*np.pi) 
+		else:
+			raise print('UNEQUAL')
+	#		 print('UNEQUAL')
+			# print(f_list)
+
+			# Deal with the appended 2 and/or 4
+			num_appended_f = len(f_list) - len(guess_df)
+
+			appended_freqs = f_list[-num_appended_f:]	 
+			print('appended freqs:', appended_freqs)
+			
+			# We'll assume that if 2 wasn't detected by the FT transform,then we can
+			# definitely/maybe/hopefully use the initial guesses for the strongest frequencies
+			freq = 2
+			temp_df = guess_df.query('amp_ratio == 1')#.format())
+			amp_frac = 0.3  # Fraction of strongest FT guess amplitude
+			
+			for f in appended_freqs:
+				# Create last Parameter object
+				initial_p_guesses.add('amp'+str(int(f)),
+									value=temp_df['mag (ohm-cm)'].values[0]/y_mean*amp_frac,
+									min=0)  # Forcing all amplitudes to be positive, negative values show up as a pi-large phase offset. absolute value
+
+				initial_p_guesses.add('freq'+str(int(f)),
+									value=temp_df['freqs (cycles/rot)'].values[0],
+									vary=False)
+
+				initial_p_guesses.add('phase'+str(int(f)),
+									value=temp_df['phase'].values[0],
+									min=-2*np.pi, 
+									  max=2*np.pi) 
+
+
+		#print(initial_p_guesses.pretty_print())
+		initial_p_guesses.add('mean', value = y_mean)
+		
+	#	 x = x[~x.isna()]
+	#	 y = y[~y.isna()]
+		# Perform the minimization
+		minner = lm.Minimizer(self.ObjFcn, initial_p_guesses, fcn_args=(x, y))
+		kws  = {'options': {'maxiter':5000}}
+		
+		#try:
+		results = minner.minimize()
+		# except ValueError as e:
+		#	 print('Value Error')
+		#	 print('x', x[x.isna()])
+		#	 print('y', y[x.isna()])
+		if print_results : print(lm.fit_report(results))
+		
+	#	 if plot_residuals:
+			
+	#		 fig, (ax1, ax2) = plt.subplots(2,1, sharex=True)
+	#		 PlotFitOverData(fit_df, results.params, title='Best Fit Results', ax=ax1)
+	#		 ax2.scatter(x, results.residual)
+	#		 #ax2.set_yscale('log')
+	#		 ax2.axhline(0)
+			
+	#		 # Formatting
+	#		 fig.set_size_inches(10,10)
+	#		 title = '{} Best Fit, H={}T, T={}K, f\'s='.format(ACT, H, T)#
+	#		 for f in f_list:
+	#			 title +=  str(int(f)) + ', '
+	#		 title = title[:-2]
+
+	#		 fig.suptitle(title, fontsize=30)  
+	#		 plt.tight_layout()
+			
+	#	 elif not plot_residuals:
+	#		 # Plot fitted parameters next to guessed parameters
+	#		 fig, (ax1, ax2) = plt.subplots(1,2)
+	#		 PlotFitOverData(fit_df, initial_p_guesses, title='Initial Guesses', ax=ax1)
+	#		 PlotFitOverData(fit_df, results.params, title='Best Fit Results', ax=ax2)
+
+	#		 # Formatting
+	#		 fig.set_size_inches(15,5)
+	#		 title = '{} Best Fit, H={}T, T={}K, f\'s='.format(ACT, H, T)#
+	#		 for f in f_list:
+	#			 title +=  str(int(f)) + ', '
+	#		 title = title[:-2]
+
+	#		 fig.suptitle(title, fontsize=30)  
+	#		 plt.tight_layout()
+		
+
+			# Deal with figure based on input parameters
+		# if savefig : 
+		#	 outdir='./AMRO Best Fit Plots/{} Best Fits/'.format(ACT_label)
+		#	 if not os.path.exists(outdir):
+		#		 os.mkdir(outdir)
+		#	 fig_file_name = outdir+title.replace('=',' ').replace(".","_").replace("\'s","").replace(',','').replace(" ","_")+".pdf"
+		#	 fig.savefig(fig_file_name, dpi=300, transparent=False, bbox_inches='tight')
+		#	 #print(ACT,H,T,'Best Fit Fig Saved')
+		# if plot_results: 
+		#	 plt.show()
+		# else:
+		#	 plt.close(fig)
+		# print(results.params)
+		# raise
+
+		return results
+
+		
+
+	def FitACTExperiment(self, label, f_rank_min, f_ratio_min_ratio, f_max, show_fig = False): #(label, all_fits_df, f, show_fig=False):
 	    all_fits_df = pd.DataFrame()
 	    all_results_dict = {}
 	    # fitted_amps = pd.DataFrame()
 	    i=0
-	    for T_label, H_label in ACT_choices[label]: 
-	        
+	    for T_label, H_label in self.act_choices[label]: 
+	        print('Fitting {}, {}K, {}T.'.format(label, T_label, H_label))
 	        # Maybe select the frequencies based on their rank and ratio wrt strongest frequency
 	        #q ='ACT == "{}" & H == {} & T == {} & amp_ratio >= {} & rank <= {} & `freqs (cycles/rot)`<={}'.format(label, H_label, T_label, f_ratio_min_ratio, f_rank_min, f_max)
 	        # q ='ACT == "{}" & H == {} & T == {} & `freqs (cycles/rot)`in (2,4,6,8)'.format(label, H_label, T_label)
-	        q ='ACT == "{}" & H == {} & T == {} & `freqs (cycles/rot)`in @FIT_SYMMETRIES'.format(label, H_label, T_label)
+	        q ='ACT_str == "{}" & H == {} & T == {} & `freqs (cycles/rot)`in @self.FIT_SYMMETRIES'.format(label, H_label, T_label)
 
-	        f_info = FT_results.query(q)[['freqs (cycles/rot)',  'amp_ratio']]  # 'rank', 'amp_ratio']]
+	        f_info = self.ft_results_df.query(q)[['freqs (cycles/rot)',  'amp_ratio']]  # 'rank', 'amp_ratio']]
 	        f = f_info['freqs (cycles/rot)'].values
 	        print("F LIST:", f)
 	        # print(f)
@@ -623,7 +635,7 @@ class FitAMRO:
 	#             print('{}, T = {}, H = {}'.format(label, T_label, H_label))
 	#             print("Appending 4... ")
 
-	        results_obj = FitAMROData(amro_df, FT_results,
+	        results_obj = self.FitAMROData(#amro_df, FT_results,
 	                                  f, label, H_label, T_label,
 	                                  print_results = False,
 	                                  plot_results = show_fig,
@@ -668,9 +680,27 @@ class FitAMRO:
 	    # replace all NaNs as zeros, assuming the problem was a mismatch between requested frequencies and FT guesses for the given experiment
 	    all_fits_df = all_fits_df.fillna(0)
 	    
-
-
 	    return all_fits_df, all_results_dict, fitted_amps
+
+	def _get_init_act_guesses(self, act:str, max_rank:int, min_ratio:float)->pd.DataFrame:
+
+		freq_check_df = pd.DataFrame() 
+
+		q = 'amp_ratio >= {} & ACT_str =="{}"'.format(min_ratio, act)
+		cols = [ 'freqs (cycles/rot)', 'amp_ratio']
+		dominant_freqs = self.ft_results_df.query(q)[cols] 
+
+		freq_check_df['f']= dominant_freqs.groupby(['freqs (cycles/rot)']).groups
+		freq_check_df.set_index('f', inplace=True)
+
+		freq_check_df['count']= dominant_freqs.groupby('freqs (cycles/rot)').count().values
+		freq_check_df['sum']= dominant_freqs.groupby( 'freqs (cycles/rot)').sum().values
+		freq_check_df['mean']= dominant_freqs.groupby('freqs (cycles/rot)').mean().values
+		freq_check_df = freq_check_df.sort_values('sum', ascending=False)
+
+		return freq_check_df
+
+
 if __name__ == "__main__":
 	import sys
 	load = LoadAMRO(sys.argv[1],sys.argv[2])
