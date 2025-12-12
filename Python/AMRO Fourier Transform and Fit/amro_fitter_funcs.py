@@ -97,15 +97,9 @@ class FitAMRO:
         """ """
 
         # Select the experimental data to be fitted
-        q = 'ACT_str == "{}" & H == {} & T== {}'.format(ACT, H, T)
-        fit_df = self.amro_df.query(q)
 
-        q = 'ACT_str == "{}" & H == {} & T== {}'.format(  #' & `freqs (cycles/rot)` in @f_list'.format(
-            ACT, H, T
-        )
-        guess_df = self.ft_results_df.query(q)
-        self.current_f_list = guess_df["freqs (cycles/rot)"].values
-        self.current_f_list_str = [str(f) for f in self.current_f_list]
+        fit_df = self.GetAMROData(ACT, H, T)
+        guess_df = self._get_freqs_guesses(ACT, H, T)
 
         # Extract data we are going to fit
         x = fit_df["Sample Position (rads)"].values
@@ -121,6 +115,7 @@ class FitAMRO:
         if self.verbose:
             print(lm.fit_report(results, show_correl=False))
         del self.current_f_list
+        del self.current_f_list_str
         return results
 
     def _initialize_parameters(
@@ -138,7 +133,7 @@ class FitAMRO:
         i = 0
         while i < (len(freqs_list) - 1):  # Extra 2 will always be at the end of f_list
             freq = int(freqs_list[i])
-            self._add_freq_guess(freq, initial_p_guesses, mean, guesses)
+            self._add_freq_parameter(freq, initial_p_guesses, mean, guesses)
             i += 1
 
         # Deal with the final element
@@ -146,7 +141,7 @@ class FitAMRO:
         if len(freqs_list) == len(guesses):
             # If nothing has been appended, just add the information for the final FT guess
             freq = int(freqs_list[i])
-            self._add_freq_guess(freq, initial_p_guesses, mean, guesses)
+            self._add_freq_parameter(freq, initial_p_guesses, mean, guesses)
 
         return initial_p_guesses
 
@@ -157,7 +152,6 @@ class FitAMRO:
         sns.set_context("notebook")
 
         data_df = self.amro_df.query('ACT_str=="{}"'.format(act_choice))
-        # params_df = self.fit_params_df.query('ACT=="{}"'.format(act_choice))
 
         T_vals = data_df["T"].unique()
         n_cols = len(T_vals)
@@ -194,14 +188,27 @@ class FitAMRO:
         for i, H in enumerate(H_vals):
             for j, T in enumerate(T_vals):
                 result = self.lmfit_results_objs[act_choice][T][H]
-                fit_params = result.params.valuesdict()
-
+                fit_params = result.params  # .valuesdict()
                 plot_df = data_df.query("H=={} & T =={}".format(H, T))
 
-                x = plot_df["Sample Position (rads)"]
-                y = plot_df["Res. (ohm-cm)"]
-                print(fit_params)
-                y_fit = self.SineBuilder(x, **fit_params)
+                x = plot_df["Sample Position (rads)"].values
+                y = plot_df["Res. (ohm-cm)"].values
+
+                _ = self._get_freqs_guesses(act_choice, H, T)
+                (
+                    amps_list,
+                    freqs_list,
+                    phase_list,
+                    offset,
+                ) = self._convert_params_to_lists(fit_params)
+
+                y_fit = self.SineBuilder(
+                    x,
+                    amps_list,
+                    freqs_list,
+                    phase_list,
+                    offset,
+                )
 
                 residuals = y - y_fit
 
@@ -218,31 +225,54 @@ class FitAMRO:
                     axes[i, j] = (ax_fit, ax_resid)
 
                     # Plot data and fit
-                    sns.scatterplot(x, y, palette=H_PALETTE[H], ax=ax_fit)
-                    sns.lineplot(x, y_fit, palette=H_PALETTE[H], ax=ax_fit)
+                    sns.scatterplot(x=x, y=y, color=H_PALETTE[H], ax=ax_fit)
+                    sns.lineplot(x=x, y=y_fit, color="black", ax=ax_fit)
                     ax_fit.set_xlabel("")
                     ax_fit.tick_params(labelbottom=False)
 
                     # Plot residuals
-                    sns.scatterplot(x, residuals, ax=ax_resid, hue="black")
+                    sns.scatterplot(x=x, y=residuals, ax=ax_resid, color="black")
                     # result.plot_residuals(ax=ax_resid)
 
                     # Add title to fit plot
                     ax_fit.set_title(f"Position ({i}, {j})", fontsize=10)
-                    ax_fit.legend(fontsize=8)
-                    ax_resid.legend(fontsize=8)
+                    # ax_fit.legend(fontsize=8)
+                    # ax_resid.legend(fontsize=8)
 
                 else:
                     ax = axes[i, j]
-                    sns.scatterplot(x, y, palette=H_PALETTE[H], ax=ax)
-                    sns.lineplot(x, y_fit, palette=H_PALETTE[H], ax=ax)
+                    sns.scatterplot(x=x, y=y, color=H_PALETTE[H], ax=ax)
+                    sns.lineplot(x=x, y=y_fit, color=H_PALETTE[H], ax=ax)
                     ax.set_title(f"Position ({i}, {j})", fontsize=10)
-                    ax.legend(fontsize=8)
+                    # ax.legend(fontsize=8)
 
         plt.tight_layout()
         return fig, axes
 
-    def _add_freq_guess(
+    def GetAMROData(self, act=None, h=None, t=None):
+        conds = []
+        if act is not None:
+            conds.append('ACT_str == "{}"'.format(act))
+        if h is not None:
+            conds.append("H =={}".format(h))
+        if t is not None:
+            conds.append("T=={}".format(t))
+
+        q = " & ".join(conds)
+
+        return self.amro_df.query(q) if q else self.amro_df
+
+    def _get_freqs_guesses(self, act, h, t):
+        q = 'ACT_str == "{}" & H == {} & T== {}'.format(  #' & `freqs (cycles/rot)` in @f_list'.format(
+            act, h, t
+        )
+        guess_df = self.ft_results_df.query(q)
+        self.current_f_list = guess_df["freqs (cycles/rot)"].values
+        self.current_f_list_str = [str(f) for f in self.current_f_list]
+
+        return guess_df
+
+    def _add_freq_parameter(
         self,
         frequency: int,
         params: lm.Parameters,
