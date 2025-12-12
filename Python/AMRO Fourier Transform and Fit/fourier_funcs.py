@@ -52,9 +52,6 @@ class Fourier:
                     self.FT_results_df = pd.concat(
                         [self.FT_results_df, freq_df], ignore_index=True
                     )  # .reset_index(drop=True)
-            # except KeyError as e:
-            #     print(e)
-            #     print('No data for: '+act_label+'. Skipping...')
 
             # Save the results of the FT
             self.FT_results_df.to_csv(self.save_fp, sep=",", index=False)

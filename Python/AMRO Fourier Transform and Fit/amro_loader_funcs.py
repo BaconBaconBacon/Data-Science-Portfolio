@@ -53,7 +53,7 @@ class LoadAMRO:
         self.file_path = os.path.join(save_folder, file_name)
         self.AMRO = pd.DataFrame()
 
-    def getAMRO(self) -> pd.DataFrame:
+    def GetAMRO(self) -> pd.DataFrame:
         """ """
         if self.file_name.endswith(".csv"):
             if os.path.exists(self.file_path):
@@ -65,13 +65,13 @@ class LoadAMRO:
 
             elif self.file_name.endswith(".csv") and not os.path.exists(self.file_path):
                 print("Combining AMRO files into: {}".format(self.file_name))
-                self.AMRO = self.combineAMRO(self.save_folder)
+                self.AMRO = self.CombineAMRO(self.save_folder)
                 # self.AMRO.meta_data = self.META_DATA
                 return self.AMRO
         else:
             raise TypeError("Wrong file type: {}".format(self.file_name))
 
-    def combineAMRO(self, data_dir: str) -> pd.DataFrame:
+    def CombineAMRO(self, data_dir: str) -> pd.DataFrame:
         """ """
 
         # Get names of files in the folder
@@ -142,14 +142,14 @@ class LoadAMRO:
     def _transform(self, temp_df: pd.DataFrame) -> pd.DataFrame:
         """ """
 
-        self._genMetaData(temp_df)
-        temp_df = self._createAltResistanceUnits(temp_df)
+        self._get_meta_data(temp_df)
+        temp_df = self._create_alt_resistance_units(temp_df)
         temp_df["Sample Position (rads)"] = (
             temp_df["Sample Position (deg)"] * 2 * np.pi / 360
         )
         return temp_df
 
-    def _genMetaData(self, df: pd.DataFrame) -> None:
+    def _get_meta_data(self, df: pd.DataFrame) -> None:
         """ """
         act_label = "ACTRot" + str(df["ACT"].values[0])
         H_label = df["H"].values[0]
@@ -165,7 +165,7 @@ class LoadAMRO:
         this_meta_data["res. units"]["0deg res (ohm-cm)"] = zero_deg_res
         return
 
-    def _createAltResistanceUnits(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _create_alt_resistance_units(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculates alternative resistivity units based on the new meta data
         """

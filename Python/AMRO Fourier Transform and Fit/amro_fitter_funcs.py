@@ -3,6 +3,10 @@ import numpy as np
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+# TODO: Shove this into a config file
+H_PALETTE = {0.5: "tab:red", 3: "tab:green", 7: "tab:orange", 9: "tab:blue"}
 
 
 class FitAMRO:
@@ -18,10 +22,12 @@ class FitAMRO:
         self.save_path = os.path.join("Data", save_name)
         self.act_choices = self._get_H_T_data()
 
+        # TODO: Add Save/Load functionality for fit results
         self.lmfit_results_objs = {}
         self.fit_params_df = pd.DataFrame()
         self.fit_amps_df = pd.DataFrame()
         self.verbose = verbose
+
         return
 
     def SineBuilder(
@@ -34,31 +40,56 @@ class FitAMRO:
 
         return mean * summation + mean
 
-    def ObjFcn(self, params, deg, res_data):
+    def ObjFcn(self, params, angle, res_data):
         """
         The sinebuilder is fitted by minimizing this least squares objective function.
         """
-        amps_list = []
-        freqs_list = []
-        phase_list = []
 
-        for key in params.keys():
-            if "amp" in key:
-                amps_list.append(params[key].value)
-            elif "freq" in key:
-                freqs_list.append(params[key].value)
-            elif "phase" in key:
-                phase_list.append(params[key].value)
+        amps_list, freqs_list, phase_list, offset = self._convert_params_to_lists(
+            params
+        )
 
-        offset = params["mean"].value
-        amps_list = np.asarray(amps_list)
-        freqs_list = np.asarray(freqs_list)
-        phase_list = np.asarray(phase_list)
-
-        res_model = self.SineBuilder(deg, amps_list, freqs_list, phase_list, offset)
+        res_model = self.SineBuilder(angle, amps_list, freqs_list, phase_list, offset)
 
         # Want to minimize least squares
         return (res_model - res_data) ** 2
+
+    def _convert_params_to_lists(
+        self, params_obj: lm.Parameters
+    ) -> tuple[list, list, list, list]:
+        """
+        Ensures the parameters are correctly ordered. Aside from the 'mean' parameter, each
+        'phase' and 'freq' are paired based on the 'freq' value.
+
+        Maybe keeping track of the freq's involved can speed this up.
+
+        TODO: Would be nice to front-load this so it's not called everytime the objective
+        function is called.
+        """
+        params_dict = params_obj.valuesdict()
+
+        # phase_list = [params_dict[f"phase{f_str}"] for f_str in self.current_f_list_str]
+        # amps_list = [params_dict[f"amp{f_str}"] for f_str in self.current_f_list_str]
+
+        amps_phase = [
+            (params_dict[f"amp{f_str}"], params_dict[f"phase{f_str}"])
+            for f_str in self.current_f_list_str
+        ]
+        amps_list, phase_list = zip(*amps_phase)
+        # for key in params_obj.keys():
+        #     if "amp" in key:
+        #         amps_list.append(params_obj[key].value)
+        #     elif "freq" in key:
+        #         freqs_list.append(params_obj[key].value)
+        #     elif "phase" in key:
+        #         phase_list.append(params_obj[key].value)
+
+        return (
+            np.asarray(amps_list),
+            np.asarray(self.current_f_list.copy()),
+            np.asarray(phase_list),
+            params_dict["mean"],
+        )
 
     def FitAMROData(
         self, ACT: str, H: int | float, T: int | float  # f_list: list,
@@ -73,10 +104,8 @@ class FitAMRO:
             ACT, H, T
         )
         guess_df = self.ft_results_df.query(q)
-        # f_list = guess_df["freqs (cycles/rot)"].unique()
-
-        # # TODO: Move this into _initialize_parameters()
-        # f_list = self._get_init_freqs(ACT, T, H)
+        self.current_f_list = guess_df["freqs (cycles/rot)"].values
+        self.current_f_list_str = [str(f) for f in self.current_f_list]
 
         # Extract data we are going to fit
         x = fit_df["Sample Position (rads)"].values
@@ -87,13 +116,11 @@ class FitAMRO:
 
         # Perform the minimization
         minner = lm.Minimizer(self.ObjFcn, initial_params, fcn_args=(x, y))
-        # kws = {'options': {'maxiter':5000}}
-
         results = minner.minimize()
 
         if self.verbose:
             print(lm.fit_report(results, show_correl=False))
-
+        del self.current_f_list
         return results
 
     def _initialize_parameters(
@@ -123,14 +150,97 @@ class FitAMRO:
 
         return initial_p_guesses
 
-    def PlotFits(self, act_choice: str):
+    def PlotFits(self, act_choice: str, figsize=None, show_residuals=True):
+        """"""
+        # Set seaborn style
+        sns.set_style("whitegrid")
+        sns.set_context("notebook")
+
         data_df = self.amro_df.query('ACT_str=="{}"'.format(act_choice))
-        params_df = self.fit_params_df.query('ACT=="{}"'.format(act_choice))
+        # params_df = self.fit_params_df.query('ACT=="{}"'.format(act_choice))
 
         T_vals = data_df["T"].unique()
-        H_vals = data_df["H"].unique()
+        n_cols = len(T_vals)
 
-        return
+        H_vals = data_df["H"].unique()
+        n_rows = len(H_vals)
+
+        # Calculate figure size if not provided
+        if figsize is None:
+            width = 4 * n_cols
+            height = (6 if show_residuals else 4) * n_rows
+            figsize = (width, height)
+
+        # Create subplots
+        if show_residuals:
+            # Each position gets 2 rows: one for fit, one for residuals
+            fig = plt.figure(figsize=figsize)
+            gs = fig.add_gridspec(
+                n_rows * 2,
+                n_cols,
+                hspace=0.05,
+                wspace=0.3,
+                height_ratios=[3, 1] * n_rows,
+            )
+            axes = np.empty((n_rows, n_cols), dtype=object)
+        else:
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
+            if n_rows == 1 and n_cols == 1:
+                axes = np.array([[axes]])
+            elif n_rows == 1 or n_cols == 1:
+                axes = axes.reshape(n_rows, n_cols)
+
+        # Iterate over grid
+        for i, H in enumerate(H_vals):
+            for j, T in enumerate(T_vals):
+                result = self.lmfit_results_objs[act_choice][T][H]
+                fit_params = result.params.valuesdict()
+
+                plot_df = data_df.query("H=={} & T =={}".format(H, T))
+
+                x = plot_df["Sample Position (rads)"]
+                y = plot_df["Res. (ohm-cm)"]
+                print(fit_params)
+                y_fit = self.SineBuilder(x, **fit_params)
+
+                residuals = y - y_fit
+
+                if result is None:
+                    print(
+                        "No lmfit Result found for {} {}K, {}T".format(act_choice, T, H)
+                    )
+                    continue
+
+                if show_residuals:
+                    # Create axes for fit and residuals
+                    ax_fit = fig.add_subplot(gs[i * 2, j])
+                    ax_resid = fig.add_subplot(gs[i * 2 + 1, j], sharex=ax_fit)
+                    axes[i, j] = (ax_fit, ax_resid)
+
+                    # Plot data and fit
+                    sns.scatterplot(x, y, palette=H_PALETTE[H], ax=ax_fit)
+                    sns.lineplot(x, y_fit, palette=H_PALETTE[H], ax=ax_fit)
+                    ax_fit.set_xlabel("")
+                    ax_fit.tick_params(labelbottom=False)
+
+                    # Plot residuals
+                    sns.scatterplot(x, residuals, ax=ax_resid, hue="black")
+                    # result.plot_residuals(ax=ax_resid)
+
+                    # Add title to fit plot
+                    ax_fit.set_title(f"Position ({i}, {j})", fontsize=10)
+                    ax_fit.legend(fontsize=8)
+                    ax_resid.legend(fontsize=8)
+
+                else:
+                    ax = axes[i, j]
+                    sns.scatterplot(x, y, palette=H_PALETTE[H], ax=ax)
+                    sns.lineplot(x, y_fit, palette=H_PALETTE[H], ax=ax)
+                    ax.set_title(f"Position ({i}, {j})", fontsize=10)
+                    ax.legend(fontsize=8)
+
+        plt.tight_layout()
+        return fig, axes
 
     def _add_freq_guess(
         self,
@@ -168,21 +278,26 @@ class FitAMRO:
         """"""
 
         for T_label, H_label in self.act_choices[label]:
-            print("Fitting {}, {}K, {}T.".format(label, T_label, H_label))
+            if not self._check_if_already_fitted(label, T_label, H_label):
+                print("Fitting {}, {}K, {}T.".format(label, T_label, H_label))
 
-            results_obj = self.FitAMROData(label, H_label, T_label)
+                results_obj = self.FitAMROData(label, H_label, T_label)
 
-            # Make use of the class variables
-            self._pack_act_fit_results(
-                results_obj,
-                label,
-                H_label,
-                T_label,  # , all_fits_df, all_results_dict, fitted_amps
-            )
-
+                # Make use of the class variables
+                self._pack_act_fit_results(
+                    results_obj,
+                    label,
+                    H_label,
+                    T_label,  # , all_fits_df, all_results_dict, fitted_amps
+                )
+            else:
+                print(
+                    "Already fitted {}, {}K, {}T.".format(label, T_label, H_label)
+                    + "Skipping..."
+                )
         # replace all NaNs as zeros, assuming the problem was a mismatch between requested frequencies and FT guesses for the given experiment
 
-        return  # all_fits_df, all_results_dict, fitted_amps
+        return
 
     def _get_init_params(self, act: str, T: str, H: str) -> pd.DataFrame:
         q = 'ACT_str == "{}" & H == {} & T == {}'.format(act, H, T)
@@ -196,11 +311,15 @@ class FitAMRO:
         f_info = self._get_init_params(act, T, H)
         return f_info["freqs (cycles/rot)"].values
 
-    def _check_if_already_fitted(self) -> bool:
+    def _check_if_already_fitted(self, act, t, h) -> bool:
         """
         Check if the experiment has already been fitted
         """
-        return
+        try:
+            _ = self.lmfit_results_objs[act][t][h]
+            return True
+        except KeyError:
+            return False
 
     def _pack_act_fit_results(
         self,
