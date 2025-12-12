@@ -3,6 +3,9 @@ import os
 import pandas as pd
 import seaborn as sns
 
+# TODO: Shove this into a config file
+H_PALETTE = {0.5: "tab:red", 3: "tab:green", 7: "tab:orange", 9: "tab:blue"}
+
 
 class LoadAMRO:
     """
@@ -34,13 +37,13 @@ class LoadAMRO:
     }
     DESIRED_COLS = [
         "Temperature (K)",
-        "Sample Position (deg)",  #'Magnetic Field (Oe)',
+        "Sample Position (deg)",
         "Res. (ohm-cm)",
         "ACT",
         "ACT_str",
         "T",
         "H",
-        "geo",  # , 'L (cm)', 'W (cm)', 'H (cm)'
+        "geo",
     ]
     COL_RENAMES = {"Res. ch2 (ohm-cm)": "Res. (ohm-cm)"}
 
@@ -111,8 +114,7 @@ class LoadAMRO:
                 temp_df["H"] = H_label
             elif "ACT" in label:
                 act_label = label
-                # print(act_label)
-                # raise
+
                 temp_df["ACT_str"] = act_label
                 temp_df["geo"] = self.META_DATA[label]["geo"]
                 temp_df["ACT"] = self.META_DATA[label]["ACT"]
@@ -132,7 +134,6 @@ class LoadAMRO:
         self.META_DATA[act_label]["H_vals"] = []
         self.META_DATA[act_label][H_label] = {}
         self.META_DATA[act_label][H_label][T_label] = {"res. units": {}}
-        # print('bob', self.META_DATA)
 
         # Select desired columns, rename as needed
         temp_df = temp_df.rename(columns=self.COL_RENAMES)[self.DESIRED_COLS]
@@ -149,6 +150,7 @@ class LoadAMRO:
         return temp_df
 
     def _genMetaData(self, df: pd.DataFrame) -> None:
+        """ """
         act_label = "ACTRot" + str(df["ACT"].values[0])
         H_label = df["H"].values[0]
         T_label = df["T"].values[0]
@@ -193,6 +195,7 @@ class LoadAMRO:
         return df
 
     def QuickPlotAMRO(self) -> None:
+        """ """
         _ = sns.relplot(
             x="Sample Position (rads)",
             y="Delta Res./R0 Mean (ohm-cm)",
