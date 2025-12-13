@@ -1,10 +1,10 @@
-import numpy as np
-import os
-import pandas as pd
 import itertools
-import seaborn as sns
+import os
 
+import numpy as np
+import pandas as pd
 from scipy.fft import rfft, rfftfreq
+import seaborn as sns
 
 
 class Fourier:
