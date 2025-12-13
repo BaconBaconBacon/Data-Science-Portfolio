@@ -14,24 +14,39 @@ from matplotlib.patches import Patch
 H_PALETTE = {0.5: "tab:red", 3: "tab:green", 7: "tab:orange", 9: "tab:blue"}
 
 
-class FitAMRO:
+class AMROFitter:
     # TODO: Consider removing this functionality.
     # FIT_SYMMETRIES = [2, 4, 6, 8]
 
     def __init__(
-        self, amro, fourier_results: pd.DataFrame, save_name: str, verbose=False
+        self,
+        amro,
+        fourier_results: pd.DataFrame,
+        save_name: str,
+        min_amp_ratio=0.2,
+        max_freq=10,
+        verbose=False,
     ) -> None:
-        self.ft_results_df = fourier_results
-        self.amro_df = amro.AMRO
-        self.act_choices = self._get_H_T_data()
+        """
+        min_amp_ratio :Amplitude must be at this fraction or more of the strongest FT guess
+        max_freq : Use to avoid fitting noise
+        """
 
+        # Fit Param filter values
+        self.min_amp_ratio = min_amp_ratio
+        self.max_freq = max_freq
+        self.amro_df = amro.AMRO
+
+        self.ft_results_df = self._filter_guess_params(fourier_results)
+        self.act_choices = self._get_H_T_values()
+
+        # Save name info
         self.save_name = save_name
-        self.fit_params_fp = os.path.join("Data", save_name + "fit_params.csv")
+        self.fit_params_fp = os.path.join("Data", save_name + "_fit_params.csv")
         self.results_fp = os.path.join("Data", save_name + "_results.pkl")
         # may be redundant, could probably get it from the fit_params_df
-        self.fit_amps_fp = os.path.join("Data", save_name + "fit_amps.csv")
+        self.fit_amps_fp = os.path.join("Data", save_name + "_fit_amps.csv")
 
-        # TODO: Add Save/Load functionality for fit results
         load_conds = (
             (os.path.exists(self.fit_params_fp))
             & os.path.exists(self.results_fp)
@@ -45,7 +60,7 @@ class FitAMRO:
             self.fit_params_df = pd.read_csv(self.fit_params_fp)
             self.fit_amps_df = pd.read_csv(self.fit_amps_fp)
         else:
-            print("Incomplete or no existing fit results found.")
+            print("Initializing.")
             self.lmfit_results_objs = {}
             self.fit_params_df = pd.DataFrame()
             self.fit_amps_df = pd.DataFrame()
@@ -63,6 +78,21 @@ class FitAMRO:
         )
 
         return mean * (summation + 1)
+
+    def _filter_guess_params(self, guess_params: pd.DataFrame) -> pd.DataFrame:
+        """
+        Filter the fit parameter initial guesses from the Fourier transform
+        using the given parameters.
+
+        The amp_ratio is the ratio of the amplitude of a given frequency divided
+        by that of the strongest frequency's amplitude.
+
+        The freq is the number of oscillations per rotation of the sample.
+        """
+        q = "amp_ratio > {} & `freqs (cycles/rot)`<{}".format(
+            self.min_amp_ratio, self.max_freq
+        )
+        return guess_params.query(q)
 
     def ObjFcn(self, params, angle, res_data):
         """
@@ -107,7 +137,76 @@ class FitAMRO:
 
         return results
 
-    def FitACTExperiment(self, label, f_rank_min, f_ratio_min_ratio, f_max):
+    def _get_freqs_guesses(self, act, h, t):
+        q = 'ACT_str == "{}" & H == {} & T== {}'.format(  #' & `freqs (cycles/rot)` in @f_list'.format(
+            act, h, t
+        )
+        guess_df = self.ft_results_df.query(q)
+        self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
+        self.current_f_list_str = [str(f) for f in self.current_f_list]
+
+        return guess_df
+
+    def _initialize_parameters(
+        self, guesses: pd.DataFrame, mean: float
+    ) -> lm.Parameters:
+        """"""
+
+        freqs_list = self.current_f_list  # guesses["freqs (cycles/rot)"].unique()
+
+        # Generate a Parameters ordered dictionary, to which we add Parameter objects
+        initial_p_guesses = lm.Parameters()
+        initial_p_guesses.add("mean", value=mean)
+
+        # Append all Parameter objects, except for the last one (must deal with appended 2)
+        i = 0
+        while i < (len(freqs_list) - 1):  # Extra 2 will always be at the end of f_list
+            freq = int(freqs_list[i])
+            self._add_freq_parameter(freq, initial_p_guesses, mean, guesses)
+            i += 1
+
+        # Deal with the final element
+        # TODO: Surely this is unnecessary?
+        if len(freqs_list) == len(guesses):
+            # If nothing has been appended, just add the information for the final FT guess
+            freq = int(freqs_list[i])
+            self._add_freq_parameter(freq, initial_p_guesses, mean, guesses)
+
+        return initial_p_guesses
+
+    def _add_freq_parameter(
+        self,
+        frequency: int,
+        params: lm.Parameters,
+        mean_val: float,
+        guesses_df: pd.DataFrame,
+    ) -> None:
+        """
+        Forcing all amplitudes to be positive, negative values show up as
+        a pi-sized phase offset.
+        """
+        temp_df = guesses_df.query("`freqs (cycles/rot)` == {}".format(frequency))
+        params.add(
+            "amp" + str(frequency),
+            value=temp_df["mag (ohm-cm)"].values[0] / mean_val,
+            min=0,
+        )
+
+        params.add(
+            "freq" + str(frequency),
+            value=temp_df["freqs (cycles/rot)"].values[0],
+            vary=False,
+        )
+
+        params.add(
+            "phase" + str(frequency),
+            value=temp_df["phase"].values[0],
+            min=-2 * np.pi,
+            max=2 * np.pi,
+        )
+        return
+
+    def FitACTExperiment(self, label):
         """"""
 
         for T_label, H_label in self.act_choices[label]:
@@ -159,26 +258,38 @@ class FitAMRO:
 
         return self.amro_df.query(q) if q else self.amro_df
 
-    def PlotFits(
+    def QuickPlotFits(
         self,
         act_choice: str,
         figsize=None,
         show_residuals=True,
         y_scale=1,
         y_label="Res. ch (ohm-cm)",
-        x_label="Sample Position (rads)",
+        x_label="Angle (rads)",
+        sns_context="poster",
+        delta=False,
+        marker_size=60,
+        hspace=0.05,
+        wspace=0.3,
+        context_font_scale=1,
     ):
-        """"""
+        """
+        Plotter to display finished fits over AMRO data, with the option
+        to show the residuals. Not intended to be for a polished final
+        version.
+        """
         # Set seaborn style
         sns.set_style("whitegrid")
-        sns.set_context("notebook")
+        sns.set_context(sns_context, font_scale=context_font_scale)
 
         data_df = self.amro_df.query('ACT_str=="{}"'.format(act_choice))
 
         T_vals = data_df["T"].unique()
+        T_vals.sort()
         n_cols = len(T_vals)
 
         H_vals = data_df["H"].unique()
+        H_vals.sort()
         n_rows = len(H_vals)
 
         # Calculate figure size if not provided
@@ -194,8 +305,8 @@ class FitAMRO:
             gs = fig.add_gridspec(
                 n_rows * 2,
                 n_cols,
-                hspace=0.05,
-                wspace=0.3,
+                hspace=hspace,
+                wspace=wspace,
                 height_ratios=[3, 1] * n_rows,
             )
             axes = np.empty((n_rows, n_cols), dtype=object)
@@ -235,7 +346,12 @@ class FitAMRO:
 
                 y = y * y_scale
                 y_fit = y_fit * y_scale
+                residuals = y - y_fit  # (y - y_fit) / y * 100
 
+                if delta:
+                    data_mean = np.mean(y)
+                    y = y - data_mean
+                    y_fit = y_fit - data_mean
                 if result is None:
                     print(
                         "No lmfit Result found for {} {}K, {}T".format(act_choice, T, H)
@@ -243,37 +359,48 @@ class FitAMRO:
                     continue
 
                 if show_residuals:
-                    residuals = y - y_fit
-
                     # Create axes for fit and residuals
                     ax_fit = fig.add_subplot(gs[i * 2, j])
                     ax_resid = fig.add_subplot(gs[i * 2 + 1, j], sharex=ax_fit)
                     axes[i, j] = (ax_fit, ax_resid)
 
                     # Plot data and fit
-                    sns.scatterplot(x=x, y=y, color=H_PALETTE[H], ax=ax_fit)
+                    sns.scatterplot(
+                        x=x,
+                        y=y,
+                        color=H_PALETTE[H],
+                        ax=ax_fit,
+                        linewidth=0,
+                        s=marker_size,
+                    )
                     sns.lineplot(x=x, y=y_fit, color="black", ax=ax_fit)
                     ax_fit.set_xlabel("")
                     ax_fit.tick_params(labelbottom=False)
 
                     # Plot residuals
-                    sns.scatterplot(x=x, y=residuals, ax=ax_resid, color="black")
-                    # result.plot_residuals(ax=ax_resid)
+                    sns.scatterplot(
+                        x=x,
+                        y=residuals,
+                        ax=ax_resid,
+                        color="black",
+                        linewidth=0,
+                        s=marker_size,
+                    )
+
                     if i == (n_rows - 1):
                         ax_resid.set(xlabel=x_label)
                     elif i == 0:
-                        ax_fit.set_title("{}K".format(T))  # , fontsize=10)
+                        ax_fit.set_title(str(T).replace(".0", "") + "K")
 
                     if j == 0:
                         ax_fit.set(ylabel=y_label)
-                    # Add title to fit plot
-
-                    # ax_fit.legend(fontsize=8)
-                    # ax_resid.legend(fontsize=8)
+                        # ax_resid.set(ylabel=r"$y-\hat{y}$ (%)")
 
                 else:
                     ax = axes[i, j]
-                    sns.scatterplot(x=x, y=y, color=H_PALETTE[H], ax=ax)
+                    sns.scatterplot(
+                        x=x, y=y, color=H_PALETTE[H], ax=ax, linewidth=0, s=marker_size
+                    )
                     sns.lineplot(x=x, y=y_fit, color=H_PALETTE[H], ax=ax)
                     ax.set_title(f"Position ({i}, {j})", fontsize=10)
                     # ax.legend(fontsize=8)
@@ -287,7 +414,14 @@ class FitAMRO:
             for label, color in H_PALETTE.items()
         ]
 
-        fig.legend(handles=legend_elements, loc="right")
+        fig.legend(
+            handles=legend_elements,
+            loc="center left",
+            bbox_to_anchor=(0.8, 0.5),
+            title="H (T)",
+        )
+        # plt.tight_layout()
+        # plt.tight_layout(rect=[0, 0, 0.95, 1])
         return fig, axes
 
     def _convert_params_to_lists(
@@ -316,75 +450,6 @@ class FitAMRO:
             np.asarray(phase_list),
             params_dict["mean"],
         )
-
-    def _initialize_parameters(
-        self, guesses: pd.DataFrame, mean: float
-    ) -> lm.Parameters:
-        """"""
-
-        freqs_list = guesses["freqs (cycles/rot)"].unique()
-
-        # Generate a Parameters ordered dictionary, to which we add Parameter objects
-        initial_p_guesses = lm.Parameters()
-        initial_p_guesses.add("mean", value=mean)
-
-        # Append all Parameter objects, except for the last one (must deal with appended 2)
-        i = 0
-        while i < (len(freqs_list) - 1):  # Extra 2 will always be at the end of f_list
-            freq = int(freqs_list[i])
-            self._add_freq_parameter(freq, initial_p_guesses, mean, guesses)
-            i += 1
-
-        # Deal with the final element
-        # TODO: Surely this is unnecessary?
-        if len(freqs_list) == len(guesses):
-            # If nothing has been appended, just add the information for the final FT guess
-            freq = int(freqs_list[i])
-            self._add_freq_parameter(freq, initial_p_guesses, mean, guesses)
-
-        return initial_p_guesses
-
-    def _get_freqs_guesses(self, act, h, t):
-        q = 'ACT_str == "{}" & H == {} & T== {}'.format(  #' & `freqs (cycles/rot)` in @f_list'.format(
-            act, h, t
-        )
-        guess_df = self.ft_results_df.query(q)
-        self.current_f_list = guess_df["freqs (cycles/rot)"].values
-        self.current_f_list_str = [str(f) for f in self.current_f_list]
-
-        return guess_df
-
-    def _add_freq_parameter(
-        self,
-        frequency: int,
-        params: lm.Parameters,
-        mean_val: float,
-        guesses_df: pd.DataFrame,
-    ) -> None:
-        """
-        Forcing all amplitudes to be positive, negative values show up as
-        a pi-sized phase offset.
-        """
-        temp_df = guesses_df.query("`freqs (cycles/rot)` == {}".format(frequency))
-        params.add(
-            "amp" + str(frequency),
-            value=temp_df["mag (ohm-cm)"].values[0] / mean_val,
-            min=0,
-        )
-
-        params.add(
-            "freq" + str(frequency),
-            value=temp_df["freqs (cycles/rot)"].values[0],
-            vary=False,
-        )
-
-        params.add(
-            "phase" + str(frequency),
-            value=temp_df["phase"].values[0],
-            min=-2 * np.pi,
-            max=2 * np.pi,
-        )
-        return
 
     def _get_init_params(self, act: str, T: str, H: str) -> pd.DataFrame:
         q = 'ACT_str == "{}" & H == {} & T == {}'.format(act, H, T)
@@ -451,6 +516,8 @@ class FitAMRO:
 
         params_df = pd.DataFrame(params_dict, index=[0])
         if params_df.isna().any().any():
+            print(params_df)
+            raise
             with pd.option_context("future.no_silent_downcasting", True):
                 params_df = params_df.fillna(0)
             print("Filling NaN parameters.")
@@ -470,7 +537,7 @@ class FitAMRO:
 
         return
 
-    def _get_H_T_data(self):
+    def _get_H_T_values(self):
         """"""
         H_T_dict = {}
         grouped = self.amro_df[

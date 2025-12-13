@@ -8,7 +8,7 @@ import seaborn as sns
 H_PALETTE = {0.5: "tab:red", 3: "tab:green", 7: "tab:orange", 9: "tab:blue"}
 
 
-class LoadAMRO:
+class AMROLoader:
     """
     Here we load the pre-cleaned and symmetrized data into a single DataFrame.
     We have already checked the data for NaNs, and handled them when they appeared.

@@ -22,7 +22,7 @@ class Fourier:
 
         if os.path.exists(self.save_fp):
             # TODO: Need to check and make sure it's loading the same data as the AMRO
-            print("loading {}".format(save_name))
+            print("Loading {}".format(save_name))
             self.FT_results_df = pd.read_csv(self.save_fp)
 
             return
