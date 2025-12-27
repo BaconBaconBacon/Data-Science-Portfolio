@@ -8,7 +8,12 @@ import pickle
 import seaborn as sns
 
 from matplotlib.patches import Patch
-from config.settings import PROCESSED_DATA_PATH, FINAL_DATA_PATH, H_PALETTE
+from config.settings import (
+    PROCESSED_DATA_PATH,
+    FINAL_DATA_PATH,
+    H_PALETTE,
+    PROCESSED_FIGURES_PATH,
+)
 
 
 class AMROFitter:
@@ -36,6 +41,8 @@ class AMROFitter:
         self.max_freq = max_freq
         self.amro_df = amro.AMRO
         self.force_four_and_two_sym = force_four_and_two_sym
+        self.verbose = verbose
+        self.overwrite = overwrite
 
         self.ft_results_df = self._filter_guess_params(fourier_results)
         self.act_choices = self._get_H_T_values()
@@ -44,21 +51,19 @@ class AMROFitter:
         s = "_ratio_{}_maxf_{}_".format(min_amp_ratio, max_freq)
         self.save_name = save_name + s.replace(".", "p")
         self._create_save_paths()
-        self.overwrite = overwrite
         self._read_or_initialize()
-        self.verbose = verbose
 
         self.failed_fit_labels = {}
         return
 
     def _create_save_paths(self):
         s = self.save_name + "_fit_params.csv"
-        self.fit_params_fp = PROCESSED_DATA_PATH / s
+        self.fit_params_fp = FINAL_DATA_PATH / s
         s = self.save_name + "_results.pkl"
-        self.results_fp = PROCESSED_DATA_PATH / s
+        self.results_fp = FINAL_DATA_PATH / s
         # may be redundant, could probably get it from the fit_params_df
         s = self.save_name + "_fit_amps.csv"
-        self.fit_amps_fp = PROCESSED_DATA_PATH / s
+        self.fit_amps_fp = FINAL_DATA_PATH / s
         return
 
     def _sine_builder(
@@ -92,12 +97,12 @@ class AMROFitter:
         for T_label, H_label in self.act_choices[label]:
             if self._check_if_already_fitted(label, T_label, H_label):
                 print(
-                    "\nAlready fitted {}, {}K, {}T.".format(label, T_label, H_label)
+                    "Already fitted {}, {}K, {}T.".format(label, T_label, H_label)
                     + " Skipping..."
                 )
                 continue
             else:
-                print("\nFitting {}, {}K, {}T.".format(label, T_label, H_label))
+                print("Fitting {}, {}K, {}T.".format(label, T_label, H_label))
 
                 results_obj = self.FitAMROData(label, H_label, T_label)
 
@@ -358,6 +363,7 @@ class AMROFitter:
         context_font_scale=1,
         H_choices=None,
         T_choices=None,
+        save_fig=False,
     ):
         """
         Plotter to display finished fits over AMRO data, with the option
@@ -381,7 +387,6 @@ class AMROFitter:
         H_vals = data_df["H"].unique()
         H_vals.sort()
         n_rows = len(H_vals)
-
         # Calculate figure size if not provided
         if figsize is None:
             width = 4 * n_cols
@@ -416,13 +421,9 @@ class AMROFitter:
                     print("T", T, "H", H)
                     print(self.lmfit_results_objs[act_choice])
                     raise e
-                fit_params = result.params  # .valuesdict()
+                fit_params = result.params
                 q = "H=={} & T =={}".format(H, T)
-                try:
-                    plot_df = data_df.query(q)
-                except Exception as e:
-                    print(q)
-                    raise e
+                plot_df = data_df.query(q)
 
                 x = plot_df["Sample Position (rads)"].values
                 x_plot = plot_df["Sample Position (deg)"].values
@@ -447,12 +448,13 @@ class AMROFitter:
 
                 y = y * y_scale
                 y_fit = y_fit * y_scale
-                residuals = y - y_fit  # (y - y_fit) / y * 100
+                residuals = (y - y_fit) / y.mean() * 100  #  y - y_fit  #
 
                 if delta:
                     data_mean = np.mean(y)
                     y = y - data_mean
                     y_fit = y_fit - data_mean
+
                 if result is None:
                     print(
                         "No lmfit Result found for {} {}K, {}T".format(act_choice, T, H)
@@ -505,6 +507,7 @@ class AMROFitter:
                     # y labels
                     if j == 0:
                         ax_fit.set(ylabel=y_label)
+                        ax_resid.set(ylabel="(% wrt Mean)")
                     else:
                         ax_fit.set(ylabel=None)
                 else:
@@ -540,6 +543,15 @@ class AMROFitter:
         )
         # plt.tight_layout()
         # plt.tight_layout(rect=[0, 0, 0.95, 1])
+        if save_fig:
+            fn = act_choice + "_figure" + self.save_name + ".pdf"
+            fp = PROCESSED_FIGURES_PATH / fn
+            fig.savefig(
+                fp,
+                dpi=300,
+                transparent=False,
+                bbox_inches="tight",
+            )
         return fig, axes
 
     def PlotBadFits(self):
@@ -696,9 +708,11 @@ class AMROFitter:
 
         params_df = pd.DataFrame(params_dict, index=[0])
 
-        self.fit_params_df = pd.concat(
-            [self.fit_params_df, params_df], ignore_index=True
-        ).reset_index(drop=True)
+        self.fit_params_df = (
+            pd.concat([self.fit_params_df, params_df], ignore_index=True)
+            .reset_index(drop=True)
+            .fillna(0)
+        )
 
         # Add lmfit Results object to dictionary
         # TODO: This nested dict builder is a good candidate for a utils function
