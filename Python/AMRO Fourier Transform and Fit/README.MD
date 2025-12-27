@@ -12,3 +12,22 @@ In order to do this, we have taken angle-resolved magnetoresistance oscillation 
 We are interested in this because the symmetry of the AMRO (how many times the resistivity repeats per sample rotation), is determined by the Fermi surface. A significant change in the AMRO symmetry indicates a significant change in the Fermi surface structure. This is an unusual occurance and indicative of a significant change in the quantum physics of the material.
 
 Investigations of such behaviour can help us discover new materials for use in technologies of the future.
+
+
+
+# Project Structure
+
+
+
+## notebooks
+
+
+## data
+
+### raw
+
+### processed
+
+### final
+
+
