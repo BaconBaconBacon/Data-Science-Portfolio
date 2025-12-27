@@ -57,7 +57,7 @@ class AMROFitter:
         self.fit_amps_fp = os.path.join("Data", self.save_name + "_fit_amps.csv")
         return
 
-    def SineBuilder(
+    def _sine_builder(
         self, rads, amps: np.array, freqs: np.array, phases: np.array, mean: float | int
     ):
         """Returns a Fourier series consisting of sine terms and an offset."""
@@ -67,7 +67,7 @@ class AMROFitter:
 
         return mean * (summation + 1)
 
-    def ObjFcn(self, params, angle, res_data):
+    def _obj_func(self, params, angle, res_data):
         """
         The sinebuilder is fitted by minimizing this least squares objective function.
         """
@@ -76,7 +76,7 @@ class AMROFitter:
             params
         )
 
-        res_model = self.SineBuilder(angle, amps_list, freqs_list, phase_list, offset)
+        res_model = self._sine_builder(angle, amps_list, freqs_list, phase_list, offset)
 
         # Want to minimize least squares
         # return (res_model - res_data) ** 2
@@ -135,40 +135,48 @@ class AMROFitter:
 
         # TODO: some parameters have No errors, causing NaNs later on.
         # Perform the minimization
-        minner = lm.Minimizer(self.ObjFcn, initial_params, fcn_args=(x, y_norm))
-        results = minner.minimize()
-
+        try:
+            minner = lm.Minimizer(self._obj_func, initial_params, fcn_args=(x, y_norm))
+            results = minner.minimize()
+        except KeyError as e:
+            print(self.current_f_list)
+            # print(self.current_f_list_str)
+            print(initial_params)
+            raise e
         # Check if the covariant matrix is singular
         # for param_name in results.params.keys():
         if self._is_covar_matrix_singular(results):
+            print("Covariance matrix is singular.")
+            results = self._refit(initial_params, x, y_norm)
+            if self._is_covar_matrix_singular(results):
+                print("Covariance matrix is still singular. Setting errors to np.inf")
+                bad_fit_params = []
+                for param_name in results.params.keys():
+                    bad_fit_params.append(param_name)
+                    results.params[param_name].stderr == np.inf
+                print(f"Errors for {bad_fit_params} could not be calculated.")
 
-            print(
-                "Fit's covariance matrix is singular. Removing parameter bounds and re-fitting."
-            )
-            for name in results.params:
-                results.params[name].min = -np.inf
-                results.params[name].max = np.inf
-            results = minner.minimize()
-        bad_fit_params = []
-        for param_name in results.params.keys():
-            if results.params[param_name].stderr is None:
-
-                bad_fit_params.append(param_name)
-                results.params[param_name].stderr == np.inf
-
-        if len(bad_fit_params) > 0:
-            print(
-                f"Errors for {bad_fit_params} could not be calculated, errors set to np.inf"
-            )
         results.params["mean"].value *= y_scale
         results.params["mean"].stderr *= y_scale
 
         if self.verbose:
             print("\n", lm.fit_report(results, show_correl=False), "\n")
         del self.current_f_list
-        del self.current_f_list_str
+        # del self.current_f_list_str
 
         return results
+
+    def _refit(
+        self, init_params: lm.Parameters, x_data: list, y_normalized: list
+    ) -> lm.minimizer.MinimizerResult:
+        print("Removing parameter bounds and re-fitting.")
+        for name in init_params:
+            init_params[name].min = -np.inf
+            init_params[name].max = np.inf
+        minner = lm.Minimizer(
+            self._obj_func, init_params, fcn_args=(x_data, y_normalized)
+        )
+        return minner.minimize()
 
     def _add_parameter(
         self,
@@ -184,7 +192,7 @@ class AMROFitter:
         The y_scale scaling is to improve the error estimation of the fitter.
 
         We divide the magnitude by the mean in order to align with the way
-        the SineBuilder function works.
+        the _sine_builder function works.
         """
         temp_df = guesses_df.query("`freqs (cycles/rot)` == {}".format(frequency))
         if temp_df.shape[0] == 0:
@@ -193,43 +201,34 @@ class AMROFitter:
                     frequency
                 )
             )
-            params.add(
-                "amp" + str(frequency),
-                value=0,
-                min=0,
+            temp_df = pd.DataFrame(
+                {
+                    "freqs": frequency,
+                    "mag (ohm-cm)": 0,
+                    "freqs (cycles/rot)": 0,
+                    "phase": 0,
+                },
+                index=[0],
             )
 
-            params.add(
-                "freq" + str(frequency),
-                value=0,
-                vary=False,
-            )
+        params.add(
+            "amp" + str(frequency),
+            value=temp_df["mag (ohm-cm)"].values[0] / mean_val,
+            min=0,
+        )
 
-            params.add(
-                "phase" + str(frequency),
-                value=0,
-                min=-2 * np.pi,
-                max=2 * np.pi,
-            )
-        else:
-            params.add(
-                "amp" + str(frequency),
-                value=temp_df["mag (ohm-cm)"].values[0] / mean_val,
-                min=0,
-            )
+        params.add(
+            "freq" + str(frequency),
+            value=temp_df["freqs (cycles/rot)"].values[0],
+            vary=False,
+        )
 
-            params.add(
-                "freq" + str(frequency),
-                value=temp_df["freqs (cycles/rot)"].values[0],
-                vary=False,
-            )
-
-            params.add(
-                "phase" + str(frequency),
-                value=temp_df["phase"].values[0],
-                min=-2 * np.pi,
-                max=2 * np.pi,
-            )
+        params.add(
+            "phase" + str(frequency),
+            value=temp_df["phase"].values[0],
+            min=-2 * np.pi,
+            max=2 * np.pi,
+        )
 
         return
 
@@ -255,17 +254,10 @@ class AMROFitter:
 
         # Append all Parameter objects, except for the last one (must deal with appended 2)
         i = 0
-        while i < (len(freqs_list) - 1):  # Extra 2 will always be at the end of f_list
+        while i < (len(freqs_list)):  # Extra 2 will always be at the end of f_list
             freq = int(freqs_list[i])
             self._add_parameter(freq, initial_p_guesses, mean, guesses)
             i += 1
-
-        # Deal with the final element
-        # TODO: Surely this is unnecessary?
-        if len(freqs_list) == len(guesses):
-            # If nothing has been appended, just add the information for the final FT guess
-            freq = int(freqs_list[i])
-            self._add_parameter(freq, initial_p_guesses, mean, guesses)
 
         return initial_p_guesses
 
@@ -275,13 +267,15 @@ class AMROFitter:
         )
         guess_df = self.ft_results_df.query(q)
         self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
+        print("boop", self.current_f_list)
         if self.force_four_and_two_sym:
+            print("adding 2 and 4")
             self.current_f_list = np.append(self.current_f_list, [2, 4])
 
             # Drop duplicates
             self.current_f_list = list(set(self.current_f_list))
 
-        self.current_f_list_str = [str(f) for f in self.current_f_list]
+        # self.current_f_list_str = [str(f) for f in self.current_f_list]
 
         return guess_df
 
@@ -391,7 +385,7 @@ class AMROFitter:
                     offset,
                 ) = self._convert_params_to_lists(fit_params)
 
-                y_fit = self.SineBuilder(
+                y_fit = self._sine_builder(
                     x,
                     amps_list,
                     freqs_list,
@@ -518,14 +512,14 @@ class AMROFitter:
         to minimize run time.
         """
         params_dict = params_obj.valuesdict()
-        try:
-            amps_phase = [
-                (params_dict[f"amp{f_str}"], params_dict[f"phase{f_str}"])
-                for f_str in self.current_f_list_str
-            ]
-        except KeyError:
-            print(params_dict)
-            raise
+        # amps_phase = [
+        #     (params_dict[f"amp{f_str}"], params_dict[f"phase{f_str}"])
+        #     for f_str in self.current_f_list_str
+        # ]
+        amps_phase = [
+            (params_dict[f"amp{str(f)}"], params_dict[f"phase{str(f)}"])
+            for f in self.current_f_list
+        ]
         amps_list, phase_list = zip(*amps_phase)
 
         return (
@@ -674,7 +668,7 @@ class AMROFitter:
         offset = 1
 
         x = np.linspace(0, 2 * np.pi, 1000)
-        y = self.SineBuilder(x, amp, f, phase, offset)
+        y = self._sine_builder(x, amp, f, phase, offset)
 
         plt.scatter(x, y)
         return
