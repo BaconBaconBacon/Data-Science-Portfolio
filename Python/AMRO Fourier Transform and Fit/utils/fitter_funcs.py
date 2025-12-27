@@ -17,8 +17,7 @@ from config.settings import (
 
 
 class AMROFitter:
-    # TODO: Consider removing this functionality.
-    FIT_SYMMETRIES = [2, 4]  # , 6, 8]
+    # FIT_SYMMETRIES = [2, 4]
 
     def __init__(
         self,
@@ -88,10 +87,9 @@ class AMROFitter:
         res_model = self._sine_builder(angle, amps_list, freqs_list, phase_list, offset)
 
         # Want to minimize least squares
-        # return (res_model - res_data) ** 2
         return res_model - res_data
 
-    def FitACTExperiment(self, label):
+    def fit_act_experiment(self, label):
         """"""
 
         for T_label, H_label in self.act_choices[label]:
@@ -104,7 +102,7 @@ class AMROFitter:
             else:
                 print("Fitting {}, {}K, {}T.".format(label, T_label, H_label))
 
-                results_obj = self.FitAMROData(label, H_label, T_label)
+                results_obj = self.fit_amro_data(label, H_label, T_label)
 
                 self._pack_act_fit_results(
                     results_obj,
@@ -115,7 +113,7 @@ class AMROFitter:
                 self._save_to_disk()
         return
 
-    def FitAMROData(
+    def fit_amro_data(
         self, ACT: str, H: int | float, T: int | float  # f_list: list,
     ) -> lm.minimizer.MinimizerResult:
         """
@@ -145,7 +143,6 @@ class AMROFitter:
         results = minner.minimize()
 
         # Check if the covariant matrix is singular
-        # for param_name in results.params.keys():
         if self._is_covar_matrix_singular(results):
             print("Covariance matrix is singular.")
             results = self._refit(initial_params, x, y_norm)
@@ -154,7 +151,7 @@ class AMROFitter:
                 bad_fit_params = []
                 for param_name in results.params.keys():
                     bad_fit_params.append(param_name)
-                    results.params[param_name].stderr == np.inf
+                    results.params[param_name].stderr = np.inf
                 print(f"Errors for {bad_fit_params} could not be calculated.")
                 self._record_failed_fit(ACT, H, T)
         results.params["mean"].value *= y_scale
@@ -163,7 +160,6 @@ class AMROFitter:
         if self.verbose:
             print("\n", lm.fit_report(results, show_correl=False), "\n")
         del self.current_f_list
-        # del self.current_f_list_str
 
         return results
 
@@ -173,6 +169,11 @@ class AMROFitter:
         else:
             self.failed_fit_labels[act_label][h_label] = t_label
         return
+
+    def _build_query(self, act, h, t) -> str:
+        # TODO: Fill this out
+        q = ""
+        return q
 
     def _refit(
         self, init_params: lm.Parameters, x_data: list, y_normalized: list
@@ -281,8 +282,6 @@ class AMROFitter:
             # Drop duplicates
             self.current_f_list = list(set(self.current_f_list))
 
-        # self.current_f_list_str = [str(f) for f in self.current_f_list]
-
         return guess_df
 
     def _is_covar_matrix_singular(
@@ -293,29 +292,11 @@ class AMROFitter:
             for param_name in results_obj.params.keys()
         )
 
-    def GetAMROData(self, act=None, h=None, t=None):
-        """
-        Retrieve a subset of the AMRO data.
-
-        TODO: May be redundant.
-        """
-        conds = []
-        if act is not None:
-            conds.append('ACT_str == "{}"'.format(act))
-        if h is not None:
-            conds.append("H =={}".format(h))
-        if t is not None:
-            conds.append("T=={}".format(t))
-
-        q = " & ".join(conds)
-
-        return self.amro_df.query(q) if q else self.amro_df
-
     def _check_residuals(self):
         # TODO: Check the mean absolute residual against some value. This lets us better track poor fits.
         return
 
-    def GetFittedParameters(
+    def get_fitted_parameters(
         self,
         act: str | list | None = None,
         h: int | float | list | None = None,
@@ -347,7 +328,7 @@ class AMROFitter:
         else:
             return self.fit_params_df
 
-    def PlotFits(
+    def plot_fits(
         self,
         act_choice: str,
         figsize=None,
@@ -415,12 +396,9 @@ class AMROFitter:
         # Iterate over grid
         for i, H in enumerate(H_vals):
             for j, T in enumerate(T_vals):
-                try:
-                    result = self.lmfit_results_objs[act_choice][T][H]
-                except KeyError as e:
-                    print("T", T, "H", H)
-                    print(self.lmfit_results_objs[act_choice])
-                    raise e
+
+                result = self.lmfit_results_objs[act_choice][T][H]
+
                 fit_params = result.params
                 q = "H=={} & T =={}".format(H, T)
                 plot_df = data_df.query(q)
@@ -541,8 +519,7 @@ class AMROFitter:
             bbox_to_anchor=(0.8, 0.5),
             title="H (T)",
         )
-        # plt.tight_layout()
-        # plt.tight_layout(rect=[0, 0, 0.95, 1])
+
         if save_fig:
             fn = act_choice + "_figure" + self.save_name + ".pdf"
             fp = PROCESSED_FIGURES_PATH / fn
@@ -554,7 +531,7 @@ class AMROFitter:
             )
         return fig, axes
 
-    def PlotBadFits(self):
+    def plot_bad_fits(self):
         print(self.failed_fit_labels)
         act_labels = self.failed_fit_labels.keys()
 
@@ -585,14 +562,10 @@ class AMROFitter:
 
         Maybe keeping track of the freq's involved can speed this up.
 
-        TODO: Would be nice to front-load as much as possible so it's
-        to minimize run time.
+
         """
         params_dict = params_obj.valuesdict()
-        # amps_phase = [
-        #     (params_dict[f"amp{f_str}"], params_dict[f"phase{f_str}"])
-        #     for f_str in self.current_f_list_str
-        # ]
+
         amps_phase = [
             (params_dict[f"amp{str(f)}"], params_dict[f"phase{str(f)}"])
             for f in self.current_f_list
@@ -624,14 +597,11 @@ class AMROFitter:
     def _get_init_params(self, act: str, T: str, H: str) -> pd.DataFrame:
         q = 'ACT_str == "{}" & H == {} & T == {}'.format(act, H, T)
 
-        # TODO: Test that this works
-        # q += "& `freqs (cycles/rot)`in @self.FIT_SYMMETRIES"
-
         f_info = self.ft_results_df.query(q)[["freqs (cycles/rot)", "amp_ratio"]]
 
         return f_info
 
-    def _get_init_freqs(self, act: str, T: str, H: str) -> pd.DataFrame:
+    def _get_init_freqs(self, act: str, T: str, H: str) -> list:
         f_info = self._get_init_params(act, T, H)
         return f_info["freqs (cycles/rot)"].values
 
@@ -699,9 +669,7 @@ class AMROFitter:
             "T": float(t_label),
             "chi squared": float(lmfit_result.redchi),
         }
-        # print("H", h_label, "T", t_label)
-        # print(params_dict)
-        # raise
+
         for var in var_names:
             params_dict[var] = param_results[var].value
             params_dict[var + " err"] = param_results[var].stderr
@@ -730,9 +698,7 @@ class AMROFitter:
     def _get_H_T_values(self):
         """"""
         H_T_dict = {}
-        grouped = self.amro_df[
-            ["ACT_str", "H", "T"]
-        ].drop_duplicates()  # .groupby(, as_index=False)
+        grouped = self.amro_df[["ACT_str", "H", "T"]].drop_duplicates()
 
         for act in grouped["ACT_str"].unique():
             tmp_list = []
