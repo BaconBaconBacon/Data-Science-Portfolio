@@ -1,6 +1,7 @@
 Python/DC_Materials
 Python/Masters Example/References
 .ipynb_checkpoints
+.idea
 .virtual_documents
 __pycache__
 /Python/references
@@ -13,3 +14,4 @@ Data/
 .env
 Masters Thesis/
 anaconda_projects/
+TODO.txt
