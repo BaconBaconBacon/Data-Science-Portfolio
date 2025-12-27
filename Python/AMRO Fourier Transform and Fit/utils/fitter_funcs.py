@@ -7,7 +7,6 @@ import pandas as pd
 import pickle
 import seaborn as sns
 
-
 from matplotlib.patches import Patch
 from config.settings import PROCESSED_DATA_PATH, FINAL_DATA_PATH, H_PALETTE
 
@@ -25,6 +24,7 @@ class AMROFitter:
         max_freq=10,
         force_four_and_two_sym=False,
         verbose=False,
+        overwrite=False,
     ) -> None:
         """
         min_amp_ratio : Amplitude must be at this fraction or more of the strongest FT guess
@@ -44,17 +44,21 @@ class AMROFitter:
         s = "_ratio_{}_maxf_{}_".format(min_amp_ratio, max_freq)
         self.save_name = save_name + s.replace(".", "p")
         self._create_save_paths()
-
+        self.overwrite = overwrite
         self._read_or_initialize()
         self.verbose = verbose
 
+        self.failed_fit_labels = {}
         return
 
     def _create_save_paths(self):
-        self.fit_params_fp = os.path.join("Data", self.save_name + "_fit_params.csv")
-        self.results_fp = os.path.join("Data", self.save_name + "_results.pkl")
+        s = self.save_name + "_fit_params.csv"
+        self.fit_params_fp = PROCESSED_DATA_PATH / s
+        s = self.save_name + "_results.pkl"
+        self.results_fp = PROCESSED_DATA_PATH / s
         # may be redundant, could probably get it from the fit_params_df
-        self.fit_amps_fp = os.path.join("Data", self.save_name + "_fit_amps.csv")
+        s = self.save_name + "_fit_amps.csv"
+        self.fit_amps_fp = PROCESSED_DATA_PATH / s
         return
 
     def _sine_builder(
@@ -88,21 +92,20 @@ class AMROFitter:
         for T_label, H_label in self.act_choices[label]:
             if self._check_if_already_fitted(label, T_label, H_label):
                 print(
-                    "Already fitted {}, {}K, {}T.".format(label, T_label, H_label)
+                    "\nAlready fitted {}, {}K, {}T.".format(label, T_label, H_label)
                     + " Skipping..."
                 )
                 continue
             else:
-                print("Fitting {}, {}K, {}T.".format(label, T_label, H_label))
+                print("\nFitting {}, {}K, {}T.".format(label, T_label, H_label))
 
                 results_obj = self.FitAMROData(label, H_label, T_label)
 
-                # Make use of the class variables
                 self._pack_act_fit_results(
                     results_obj,
-                    label,
-                    H_label,
-                    T_label,  # , all_fits_df, all_results_dict, fitted_amps
+                    act_label=label,
+                    h_label=H_label,
+                    t_label=T_label,  # , all_fits_df, all_results_dict, fitted_amps
                 )
                 self._save_to_disk()
         return
@@ -131,18 +134,11 @@ class AMROFitter:
         y_mean = y_norm.mean()
 
         initial_params = self._initialize_parameters(guess_df, y_mean)
-        fail_count = 0
 
-        # TODO: some parameters have No errors, causing NaNs later on.
         # Perform the minimization
-        try:
-            minner = lm.Minimizer(self._obj_func, initial_params, fcn_args=(x, y_norm))
-            results = minner.minimize()
-        except KeyError as e:
-            print(self.current_f_list)
-            # print(self.current_f_list_str)
-            print(initial_params)
-            raise e
+        minner = lm.Minimizer(self._obj_func, initial_params, fcn_args=(x, y_norm))
+        results = minner.minimize()
+
         # Check if the covariant matrix is singular
         # for param_name in results.params.keys():
         if self._is_covar_matrix_singular(results):
@@ -155,7 +151,7 @@ class AMROFitter:
                     bad_fit_params.append(param_name)
                     results.params[param_name].stderr == np.inf
                 print(f"Errors for {bad_fit_params} could not be calculated.")
-
+                self._record_failed_fit(ACT, H, T)
         results.params["mean"].value *= y_scale
         results.params["mean"].stderr *= y_scale
 
@@ -165,6 +161,13 @@ class AMROFitter:
         # del self.current_f_list_str
 
         return results
+
+    def _record_failed_fit(self, act_label, h_label, t_label) -> None:
+        if act_label not in self.failed_fit_labels.keys():
+            self.failed_fit_labels[act_label] = {h_label: t_label}
+        else:
+            self.failed_fit_labels[act_label][h_label] = t_label
+        return
 
     def _refit(
         self, init_params: lm.Parameters, x_data: list, y_normalized: list
@@ -267,9 +270,7 @@ class AMROFitter:
         )
         guess_df = self.ft_results_df.query(q)
         self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
-        print("boop", self.current_f_list)
         if self.force_four_and_two_sym:
-            print("adding 2 and 4")
             self.current_f_list = np.append(self.current_f_list, [2, 4])
 
             # Drop duplicates
@@ -305,7 +306,43 @@ class AMROFitter:
 
         return self.amro_df.query(q) if q else self.amro_df
 
-    def QuickPlotFits(
+    def _check_residuals(self):
+        # TODO: Check the mean absolute residual against some value. This lets us better track poor fits.
+        return
+
+    def GetFittedParameters(
+        self,
+        act: str | list | None = None,
+        h: int | float | list | None = None,
+        t: int | float | list | None = None,
+    ) -> pd.DataFrame:
+        # TODO: Would be worth throwing this query builder functionality into a utils function. Programmatically define
+        # a function for it that gets initialized with the class.
+        q = []
+        if act is not None:
+            if isinstance(act, str):
+                q.append('ACT_str == "{}"'.format(act))
+            elif isinstance(act, list):
+                q.append("ACT_list in @act")
+        if h is not None:
+            if isinstance(h, list):
+                q.append("H in @h")
+            elif isinstance(h, int) | isinstance(h, float):
+                q.append("H == {}".format(h))
+        if t is not None:
+            if isinstance(t, list):
+                q.append("T in @t")
+            elif isinstance(t, int) | isinstance(t, float):
+                q.append("T == {}".format(t))
+
+        if len(q) > 0:
+            q = " & ".join(q)
+            print(q)
+            return self.fit_params_df.query(q)
+        else:
+            return self.fit_params_df
+
+    def PlotFits(
         self,
         act_choice: str,
         figsize=None,
@@ -319,6 +356,8 @@ class AMROFitter:
         hspace=0.05,
         wspace=0.3,
         context_font_scale=1,
+        H_choices=None,
+        T_choices=None,
     ):
         """
         Plotter to display finished fits over AMRO data, with the option
@@ -328,8 +367,12 @@ class AMROFitter:
         # Set seaborn style
         sns.set_style("whitegrid")
         sns.set_context(sns_context, font_scale=context_font_scale)
-
-        data_df = self.amro_df.query('ACT_str=="{}"'.format(act_choice))
+        q = 'ACT_str=="{}"'.format(act_choice)
+        if H_choices is not None:
+            q += "& H in @H_choices"
+        if T_choices is not None:
+            q += "& T in @T_choices"
+        data_df = self.amro_df.query(q)
 
         T_vals = data_df["T"].unique()
         T_vals.sort()
@@ -367,11 +410,20 @@ class AMROFitter:
         # Iterate over grid
         for i, H in enumerate(H_vals):
             for j, T in enumerate(T_vals):
-                result = self.lmfit_results_objs[act_choice][T][H]
+                try:
+                    result = self.lmfit_results_objs[act_choice][T][H]
+                except KeyError as e:
+                    print("T", T, "H", H)
+                    print(self.lmfit_results_objs[act_choice])
+                    raise e
                 fit_params = result.params  # .valuesdict()
-                plot_df = data_df.query("H=={} & T =={}".format(H, T))
+                q = "H=={} & T =={}".format(H, T)
+                try:
+                    plot_df = data_df.query(q)
+                except Exception as e:
+                    print(q)
+                    raise e
 
-                # Note: Do not use vars x_label and y_label for this
                 x = plot_df["Sample Position (rads)"].values
                 x_plot = plot_df["Sample Position (deg)"].values
 
@@ -490,6 +542,19 @@ class AMROFitter:
         # plt.tight_layout(rect=[0, 0, 0.95, 1])
         return fig, axes
 
+    def PlotBadFits(self):
+        print(self.failed_fit_labels)
+        act_labels = self.failed_fit_labels.keys()
+
+        for act_label in act_labels:
+            h_labels = self.failed_fit_labels[act_label].keys()
+            t_labels = []
+            for h_label in h_labels:
+                t_labels.append(self.failed_fit_labels[act_label][h_label])
+            _, _ = self.PlotFits(act_label, T_choices=t_labels, H_choices=h_labels)
+        plt.show()
+        return
+
     def _save_to_disk(self):
         """ """
         with open(self.results_fp, "wb") as f:
@@ -570,9 +635,10 @@ class AMROFitter:
 
     def _read_or_initialize(self):
         load_conds = (
-            (os.path.exists(self.fit_params_fp))
+            os.path.exists(self.fit_params_fp)
             & os.path.exists(self.results_fp)
             & os.path.exists(self.fit_amps_fp)
+            & (not self.overwrite)
         )
         if load_conds:
             print("Loading previous fit results.")
@@ -606,9 +672,9 @@ class AMROFitter:
 
         f_info = pd.DataFrame(
             {
-                "act": act_label,
-                "T (K)": t_label,
-                "H (T)": h_label,
+                "ACT_str": act_label,
+                "T": t_label,
+                "H": h_label,
                 "f_list": f_list,
             }
         )
@@ -616,30 +682,32 @@ class AMROFitter:
 
         # Pack all fit parameters
         params_dict = {
-            "ACT": act_label,
-            "H": h_label,
-            "T": t_label,
-            "chi squared": lmfit_result.redchi,
+            "ACT_str": act_label,
+            "H": float(h_label),
+            "T": float(t_label),
+            "chi squared": float(lmfit_result.redchi),
         }
+        # print("H", h_label, "T", t_label)
+        # print(params_dict)
+        # raise
         for var in var_names:
             params_dict[var] = param_results[var].value
             params_dict[var + " err"] = param_results[var].stderr
 
         params_df = pd.DataFrame(params_dict, index=[0])
-        # if params_df.isna().any().any():
-        #     print(params_df)
-        #     raise ValueError("NaN found in fitted parameters.")
 
         self.fit_params_df = pd.concat(
             [self.fit_params_df, params_df], ignore_index=True
-        )
+        ).reset_index(drop=True)
 
         # Add lmfit Results object to dictionary
-        if act_label not in self.lmfit_results_objs:
+        # TODO: This nested dict builder is a good candidate for a utils function
+        # OR Just pre-populate this dictionary with the unique ACT/H/T permutations
+        if act_label not in self.lmfit_results_objs.keys():
             self.lmfit_results_objs[act_label] = {}
-        if h_label not in self.lmfit_results_objs[act_label]:
-            self.lmfit_results_objs[act_label][h_label] = {}
-        self.lmfit_results_objs[act_label][h_label][t_label] = lmfit_result
+        if t_label not in self.lmfit_results_objs[act_label].keys():
+            self.lmfit_results_objs[act_label][t_label] = {}
+        self.lmfit_results_objs[act_label][t_label][h_label] = lmfit_result
 
         # results_obj, all_fits_df, all_results_dict, fitted_amps
 
@@ -655,7 +723,7 @@ class AMROFitter:
         for act in grouped["ACT_str"].unique():
             tmp_list = []
             for _, row in grouped.query('ACT_str=="{}"'.format(act)).iterrows():
-                tmp_list.append((row["T"], row["H"]))
+                tmp_list.append((float(row["T"]), float(row["H"])))
             H_T_dict[act] = tmp_list
         return H_T_dict
 

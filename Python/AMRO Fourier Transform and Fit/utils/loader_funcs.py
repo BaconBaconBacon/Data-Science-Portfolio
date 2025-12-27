@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from config.settings import PROCESSED_DATA_PATH, H_PALETTE
+from config.settings import RAW_DATA_PATH, H_PALETTE
 
 # H_PALETTE = {0.5: "tab:red", 3: "tab:green", 7: "tab:orange", 9: "tab:blue"}
 
@@ -50,7 +50,7 @@ class AMROLoader:
 
     def __init__(self, file_name: str):
         self.file_name = file_name
-        self.save_folder = PROCESSED_DATA_PATH
+        self.save_folder = RAW_DATA_PATH
         self.file_path = os.path.join(self.save_folder, self.file_name)
         self.AMRO = pd.DataFrame()
 
