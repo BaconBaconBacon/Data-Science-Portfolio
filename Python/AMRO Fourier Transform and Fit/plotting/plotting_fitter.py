@@ -3,10 +3,8 @@
 """
 
 import matplotlib.pyplot as plt
-import seaborn as sns
-from utils import utils_misc as u
 import numpy as np
-from matplotlib.patches import Patch
+import seaborn as sns
 
 from config.settings import (
     PROCESSED_DATA_PATH,
@@ -14,25 +12,25 @@ from config.settings import (
     H_PALETTE,
     PROCESSED_FIGURES_PATH,
 )
+from matplotlib.patches import Patch
+from utils import utils_misc as u
 
 
-def _plot_fits(
+sns_context = "poster"
+hspace = 0.05
+wspace = 0.3
+context_font_scale = 1
+
+
+def _plot_fits_with_residuals(
     fitter,
     act_choice: str,
+    h_choices=None,
+    t_choices=None,
     figsize=None,
-    show_residuals=True,
     y_scale=1,
     y_label="Res. ch (ohm-cm)",
     x_label="Angle (deg)",
-    sns_context="poster",
-    delta=False,
-    marker_size=60,
-    hspace=0.05,
-    wspace=0.3,
-    context_font_scale=1,
-    H_choices=None,
-    T_choices=None,
-    save_fig=False,
 ):
     """
     Plotter to display finished fits over AMRO data, with the option
@@ -40,200 +38,257 @@ def _plot_fits(
     version.
     """
     # Set seaborn style
+    # TODO: Use set_context or rcParams to set the plotting parameters like hspace and wspace
+
     sns.set_style("whitegrid")
-    sns.set_context(sns_context, font_scale=context_font_scale)
+    sns.set_context(sns_context)  # , font_scale=context_font_scale)
 
-    data_df = u.QueryDataFrame(fitter.amro_df, act=act_choice, h=H_choices, t=T_choices)
+    data_df = u.QueryDataFrame(fitter.amro_df, act=act_choice, h=h_choices, t=t_choices)
+    t_vals, h_vals = _get_plot_labels(data_df)
 
-    t_vals = data_df["T"].unique()
-    t_vals.sort()
     n_cols = len(t_vals)
-
-    h_vals = data_df["H"].unique()
-    h_vals.sort()
     n_rows = len(h_vals)
+
     # Calculate figure size if not provided
     if figsize is None:
-        width = 4 * n_cols
-        height = (6 if show_residuals else 4) * n_rows
-        figsize = (width, height)
+        figsize = _calculate_fig_size(n_cols=n_cols, n_rows=n_rows)
 
     # Create subplots
-    if show_residuals:
-        # Each position gets 2 rows: one for fit, one for residuals
-        fig = plt.figure(figsize=figsize)
-        gs = fig.add_gridspec(
-            n_rows * 2,
-            n_cols,
-            hspace=hspace,
-            wspace=wspace,
-            height_ratios=[3, 1] * n_rows,
-        )
-        axes = np.empty((n_rows, n_cols), dtype=object)
-    else:
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
-        if n_rows == 1 and n_cols == 1:
-            axes = np.array([[axes]])
-        elif n_rows == 1 or n_cols == 1:
-            axes = axes.reshape(n_rows, n_cols)
+    fig, gs, axes = _create_subplots(
+        fig_size=figsize,
+        n_rows=n_rows,
+        n_cols=n_cols,
+        hspace=hspace,
+        wspace=wspace,
+    )
+
+    _plot_grid(
+        data_df,
+        fitter,
+        act_choice,
+        h_vals,
+        t_vals,
+        fig,
+        gs,
+        axes,
+        y_scale,
+        x_label,
+        y_label,
+    )
+
+    # Generate legend
+    _generate_legend(fig)
+
+    return fig, axes
+
+
+def _plot_fits_with_residuals_uohm(
+    fitter, act_choice: str, h_choices=None, t_choices=None, figsize=None
+):
+    fig, axes = _plot_fits_with_residuals(
+        fitter=fitter,
+        act_choice=act_choice,
+        h_choices=h_choices,
+        t_choices=t_choices,
+        figsize=figsize,
+        y_scale=10**6,
+        y_label="Res. (uohm-cm)",
+    )
+    return fig, axes
+
+
+def _plot_grid(
+    data_df, fitter, act, h_vals, t_vals, fig, gs, axes, y_scale, x_label, y_label
+):
+    n_rows = len(h_vals)
 
     # Iterate over grid
     for i, H in enumerate(h_vals):
         for j, T in enumerate(t_vals):
 
-            try:
-                result = fitter.lmfit_results_objs[act_choice][T][H]
-            except KeyError as e:
-                print("ACT", act_choice, "T", T, "H", H)
-                print("hvals", h_vals)
-                print("tvals", t_vals)
-                print(fitter.lmfit_results_objs[act_choice].keys())
-                print(data_df)
-                # print(self.lmfit_results_objs[act_choice][T].keys())
-                raise e
-            fit_params = result.params
+            ax_fit = fig.add_subplot(gs[i * 2, j])
+            ax_resid = fig.add_subplot(gs[i * 2 + 1, j], sharex=ax_fit)
+            axes[i, j] = (ax_fit, ax_resid)
 
-            plot_df = u.QueryDataFrame(data_df, act=act_choice, h=H, t=T)
+            x_data, x_plot, y_data = _get_plot_points(data_df, act, H, T)
 
-            x = plot_df["Sample Position (rads)"].values
-            x_plot = plot_df["Sample Position (deg)"].values
+            params = _get_fit_params(fitter, act, H, T)
+            y_fit = _calculate_model_values(x_data, params)
+            if y_fit is None:
+                print("No lmfit Result found for {} {}K, {}T".format(act, T, H))
+                return
 
-            y = plot_df["Res. (ohm-cm)"].values
-
-            df = fitter._get_freqs_guesses(act_choice, H, T)
-            fitter.current_f_list = df["freqs (cycles/rot)"].unique()
-
-            (
-                amps_list,
-                freqs_list,
-                phase_list,
-                offset,
-            ) = fitter._convert_params_to_lists(fit_params)
-            del fitter.current_f_list
-
-            y_fit = fitter._sine_builder(
-                x,
-                amps_list,
-                freqs_list,
-                phase_list,
-                offset,
-            )
-
-            y = y * y_scale
+            y_data = y_data * y_scale
             y_fit = y_fit * y_scale
-            residuals = (y - y_fit) / y.mean() * 100  #  y - y_fit  #
+            residuals = y_data - y_fit
 
-            if delta:
-                data_mean = np.mean(y)
-                y = y - data_mean
-                y_fit = y_fit - data_mean
+            _plot_fit_over_data(x_plot, y_data, y_fit, ax_fit, H_PALETTE[H])
+            _plot_residuals(x_plot, residuals, ax_resid)
 
-            if result is None:
-                print("No lmfit Result found for {} {}K, {}T".format(act_choice, T, H))
-                continue
+            subplot_title = "{}T | {}K".format(H, T)
+            _format_data_axis(ax_fit, n_rows, i, j, subplot_title, x_label, y_label)
+            _format_residuals_axis(ax_resid, n_rows, i, j, x_label)
 
-            if show_residuals:
-                # Create axes for fit and residuals
-                ax_fit = fig.add_subplot(gs[i * 2, j])
-                ax_resid = fig.add_subplot(gs[i * 2 + 1, j], sharex=ax_fit)
-                axes[i, j] = (ax_fit, ax_resid)
 
-                ax_fit.set_xticks([0, 90, 180, 270, 360])
-                ax_resid.set_xticks([0, 90, 180, 270, 360])
+def _plot_residuals(x_plot, residuals, ax_resid):
+    sns.scatterplot(
+        x=x_plot,
+        y=residuals,
+        ax=ax_resid,
+        color="black",
+        linewidth=0,
+    )
+    return
 
-                # Plot data and fit
-                sns.scatterplot(
-                    x=x_plot,
-                    y=y,
-                    color=H_PALETTE[H],
-                    ax=ax_fit,
-                    linewidth=0,
-                    s=marker_size,
-                )
-                sns.lineplot(x=x_plot, y=y_fit, color="black", ax=ax_fit)
-                ax_fit.set_xlabel("")
-                ax_fit.tick_params(labelbottom=False)
 
-                # Plot residuals
-                sns.scatterplot(
-                    x=x_plot,
-                    y=residuals,
-                    ax=ax_resid,
-                    color="black",
-                    linewidth=0,
-                    s=marker_size,
-                )
+def _plot_fit_over_data(x_plot, y, y_fit, ax, color):
+    sns.scatterplot(
+        x=x_plot,
+        y=y,
+        color=color,
+        ax=ax,
+        linewidth=0,
+    )
+    sns.lineplot(x=x_plot, y=y_fit, color="black", ax=ax)
 
-                # x labels
-                if i == (n_rows - 1):
-                    ax_resid.set(xlabel=x_label)
-                else:
-                    ax_resid.set(xlabel="")
-                    ax_resid.tick_params(labelbottom=False)
 
-                # titles
-                if i == 0:
-                    ax_fit.set_title(str(T).replace(".0", "") + "K")
+def _plot_bad_fits(fitter, act_choice: str):
 
-                # y labels
-                if j == 0:
-                    ax_fit.set(ylabel=y_label)
-                    ax_resid.set(ylabel="(% wrt Mean)")
-                else:
-                    ax_fit.set(ylabel=None)
-            else:
-                ax = axes[i, j]
-                sns.scatterplot(
-                    x=x_plot,
-                    y=y,
-                    color=H_PALETTE[H],
-                    ax=ax,
-                    linewidth=0,
-                    s=marker_size,
-                )
-                sns.lineplot(x=x_plot, y=y_fit, color=H_PALETTE[H], ax=ax)
-                ax.set_title(f"Position ({i}, {j})", fontsize=10)
-                ax.set_xticks([0, 90, 180, 270, 360])
+    # TODO: Need to fixed the nested dictionary usage
+    # Failed fit labels might benefit from using a DataFrame
+    try:
+        h_labels = fitter.failed_fit_labels[act_choice].keys()
+    except KeyError:
+        print("No bad fits found for {}".format(act_choice))
+        return None, None
+    t_labels = []
+    for h_label in h_labels:
+        t_labels.append(fitter.failed_fit_labels[act_choice][h_label])
 
-                # ax.legend(fontsize=8)
-                if i == (n_rows - 1):
-                    ax.set(xlabel=x_label)
-                if j == 0:
-                    ax.set(ylabel=y_label)
-    # Generate legend
+    fig, axes = fitter.plot_fits(act_choice, T_choices=t_labels, H_choices=h_labels)
+
+    plt.show()
+    return fig, axes
+
+
+def _calculate_model_values(x, params):
+
+    (
+        amps_list,
+        freqs_list,
+        phase_list,
+        offset,
+    ) = params
+
+    # Calculate model's values
+    y_fit = u.SineBuilder(
+        x,
+        amps_list,
+        freqs_list,
+        phase_list,
+        offset,
+    )
+    return y_fit
+
+
+def _format_data_axis(ax_fit, n_rows, i, j, subplot_title, x_label, y_label):
+    ax_fit.set_title(subplot_title, fontsize=10)
+    ax_fit.set_xticks([0, 90, 180, 270, 360])
+    if i == (n_rows - 1):
+        ax_fit.set(xlabel=x_label)
+    if j == 0:
+        ax_fit.set(ylabel=y_label)
+
+
+def _format_residuals_axis(ax_resid, n_rows, i, j, x_label):
+    if i == (n_rows - 1):
+        ax_resid.set(xlabel=x_label)
+    else:
+        ax_resid.set(xlabel="")
+        ax_resid.tick_params(labelbottom=False)
+
+    return
+
+
+def _generate_legend(figure):
     legend_elements = [
         Patch(facecolor=color, label=str(label)) for label, color in H_PALETTE.items()
     ]
 
-    fig.legend(
+    figure.legend(
         handles=legend_elements,
         loc="center left",
         bbox_to_anchor=(0.8, 0.5),
         title="H (T)",
     )
-
-    if save_fig:
-        fn = act_choice + "_figure" + fitter.save_name + ".pdf"
-        fp = PROCESSED_FIGURES_PATH / fn
-        fig.savefig(
-            fp,
-            dpi=300,
-            transparent=False,
-            bbox_inches="tight",
-        )
-    return fig, axes
+    return
 
 
-def _plot_bad_fits(fitter):
+def _get_plot_labels(data_df):
 
-    # TODO: Fix this nested dictionary stuff. When the data has it's own class, just iterate over experiments,
-    # checking the relevant bool attribute.
-    act_labels = fitter.failed_fit_labels.keys()
-    for act_label in act_labels:
-        h_labels = fitter.failed_fit_labels[act_label].keys()
-        t_labels = []
-        for h_label in h_labels:
-            t_labels.append(fitter.failed_fit_labels[act_label][h_label])
-        _, _ = fitter.plot_fits(act_label, T_choices=t_labels, H_choices=h_labels)
-    plt.show()
+    t_vals = data_df["T"].unique()
+    t_vals.sort()
+
+    h_vals = data_df["H"].unique()
+    h_vals.sort()
+    return t_vals, h_vals
+
+
+def _get_plot_points(data_df, act_choice, H, T):
+
+    plot_df = u.QueryDataFrame(data_df, act=act_choice, h=H, t=T)
+    x = plot_df["Sample Position (rads)"].values
+    x_plot = plot_df["Sample Position (deg)"].values
+    y_plot = plot_df["Res. (ohm-cm)"].values
+
+    return x, x_plot, y_plot
+
+
+def _get_fit_params(fitter, act, h, t):
+
+    try:
+        result = fitter.lmfit_results_objs[act][t][h]
+    except KeyError:
+        print(f"Fit parameters for {act}. {t}K. {h}T not found")
+        return None
+    if result is None:
+        return None
+    fit_params = result.params
+    return fitter.convert_params_to_ndarrays(fit_params)
+
+
+def _calculate_fig_size(n_cols, n_rows):
+    width = 6 * n_cols
+    height = 6 * n_rows
+    return width, height
+
+
+def _create_subplots(fig_size, n_rows, n_cols, hspace, wspace):
+    # Each position gets 2 rows: one for fit, one for residuals
+    fig = plt.figure(figsize=fig_size)
+    gs = fig.add_gridspec(
+        n_rows * 2,
+        n_cols,
+        hspace=hspace,
+        wspace=wspace,
+        height_ratios=[3, 1] * n_rows,
+    )
+    axes = np.empty((n_rows, n_cols), dtype=object)
+
+    return fig, gs, axes
+
+
+def _save_plot(fig, filename, dpi=300):
+    """
+    Save the plot
+    """
+
+    filepath = PROCESSED_FIGURES_PATH / filename
+    fig.savefig(
+        filepath,
+        dpi=dpi,
+        transparent=False,
+        bbox_inches="tight",
+    )
+    print("Saved {}".format(filename))
     return

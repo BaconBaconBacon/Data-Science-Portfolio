@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 
 def QueryDataFrame(
@@ -45,3 +46,14 @@ def DictBuilder():
 
     """
     return
+
+
+def SineBuilder(
+    rads, amps: np.ndarray, freqs: np.ndarray, phases: np.ndarray, mean: float | int
+):
+    """Returns a Fourier series consisting of sine terms and an offset."""
+    summation = np.sum(
+        amps[:, None] * np.sin(freqs[:, None] * rads + phases[:, None]), axis=0
+    )
+
+    return mean * (summation + 1)

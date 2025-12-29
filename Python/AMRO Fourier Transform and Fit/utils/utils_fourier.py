@@ -8,6 +8,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 from config.settings import PROCESSED_DATA_PATH, H_PALETTE
+from utils import utils_misc as u
+from plotting.plotting_fourier import _plot_n_strongest
 
 
 class Fourier:
@@ -74,44 +76,8 @@ class Fourier:
         elif n == 0:
             return strongest_df
 
-    def plot_n_strongest(self, n: int, T: list | float, H: list | float) -> None:
-        """
-        Plots the n-strongest.
-
-        If n=0, then plots all available contributions.
-        """
-
-        # TODO: Maybe package into a function, but add functionality to
-        # plot all by omitting T and H.
-        if isinstance(T, list):
-            q = "T in {}".format(T)
-        else:
-            q = "T == {}".format(T)
-
-        if isinstance(H, list):
-            q += " & H in {}".format(H)
-        else:
-            q += " & H == {}".format(H)
-
-        plot_df = self.GetNStrongest(n).query(q)
-
-        # Bypass a formatting bug in catplot
-        hue_choice = "ACT"
-        plot_df = plot_df.sort_values(hue_choice)
-        plot_df[hue_choice] = plot_df[hue_choice].astype(str)
-        sns.set_context("poster")
-        g = sns.catplot(
-            x="freqs (cycles/rot)",
-            y="amp_ratio",
-            data=plot_df,
-            col="T",
-            row="H",
-            kind="bar",
-            hue=hue_choice,
-            sharex=False,
-        )
-
-        return g
+    def plot_n_strongest(self, n: int, T: list | float, H: list | float):
+        return _plot_n_strongest(self, n, T, H)
 
     def _fourier_transform(self, df: pd.DataFrame) -> pd.DataFrame:
         fftdata = df["Delta Res. Mean (ohm-cm)"].values
