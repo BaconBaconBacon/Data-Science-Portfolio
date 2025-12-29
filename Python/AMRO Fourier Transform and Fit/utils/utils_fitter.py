@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 import pickle
 import seaborn as sns
-import utils_misc as u
+from . import utils_misc as u
 
 from matplotlib.patches import Patch
-from ..config.settings import (
+from config.settings import (
     PROCESSED_DATA_PATH,
     FINAL_DATA_PATH,
     H_PALETTE,
@@ -168,15 +168,10 @@ class AMROFitter:
 
     def _record_failed_fit(self, act_label, h_label, t_label) -> None:
         if act_label not in self.failed_fit_labels.keys():
-            self.failed_fit_labels[act_label] = {h_label: t_label}
+            self.failed_fit_labels[act_label] = {h_label: [t_label]}
         else:
-            self.failed_fit_labels[act_label][h_label] = t_label
+            self.failed_fit_labels[act_label][h_label].append(t_label)
         return
-
-    def _build_query(self, act, h, t) -> str:
-        # TODO: Fill this out
-        q = ""
-        return q
 
     def _refit(
         self, init_params: lm.Parameters, x_data: list, y_normalized: list
