@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def query_dataframe(
+def QueryDataFrame(
     df: pd.DataFrame,
     act: str | list | None = None,
     h: float | int | list | None = None,
@@ -33,7 +33,7 @@ def query_dataframe(
         return df
 
 
-def dict_builder():
+def DictBuilder():
     """
         Utility function to pre-build dictionary for storing meta-data regarding what ACT labels, H-values, and T-values
         are present in the data. Minimizes reliance on nested dictionaries.

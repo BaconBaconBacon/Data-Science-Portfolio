@@ -45,7 +45,7 @@ class AMROFitter:
         self.overwrite = overwrite
 
         self.ft_results_df = self._filter_guess_params(fourier_results)
-        self.act_choices = self._get_H_T_values()
+        self.act_choices = self._get_h_t_values()
 
         # Save name info
         s = "_ratio_{}_maxf_{}_".format(min_amp_ratio, max_freq)
@@ -270,7 +270,7 @@ class AMROFitter:
         return initial_p_guesses
 
     def _get_freqs_guesses(self, act, h, t):
-        guess_df = u.query_dataframe(self.ft_results_df, act=act, h=h, t=t)
+        guess_df = u.QueryDataFrame(self.ft_results_df, act=act, h=h, t=t)
         if self.force_four_and_two_sym:
             self.current_f_list = np.append(self.current_f_list, [2, 4])
 
@@ -326,7 +326,7 @@ class AMROFitter:
         sns.set_style("whitegrid")
         sns.set_context(sns_context, font_scale=context_font_scale)
 
-        data_df = u.query_dataframe(
+        data_df = u.QueryDataFrame(
             self.amro_df, act=act_choice, h=H_choices, t=T_choices
         )
         T_vals = data_df["T"].unique()
@@ -369,7 +369,7 @@ class AMROFitter:
 
                 fit_params = result.params
 
-                plot_df = u.query_dataframe(data_df, act=act_choice, h=H, t=T)
+                plot_df = u.QueryDataFrame(data_df, act=act_choice, h=H, t=T)
 
                 x = plot_df["Sample Position (rads)"].values
                 x_plot = plot_df["Sample Position (deg)"].values
@@ -568,7 +568,7 @@ class AMROFitter:
         self, act: str | list, T: float | int | list, H: float | int | list
     ) -> pd.DataFrame:
 
-        f_info = u.query_dataframe(self.ft_results_df, act=act, h=H, t=T)
+        f_info = u.QueryDataFrame(self.ft_results_df, act=act, h=H, t=T)
 
         return f_info[["freqs (cycles/rot)", "amp_ratio"]]
 
@@ -662,21 +662,19 @@ class AMROFitter:
             self.lmfit_results_objs[act_label][t_label] = {}
         self.lmfit_results_objs[act_label][t_label][h_label] = lmfit_result
 
-        # results_obj, all_fits_df, all_results_dict, fitted_amps
-
         return
 
-    def _get_H_T_values(self):
+    def _get_h_t_values(self):
         """"""
-        H_T_dict = {}
+        h_t_dict = {}
         grouped = self.amro_df[["ACT_str", "H", "T"]].drop_duplicates()
 
         for act in grouped["ACT_str"].unique():
             tmp_list = []
             for _, row in grouped.query('ACT_str=="{}"'.format(act)).iterrows():
                 tmp_list.append((float(row["T"]), float(row["H"])))
-            H_T_dict[act] = tmp_list
-        return H_T_dict
+            h_t_dict[act] = tmp_list
+        return h_t_dict
 
     def _test_plot_sinebuilder(self):
         """ """
