@@ -1,12 +1,9 @@
 # TODO: Switch it over to using pathlib instead of os
 import os
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
 from config.settings import RAW_DATA_PATH, H_PALETTE
-
-# H_PALETTE = {0.5: "tab:red", 3: "tab:green", 7: "tab:orange", 9: "tab:blue"}
+from plotting.plotting_loader import _quick_plot_amro
 
 
 class AMROLoader:
@@ -207,18 +204,5 @@ class AMROLoader:
 
         return df
 
-    def quick_plot_amro(self) -> None:
-        """ """
-        _ = sns.relplot(
-            x="Sample Position (rads)",
-            y="Delta Res./R0 Mean (ohm-cm)",
-            hue="H",
-            col="T",
-            # hue='ACT',
-            row="ACT",
-            palette=H_PALETTE,
-            facet_kws={"sharey": False},
-            data=self.AMRO,
-        )
-        plt.show()
-        return
+    def quick_plot_amro(self):
+        return _quick_plot_amro(self)

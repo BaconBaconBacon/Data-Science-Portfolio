@@ -1,18 +1,15 @@
 import os
 
 import lmfit as lm
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pickle
-import seaborn as sns
 from . import utils_misc as u
-from plotting.plotting_fitter import _plot_fits, _plot_bad_fits  # as _plot_fits
+from plotting.plotting_fitter import _plot_fits, _plot_bad_fits
 
 from config.settings import (
     PROCESSED_DATA_PATH,
     FINAL_DATA_PATH,
-    # H_PALETTE,
     PROCESSED_FIGURES_PATH,
 )
 
