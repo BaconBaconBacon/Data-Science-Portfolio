@@ -31,6 +31,7 @@ class AMROLoader:
     TODO: Add the cleaning and symmetrization functionality into the ETL pipeline.
     """
 
+    # TODO: Need to address this nested dictionary data storage
     META_DATA = {
         "ACTRot11": {"geo": "perp", "ACT": 11},
         "ACTRot12": {"geo": "para", "ACT": 12},
@@ -131,6 +132,7 @@ class AMROLoader:
                 temp_df["ACT"] = self.META_DATA[label]["ACT"]
 
                 # Update meta data
+                # TODO: Need to address this nested dict storage by using a custom data class
                 if "L (cm)" not in self.META_DATA[label].keys():
                     self.META_DATA[label]["L (cm)"] = temp_df["L (cm)"].values[0]
                     self.META_DATA[label]["W (cm)"] = temp_df["W (cm)"].values[0]
