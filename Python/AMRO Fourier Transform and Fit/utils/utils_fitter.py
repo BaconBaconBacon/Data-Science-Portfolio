@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 import pickle
 import seaborn as sns
-import utility_funcs as u
+import utils_misc as u
 
 from matplotlib.patches import Patch
-from config.settings import (
+from ..config.settings import (
     PROCESSED_DATA_PATH,
     FINAL_DATA_PATH,
     H_PALETTE,
@@ -568,7 +568,7 @@ class AMROFitter:
         self, act: str | list, T: float | int | list, H: float | int | list
     ) -> pd.DataFrame:
 
-        f_info = u.query_dataframe(self.ft_results_df, act=act, h=H, h=T)
+        f_info = u.query_dataframe(self.ft_results_df, act=act, h=H, t=T)
 
         return f_info[["freqs (cycles/rot)", "amp_ratio"]]
 
