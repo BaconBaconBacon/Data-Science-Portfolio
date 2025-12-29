@@ -1,6 +1,7 @@
 # TODO: Switch it over to using pathlib instead of os
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 from config.settings import RAW_DATA_PATH, H_PALETTE
@@ -217,4 +218,5 @@ class AMROLoader:
             facet_kws={"sharey": False},
             data=self.AMRO,
         )
+        plt.show()
         return

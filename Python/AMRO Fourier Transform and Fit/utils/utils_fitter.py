@@ -22,7 +22,7 @@ class AMROFitter:
 
     def __init__(
         self,
-        amro,
+        amro_df: pd.DataFrame,
         fourier_results: pd.DataFrame,
         save_name: str,
         min_amp_ratio=0.2,
@@ -39,7 +39,7 @@ class AMROFitter:
         # Fit Param filter values
         self.min_amp_ratio = min_amp_ratio
         self.max_freq = max_freq
-        self.amro_df = amro.AMRO
+        self.amro_df = amro_df
         self.force_four_and_two_sym = force_four_and_two_sym
         self.verbose = verbose
         self.overwrite = overwrite
@@ -126,8 +126,7 @@ class AMROFitter:
         """
 
         # Select the experimental data to be fitted
-
-        fit_df = self.GetAMROData(ACT, H, T)
+        fit_df = u.QueryDataFrame(self.amro_df, act=ACT, h=H, t=T)
         guess_df = self._get_freqs_guesses(ACT, H, T)
 
         self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
@@ -266,6 +265,7 @@ class AMROFitter:
 
     def _get_freqs_guesses(self, act, h, t):
         guess_df = u.QueryDataFrame(self.ft_results_df, act=act, h=h, t=t)
+        self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
         if self.force_four_and_two_sym:
             self.current_f_list = np.append(self.current_f_list, [2, 4])
 
@@ -292,7 +292,7 @@ class AMROFitter:
         h: int | float | list | None = None,
         t: int | float | list | None = None,
     ) -> pd.DataFrame:
-        return u.query_builder(self.fit_paramas_df, act=act, h=h, t=t)
+        return u.QueryDataFrame(self.fit_params_df, act=act, h=h, t=t)
 
     def plot_fits(
         self,
@@ -324,13 +324,14 @@ class AMROFitter:
         data_df = u.QueryDataFrame(
             self.amro_df, act=act_choice, h=H_choices, t=T_choices
         )
-        T_vals = data_df["T"].unique()
-        T_vals.sort()
-        n_cols = len(T_vals)
 
-        H_vals = data_df["H"].unique()
-        H_vals.sort()
-        n_rows = len(H_vals)
+        t_vals = data_df["T"].unique()
+        t_vals.sort()
+        n_cols = len(t_vals)
+
+        h_vals = data_df["H"].unique()
+        h_vals.sort()
+        n_rows = len(h_vals)
         # Calculate figure size if not provided
         if figsize is None:
             width = 4 * n_cols
@@ -357,11 +358,19 @@ class AMROFitter:
                 axes = axes.reshape(n_rows, n_cols)
 
         # Iterate over grid
-        for i, H in enumerate(H_vals):
-            for j, T in enumerate(T_vals):
+        for i, H in enumerate(h_vals):
+            for j, T in enumerate(t_vals):
 
-                result = self.lmfit_results_objs[act_choice][T][H]
-
+                try:
+                    result = self.lmfit_results_objs[act_choice][T][H]
+                except KeyError as e:
+                    print("ACT", act_choice, "T", T, "H", H)
+                    print("hvals", h_vals)
+                    print("tvals", t_vals)
+                    print(self.lmfit_results_objs[act_choice].keys())
+                    print(data_df)
+                    # print(self.lmfit_results_objs[act_choice][T].keys())
+                    raise e
                 fit_params = result.params
 
                 plot_df = u.QueryDataFrame(data_df, act=act_choice, h=H, t=T)
@@ -371,9 +380,8 @@ class AMROFitter:
 
                 y = plot_df["Res. (ohm-cm)"].values
 
-                # TODO: removing the update of frequencies list from _get_freqs_guesses may have broken this
-                _ = self._get_freqs_guesses(act_choice, H, T)
-                # self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
+                df = self._get_freqs_guesses(act_choice, H, T)
+                self.current_f_list = df["freqs (cycles/rot)"].unique()
 
                 (
                     amps_list,
@@ -381,6 +389,7 @@ class AMROFitter:
                     phase_list,
                     offset,
                 ) = self._convert_params_to_lists(fit_params)
+                del self.current_f_list
 
                 y_fit = self._sine_builder(
                     x,
@@ -498,9 +507,9 @@ class AMROFitter:
         return fig, axes
 
     def plot_bad_fits(self):
-        print(self.failed_fit_labels)
-        act_labels = self.failed_fit_labels.keys()
 
+        # TODO: Fix this nested dictionary stuff
+        act_labels = self.failed_fit_labels.keys()
         for act_label in act_labels:
             h_labels = self.failed_fit_labels[act_label].keys()
             t_labels = []
@@ -521,7 +530,7 @@ class AMROFitter:
 
     def _convert_params_to_lists(
         self, params_obj: lm.Parameters
-    ) -> tuple[list, list, list, list]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Ensures the parameters are correctly ordered. Aside from the 'mean' parameter, each
         'phase' and 'freq' are paired based on the 'freq' value.

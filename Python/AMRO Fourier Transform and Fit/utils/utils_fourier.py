@@ -11,9 +11,9 @@ from config.settings import PROCESSED_DATA_PATH, H_PALETTE
 
 
 class Fourier:
-    def __init__(self, amro, save_name: str):
+    def __init__(self, amro_df: pd.DataFrame, save_name: str):
         # Get the AMRO
-        self.amro_data = amro.AMRO
+        self.amro_data = amro_df
         # self.meta_data = amro.META_DATA
         self.labels = self.amro_data[["ACT", "T", "H"]].drop_duplicates()
 

@@ -20,7 +20,9 @@ def QueryDataFrame(
 
     """
     q = []
-    if act is not None:
+    if type(act) is str:
+        q.append('ACT_str == "{}"'.format(act))
+    elif type(act) is list:
         q.append("ACT_str == {}".format(act))
     if h is not None:
         q.append("H == {}".format(h))
