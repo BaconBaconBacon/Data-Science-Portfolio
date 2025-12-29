@@ -60,7 +60,7 @@ class Fourier:
             print("Results saved to: {}".format(self.save_name))
         return
 
-    def GetNStrongest(self, n: int):
+    def get_n_strongest(self, n: int):
         """
         Queries the n strongest contributions for each experiment in the data set.
         If n=0, then returns all available contributions sorted by magnitude.
@@ -74,7 +74,7 @@ class Fourier:
         elif n == 0:
             return strongest_df
 
-    def PlotNStrongest(self, n: int, T: list | float, H: list | float) -> None:
+    def plot_n_strongest(self, n: int, T: list | float, H: list | float) -> None:
         """
         Plots the n-strongest.
 
@@ -142,10 +142,3 @@ class Fourier:
             freq_df["phase_raw"],
         )
         return freq_df
-
-
-# if __name__ == "__main__":
-#     import sys
-#     load = LoadAMRO(sys.argv[1],sys.argv[2])
-#     _ = load.combineAMRO()
-#

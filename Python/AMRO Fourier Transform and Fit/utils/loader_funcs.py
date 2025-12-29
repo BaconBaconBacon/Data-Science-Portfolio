@@ -54,7 +54,7 @@ class AMROLoader:
         self.file_path = os.path.join(self.save_folder, self.file_name)
         self.AMRO = pd.DataFrame()
 
-    def GetAMRO(self) -> pd.DataFrame:
+    def get_amro(self) -> pd.DataFrame:
         """ """
         if self.file_name.endswith(".csv"):
             if os.path.exists(self.file_path):
@@ -72,7 +72,7 @@ class AMROLoader:
         else:
             raise TypeError("Wrong file type: {}".format(self.file_name))
 
-    def CombineAMRO(self, data_dir: str) -> pd.DataFrame:
+    def combine_amro(self, data_dir: str) -> pd.DataFrame:
         """
 
         Args:
@@ -204,7 +204,7 @@ class AMROLoader:
 
         return df
 
-    def QuickPlotAMRO(self) -> None:
+    def quick_plot_amro(self) -> None:
         """ """
         _ = sns.relplot(
             x="Sample Position (rads)",

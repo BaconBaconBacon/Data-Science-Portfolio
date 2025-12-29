@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import seaborn as sns
+import utility_funcs as u
 
 from matplotlib.patches import Patch
 from config.settings import (
@@ -128,6 +129,8 @@ class AMROFitter:
 
         fit_df = self.GetAMROData(ACT, H, T)
         guess_df = self._get_freqs_guesses(ACT, H, T)
+
+        self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
 
         # Extract data we are going to fit
         x = fit_df["Sample Position (rads)"].values
@@ -255,27 +258,19 @@ class AMROFitter:
     ) -> lm.Parameters:
         """Note that the value of the 'mean' value should have been normalized"""
 
-        freqs_list = self.current_f_list  # guesses["freqs (cycles/rot)"].unique()
-
         # Generate a Parameters ordered dictionary, to which we add Parameter objects
         initial_p_guesses = lm.Parameters()
         initial_p_guesses.add("mean", value=mean, min=0)
 
         # Append all Parameter objects, except for the last one (must deal with appended 2)
-        i = 0
-        while i < (len(freqs_list)):  # Extra 2 will always be at the end of f_list
-            freq = int(freqs_list[i])
-            self._add_parameter(freq, initial_p_guesses, mean, guesses)
-            i += 1
+
+        for freq in self.current_f_list:
+            self._add_parameter(int(freq), initial_p_guesses, mean, guesses)
 
         return initial_p_guesses
 
     def _get_freqs_guesses(self, act, h, t):
-        q = 'ACT_str == "{}" & H == {} & T== {}'.format(  #' & `freqs (cycles/rot)` in @f_list'.format(
-            act, h, t
-        )
-        guess_df = self.ft_results_df.query(q)
-        self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
+        guess_df = u.query_dataframe(self.ft_results_df, act=act, h=h, t=t)
         if self.force_four_and_two_sym:
             self.current_f_list = np.append(self.current_f_list, [2, 4])
 
@@ -292,7 +287,7 @@ class AMROFitter:
             for param_name in results_obj.params.keys()
         )
 
-    def _check_residuals(self):
+    def _are_residuals_acceptable(self) -> bool:
         # TODO: Check the mean absolute residual against some value. This lets us better track poor fits.
         return
 
@@ -302,31 +297,7 @@ class AMROFitter:
         h: int | float | list | None = None,
         t: int | float | list | None = None,
     ) -> pd.DataFrame:
-        # TODO: Would be worth throwing this query builder functionality into a utils function. Programmatically define
-        # a function for it that gets initialized with the class.
-        q = []
-        if act is not None:
-            if isinstance(act, str):
-                q.append('ACT_str == "{}"'.format(act))
-            elif isinstance(act, list):
-                q.append("ACT_list in @act")
-        if h is not None:
-            if isinstance(h, list):
-                q.append("H in @h")
-            elif isinstance(h, int) | isinstance(h, float):
-                q.append("H == {}".format(h))
-        if t is not None:
-            if isinstance(t, list):
-                q.append("T in @t")
-            elif isinstance(t, int) | isinstance(t, float):
-                q.append("T == {}".format(t))
-
-        if len(q) > 0:
-            q = " & ".join(q)
-            print(q)
-            return self.fit_params_df.query(q)
-        else:
-            return self.fit_params_df
+        return u.query_builder(self.fit_paramas_df, act=act, h=h, t=t)
 
     def plot_fits(
         self,
@@ -354,13 +325,10 @@ class AMROFitter:
         # Set seaborn style
         sns.set_style("whitegrid")
         sns.set_context(sns_context, font_scale=context_font_scale)
-        q = 'ACT_str=="{}"'.format(act_choice)
-        if H_choices is not None:
-            q += "& H in @H_choices"
-        if T_choices is not None:
-            q += "& T in @T_choices"
-        data_df = self.amro_df.query(q)
 
+        data_df = u.query_dataframe(
+            self.amro_df, act=act_choice, h=H_choices, t=T_choices
+        )
         T_vals = data_df["T"].unique()
         T_vals.sort()
         n_cols = len(T_vals)
@@ -400,15 +368,18 @@ class AMROFitter:
                 result = self.lmfit_results_objs[act_choice][T][H]
 
                 fit_params = result.params
-                q = "H=={} & T =={}".format(H, T)
-                plot_df = data_df.query(q)
+
+                plot_df = u.query_dataframe(data_df, act=act_choice, h=H, t=T)
 
                 x = plot_df["Sample Position (rads)"].values
                 x_plot = plot_df["Sample Position (deg)"].values
 
                 y = plot_df["Res. (ohm-cm)"].values
 
+                # TODO: removing the update of frequencies list from _get_freqs_guesses may have broken this
                 _ = self._get_freqs_guesses(act_choice, H, T)
+                # self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
+
                 (
                     amps_list,
                     freqs_list,
@@ -571,7 +542,6 @@ class AMROFitter:
             for f in self.current_f_list
         ]
         amps_list, phase_list = zip(*amps_phase)
-
         return (
             np.asarray(amps_list),
             np.asarray(self.current_f_list.copy()),
@@ -594,12 +564,13 @@ class AMROFitter:
         )
         return guess_params.query(q)
 
-    def _get_init_params(self, act: str, T: str, H: str) -> pd.DataFrame:
-        q = 'ACT_str == "{}" & H == {} & T == {}'.format(act, H, T)
+    def _get_init_params(
+        self, act: str | list, T: float | int | list, H: float | int | list
+    ) -> pd.DataFrame:
 
-        f_info = self.ft_results_df.query(q)[["freqs (cycles/rot)", "amp_ratio"]]
+        f_info = u.query_dataframe(self.ft_results_df, act=act, h=H, h=T)
 
-        return f_info
+        return f_info[["freqs (cycles/rot)", "amp_ratio"]]
 
     def _get_init_freqs(self, act: str, T: str, H: str) -> list:
         f_info = self._get_init_params(act, T, H)
