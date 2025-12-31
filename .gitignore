@@ -13,6 +13,7 @@ data/
 Data/
 .env
 Masters Thesis/
-anaconda_projects/
+/anaconda_projects/
 TODO.txt
 .claude
+.idea

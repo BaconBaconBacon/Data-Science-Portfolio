@@ -85,6 +85,7 @@ class AMROLoader:
         # Get names of files in the folder
         filenames = os.listdir(data_dir)
         amro_df = pd.DataFrame()
+        # TODO: Encapsulate some of this
         for filename in filenames:
             # Ensure we are selecting only AMRO data
             if (
@@ -101,6 +102,7 @@ class AMROLoader:
                 # LOAD
                 amro_df = pd.concat([amro_df, temp_df], ignore_index=True)
                 amro_df.to_csv(self.file_path, sep=",")
+
         if amro_df.shape[0] == 0:
             raise Exception("No AMRO files found in {}".format(data_dir))
         print(filenames)
@@ -114,6 +116,8 @@ class AMROLoader:
         # Extract experimental info from file_path
         fn = file_path.split(os.path.sep)[-1]
         temp_name = fn.replace(".csv", "").replace("0_5", "0.5").replace("1p9", "1.9")
+
+        # TODO: Encapsulate
         conds = lambda x: ("ACT" in x or x.endswith("T") or x.endswith("K"))
         for label in [a for a in temp_name.split("_") if conds(a)]:
             if label.endswith("K"):
@@ -136,10 +140,12 @@ class AMROLoader:
                     self.META_DATA[label]["W (cm)"] = temp_df["W (cm)"].values[0]
                     self.META_DATA[label]["H (cm)"] = temp_df["H (cm)"].values[0]
 
-            else:
-                print("Filename parsing error, fix filename for:\t" + filename)
-                raise ValueError
+                else:
+                    # TODO: Fix this reference error for filename
+                    print("Filename parsing error, fix filename for:\t" + filename)
+                    raise ValueError
 
+        # TODO: What is going on with this? Encapsulate and make more clear
         # Create additional meta data dictionaries
         self.META_DATA[act_label]["T_vals"] = []
         self.META_DATA[act_label]["H_vals"] = []
