@@ -1,0 +1,11 @@
+numpy
+pandas
+scipy
+matplotlib
+seaborn
+lmfit
+
+[dev]
+pytest
+jupyter
+ipython

@@ -1,5 +1,4 @@
-Python/DC_Materials
-Python/Masters Example/References
+
 .ipynb_checkpoints
 .idea
 .virtual_documents
@@ -19,3 +18,4 @@ TODO.txt
 /anaconda_projects
 /.idea
 /anaconda_projects/db
+.egg-info

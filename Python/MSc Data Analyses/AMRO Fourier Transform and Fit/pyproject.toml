@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amro"
+version = "0.1.0"
+description = "AMRO Fourier Transform and Fitting Analysis for YbPdBi"
+readme = "README.MD"
+requires-python = ">=3.9"
+dependencies = [
+ "numpy",
+ "pandas",
+ "scipy",
+ "matplotlib",
+ "seaborn",
+ "lmfit",
+]
+
+[project.optional-dependencies]
+dev = [
+ "pytest",
+ "jupyter",
+ "ipython",
+]
