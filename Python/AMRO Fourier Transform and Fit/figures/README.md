@@ -1,1 +1,0 @@
-Following the conventions of the 'data' folder, place any figures here that can be used to investigate the results of any of the processing steps.
