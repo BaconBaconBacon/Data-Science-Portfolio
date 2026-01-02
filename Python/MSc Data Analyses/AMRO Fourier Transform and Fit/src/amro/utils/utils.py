@@ -1,8 +1,10 @@
 import pandas as pd
 import numpy as np
 
+from amro.config.settings import HEADER_ACT, HEADER_TEMP, HEADER_MAGNET
 
-def query_data_frame(
+
+def query_dataframe(
     df: pd.DataFrame,
     act: str | list | None = None,
     h: float | int | list | None = None,
@@ -22,30 +24,18 @@ def query_data_frame(
     """
     q = []
     if type(act) is str:
-        q.append('ACT_str == "{}"'.format(act))
+        q.append(HEADER_ACT + f' == "{act}"')
     elif type(act) is list:
-        q.append("ACT_str == {}".format(act))
+        q.append(HEADER_ACT + f"== {act}")
     if h is not None:
-        q.append("H == {}".format(h))
+        q.append(HEADER_MAGNET + f"== {h}")
     if t is not None:
-        q.append("T == {}".format(t))
+        q.append(HEADER_TEMP + f"== {t}")
     if len(q) > 0:
         q = " & ".join(q)
         return df.query(q)
     else:
         return df
-
-
-def dict_builder():
-    """
-        Utility function to pre-build dictionary for storing meta-data regarding what ACT labels, H-values, and T-values
-        are present in the data. Minimizes reliance on nested dictionaries.
-
-        using defaultdict?
-    Returns:
-
-    """
-    return
 
 
 def sine_builder(

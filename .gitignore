@@ -18,4 +18,4 @@ TODO.txt
 /anaconda_projects
 /.idea
 /anaconda_projects/db
-# .egg-info
+.egg-info

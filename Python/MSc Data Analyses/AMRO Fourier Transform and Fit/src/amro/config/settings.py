@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 BASE_PATH = Path(__file__).parent.parent.parent.parent
 
 CONFIG_PATH = BASE_PATH / "config"
@@ -18,3 +19,84 @@ PROCESSED_FIGURES_PATH = FIGURES_PATH / "processed"
 FINAL_FIGURES_PATH = FIGURES_PATH / "final"
 
 H_PALETTE = {0.5: "tab:red", 3: "tab:green", 7: "tab:orange", 9: "tab:blue"}
+
+
+# The loader functionality reads only these from the cleaned AMRO data
+LOADER_DESIRED_COLS = [
+    "Temperature (K)",
+    "Sample Position (deg)",
+    "Res. (ohm-cm)",
+    "ACT_str",
+    "T",
+    "H",
+    "geo",
+]
+
+# This is how we let the loader re-name the columns of the cleaned AMRO data
+LOADER_COL_RENAME_DICT = {"Res. ch2 (ohm-cm)": "Res. (ohm-cm)"}
+
+HEADER_ANGLE_DEG = "Sample Position (deg)"
+HEADER_ANGLE_RAD = "Sample Position (rads)"
+HEADER_RES_OHM = "Res. (ohm-cm)"
+HEADER_RES_UOHM = "Res. (uohm-cm)"
+
+# todo: make sure to update the various labels throughout, and add missed labels to this config file here
+# Columns used for plots and figures
+HEADER_ANGLE_DISPLAY = HEADER_ANGLE_DEG
+HEADER_RES_DISPLAY = HEADER_RES_UOHM
+
+# Columns used for calculations
+HEADER_ANGLE_CALC = HEADER_ANGLE_RAD
+HEADER_RES_CALC = HEADER_RES_OHM
+
+
+# AMRO DataFrame header labels
+# TODO: Update the DF headers in the code
+HEADER_TEMP = "T"
+HEADER_MAGNET = "H"
+HEADER_ACT = "ACT_str"
+HEADER_GEO = "geo"
+HEADER_LENGTH = "L (cm)"
+HEADER_WIDTH = "W (cm)"
+HEADER_HEIGHT = "H (cm)"
+
+# Fourier DataFrame header labels
+HEADER_MAG = "mag (ohm-cm)"
+HEADER_MAG_RATIO = "amp_ratio"
+HEADER_FREQ = "freqs (cycles/rot)"
+HEADER_FREQ_LIST = "f_list"
+HEADER_PHASE = "phase"
+HEADER_PHASE_RAW = "phase_raw"
+
+#  Fitter DF header Labels
+HEADER_FIT_CHISQ = "chi_squared"
+HEADER_PARAM_AMP_PREFIX = "amp"
+HEADER_PARAM_FREQ_PREFIX = "freq"
+HEADER_PARAM_PHASE_PREFIX = "phase"
+HEADER_PARAM_MEAN_PREFIX = "mean"
+
+
+# Loader DF Header Labels
+HEADER_MEAN = "Mean (ohm-cm)"
+HEADER_0DEG = "0deg (ohm-cm)"
+
+# TODO: Once the data classes replace the META_DATA dict, these can be removed
+KEY_RES_CONSTANTS = "res_constants"
+KEY_TEMP_LABELS = "T_labels"
+KEY_MAGNET_LABELS = "H_labels"
+
+### Alternative resistivity units (used mostly in loader and plotting functions)
+# value = (res-res_{constant})
+HEADER_RES_DEL_MEAN_OHM = f"Delta Res. {HEADER_MEAN}"
+HEADER_RES_DEL_MEAN_UOHM = HEADER_RES_DEL_MEAN_OHM.replace("ohm", "uohm")
+
+HEADER_RES_DEL_0DEG_OHM = HEADER_RES_DEL_MEAN_OHM.replace(HEADER_MEAN, HEADER_0DEG)
+HEADER_RES_DEL_0DEG_UOHM = HEADER_RES_DEL_0DEG_OHM.replace("ohm", "uohm")
+
+# value = (res-res_{constant})/res_{constant} (unitless)
+HEADER_RES_DEF_MEAN_NORM = f"Delta Res./R0 {HEADER_MEAN}".replace("(ohm-cm)", "")
+HEADER_RES_DEL_0DEG_NORM = f"Delta Res./R0 {HEADER_0DEG}".replace("(ohm-cm)", "")
+
+# value = (res-res_{constant})/res_{constant}*100
+HEADER_RES_DEL_MEAN_NORM_PCT = HEADER_RES_DEF_MEAN_NORM + " (%)"
+HEADER_RES_DEL_0DEG_NORM_PCT = HEADER_RES_DEL_0DEG_NORM + " (%)"

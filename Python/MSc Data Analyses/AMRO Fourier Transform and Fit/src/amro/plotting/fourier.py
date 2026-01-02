@@ -2,30 +2,41 @@
     Plotting functionality for the utils_fourier.py file.
 """
 
+from ..config.settings import (
+    HEADER_FREQ,
+    HEADER_MAG_RATIO,
+    HEADER_TEMP,
+    HEADER_MAGNET,
+    HEADER_ACT,
+)
 from ..utils import utils as u
 import seaborn as sns
 
 
-def _plot_n_strongest(fourier, n: int, T: list | float, H: list | float) -> None:
+def _plot_n_strongest(
+    fourier, n: int, T: list | float, H: list | float
+) -> sns.FacetGrid:
     """
     Plots the n-strongest.
 
     If n=0, then plots all available contributions.
     """
+    # TODO: Config file?
+    sns.set_context("poster")
 
     df = fourier.get_n_strongest(n)
     plot_df = u.query_dataframe(df=df, t=T, h=H)
 
-    hue_choice = "ACT"
+    hue_choice = HEADER_ACT
+
     plot_df = plot_df.sort_values(hue_choice)
     plot_df[hue_choice] = plot_df[hue_choice].astype(str)
-    sns.set_context("poster")
     g = sns.catplot(
-        x="freqs (cycles/rot)",
-        y="amp_ratio",
+        x=HEADER_FREQ,
+        y=HEADER_MAG_RATIO,
         data=plot_df,
-        col="T",
-        row="H",
+        col=HEADER_TEMP,
+        row=HEADER_MAGNET,
         kind="bar",
         hue=hue_choice,
         sharex=False,

@@ -16,6 +16,22 @@ from ..config.settings import (
     PROCESSED_DATA_PATH,
     FINAL_DATA_PATH,
     PROCESSED_FIGURES_PATH,
+    HEADER_ANGLE_DEG,
+    HEADER_ANGLE_RAD,
+    HEADER_RES_OHM,
+    HEADER_MAGNET,
+    HEADER_TEMP,
+    HEADER_ACT,
+    HEADER_FREQ_LIST,
+    HEADER_FIT_CHISQ,
+    HEADER_FREQ,
+    HEADER_MAG_RATIO,
+    HEADER_PARAM_AMP_PREFIX,
+    HEADER_PARAM_PHASE_PREFIX,
+    HEADER_PARAM_FREQ_PREFIX,
+    HEADER_PARAM_MEAN_PREFIX,
+    HEADER_PHASE,
+    HEADER_MAG,
 )
 
 
@@ -119,14 +135,14 @@ class AMROFitter:
         """
 
         # Select the experimental data to be fitted
-        fit_df = u.query_data_frame(self.amro_df, act=ACT, h=H, t=T)
+        fit_df = u.query_dataframe(self.amro_df, act=ACT, h=H, t=T)
         guess_df = self._get_freqs_guesses(ACT, H, T)
 
-        self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
+        self.current_f_list = guess_df[HEADER_FREQ].unique()
 
         # Extract data we are going to fit
-        x = fit_df["Sample Position (rads)"].values
-        y = fit_df["Res. (ohm-cm)"].values
+        x = fit_df[HEADER_ANGLE_RAD].values
+        y = fit_df[HEADER_RES_OHM].values
 
         y_norm, y_scale = self._normalize_data(y)
         y_mean = y_norm.mean()
@@ -149,8 +165,8 @@ class AMROFitter:
                     results.params[param_name].stderr = np.inf
                 print(f"Errors for {bad_fit_params} could not be calculated.")
                 self._record_failed_fit(ACT, H, T)
-        results.params["mean"].value *= y_scale
-        results.params["mean"].stderr *= y_scale
+        results.params[HEADER_PARAM_MEAN_PREFIX].value *= y_scale
+        results.params[HEADER_PARAM_MEAN_PREFIX].stderr *= y_scale
 
         if self.verbose:
             print("\n", lm.fit_report(results, show_correl=False), "\n")
@@ -194,7 +210,7 @@ class AMROFitter:
         We divide the magnitude by the mean in order to align with the way
         the _sine_builder function works.
         """
-        temp_df = guesses_df.query("`freqs (cycles/rot)` == {}".format(frequency))
+        temp_df = guesses_df.query(f"`{HEADER_FREQ}` == {frequency}")
         if temp_df.shape[0] == 0:
             print(
                 "FT guess for {} not found. Setting initial guesses to zero.".format(
@@ -203,29 +219,28 @@ class AMROFitter:
             )
             temp_df = pd.DataFrame(
                 {
-                    "freqs": frequency,
-                    "mag (ohm-cm)": 0,
-                    "freqs (cycles/rot)": 0,
-                    "phase": 0,
+                    HEADER_FREQ: frequency,
+                    HEADER_MAG: 0,
+                    HEADER_PHASE: 0,
                 },
                 index=[0],
             )
 
         params.add(
-            "amp" + str(frequency),
-            value=temp_df["mag (ohm-cm)"].values[0] / mean_val,
+            HEADER_PARAM_AMP_PREFIX + str(frequency),
+            value=temp_df[HEADER_MAG].values[0] / mean_val,
             min=0,
         )
 
         params.add(
-            "freq" + str(frequency),
-            value=temp_df["freqs (cycles/rot)"].values[0],
+            HEADER_PARAM_FREQ_PREFIX + str(frequency),
+            value=temp_df[HEADER_FREQ].values[0],
             vary=False,
         )
 
         params.add(
-            "phase" + str(frequency),
-            value=temp_df["phase"].values[0],
+            HEADER_PARAM_PHASE_PREFIX + str(frequency),
+            value=temp_df[HEADER_PHASE].values[0],
             min=-2 * np.pi,
             max=2 * np.pi,
         )
@@ -248,7 +263,7 @@ class AMROFitter:
 
         # Generate a Parameters ordered dictionary, to which we add Parameter objects
         initial_p_guesses = lm.Parameters()
-        initial_p_guesses.add("mean", value=mean, min=0)
+        initial_p_guesses.add(HEADER_PARAM_MEAN_PREFIX, value=mean, min=0)
 
         # Append all Parameter objects, except for the last one (must deal with appended 2)
 
@@ -258,8 +273,8 @@ class AMROFitter:
         return initial_p_guesses
 
     def _get_freqs_guesses(self, act, h, t):
-        guess_df = u.query_data_frame(self.ft_results_df, act=act, h=h, t=t)
-        self.current_f_list = guess_df["freqs (cycles/rot)"].unique()
+        guess_df = u.query_dataframe(self.ft_results_df, act=act, h=h, t=t)
+        self.current_f_list = guess_df[HEADER_FREQ].unique()
         if self.force_four_and_two_sym:
             self.current_f_list = np.append(self.current_f_list, [2, 4])
 
@@ -286,7 +301,7 @@ class AMROFitter:
         h: int | float | list | None = None,
         t: int | float | list | None = None,
     ) -> pd.DataFrame:
-        return u.query_data_frame(self.fit_params_df, act=act, h=h, t=t)
+        return u.query_dataframe(self.fit_params_df, act=act, h=h, t=t)
 
     def plot_fits_with_residuals(self, act_choice, **kwargs):
         return _plot_fits_with_residuals(self, act_choice, **kwargs)
@@ -325,19 +340,19 @@ class AMROFitter:
 
         freqs_list = []
         for key in params_dict.keys():
-            if "freq" in key:
+            if HEADER_PARAM_FREQ_PREFIX in key:
                 freqs_list.append(int(params_dict[key]))
         amps_list = []
         phases_list = []
         for freq in freqs_list:
-            amps_list.append(params_dict["amp{}".format(freq)])
-            phases_list.append(params_dict["phase{}".format(freq)])
+            amps_list.append(params_dict[HEADER_PARAM_AMP_PREFIX + f"{freq}"])
+            phases_list.append(params_dict[HEADER_PARAM_PHASE_PREFIX + f"{freq}"])
 
         return (
             np.asarray(amps_list),
             np.asarray(freqs_list),
             np.asarray(phases_list),
-            params_dict["mean"],
+            params_dict[HEADER_PARAM_MEAN_PREFIX],
         )
 
     def _fast_convert_params_to_ndarrays(
@@ -354,7 +369,10 @@ class AMROFitter:
         params_dict = params_obj.valuesdict()
         # TODO: Fix this with the data class. The naming format is 'fragile to naming convention changes'
         amps_phase = [
-            (params_dict[f"amp{str(f)}"], params_dict[f"phase{str(f)}"])
+            (
+                params_dict[HEADER_PARAM_AMP_PREFIX + f"{str(f)}"],
+                params_dict[HEADER_PARAM_PHASE_PREFIX + f"{str(f)}"],
+            )
             for f in self.current_f_list
         ]
         amps_list, phase_list = zip(*amps_phase)
@@ -362,7 +380,7 @@ class AMROFitter:
             np.asarray(amps_list),
             np.asarray(self.current_f_list.copy()),
             np.asarray(phase_list),
-            params_dict["mean"],
+            params_dict[HEADER_PARAM_MEAN_PREFIX],
         )
 
     def _filter_guess_params(self, guess_params: pd.DataFrame) -> pd.DataFrame:
@@ -375,22 +393,22 @@ class AMROFitter:
 
         The freq is the number of oscillations per rotation of the sample.
         """
-        q = "amp_ratio > {} & `freqs (cycles/rot)`<{}".format(
-            self.min_amp_ratio, self.max_freq
-        )
+
+        q = HEADER_MAG_RATIO + f" > {self.min_amp_ratio} "
+        q += f"& `{HEADER_FREQ}`<{self.max_freq}"
         return guess_params.query(q)
 
     def _get_init_params(
         self, act: str | list, T: float | int | list, H: float | int | list
     ) -> pd.DataFrame:
 
-        f_info = u.query_data_frame(self.ft_results_df, act=act, h=H, t=T)
+        f_info = u.query_dataframe(self.ft_results_df, act=act, h=H, t=T)
 
-        return f_info[["freqs (cycles/rot)", "amp_ratio"]]
+        return f_info[[HEADER_FREQ, HEADER_MAG_RATIO]]
 
-    def _get_init_freqs(self, act: str, T: str, H: str) -> list:
+    def _get_init_freqs(self, act: str, T: str, H: str) -> np.ndarray:
         f_info = self._get_init_params(act, T, H)
-        return f_info["freqs (cycles/rot)"].values
+        return f_info[HEADER_FREQ].values
 
     def _check_if_already_fitted(self, act, t, h) -> bool:
         """
@@ -441,10 +459,10 @@ class AMROFitter:
 
         f_info = pd.DataFrame(
             {
-                "ACT_str": act_label,
-                "T": t_label,
-                "H": h_label,
-                "f_list": f_list,
+                HEADER_ACT: act_label,
+                HEADER_TEMP: t_label,
+                HEADER_MAGNET: h_label,
+                HEADER_FREQ_LIST: f_list,
             }
         )
         self.fit_amps_df = pd.concat([self.fit_amps_df, f_info])
@@ -456,10 +474,10 @@ class AMROFitter:
         # - Converted to DataFrame (should be a class)
 
         params_dict = {
-            "ACT_str": act_label,
-            "H": float(h_label),
-            "T": float(t_label),
-            "chi squared": float(lmfit_result.redchi),
+            HEADER_ACT: act_label,
+            HEADER_MAGNET: float(h_label),
+            HEADER_TEMP: float(t_label),
+            HEADER_FIT_CHISQ: float(lmfit_result.redchi),
         }
 
         for var in var_names:
@@ -488,11 +506,13 @@ class AMROFitter:
     def _get_h_t_values(self):
         """"""
         h_t_dict = {}
-        grouped = self.amro_df[["ACT_str", "H", "T"]].drop_duplicates()
+        grouped = self.amro_df[
+            [HEADER_ACT, HEADER_MAGNET, HEADER_TEMP]
+        ].drop_duplicates()
 
-        for act in grouped["ACT_str"].unique():
+        for act in grouped[HEADER_ACT].unique():
             tmp_list = []
-            for _, row in grouped.query('ACT_str=="{}"'.format(act)).iterrows():
-                tmp_list.append((float(row["T"]), float(row["H"])))
+            for _, row in grouped.query(HEADER_ACT + f'=="{act}"').iterrows():
+                tmp_list.append((float(row[HEADER_TEMP]), float(row[HEADER_MAGNET])))
             h_t_dict[act] = tmp_list
         return h_t_dict

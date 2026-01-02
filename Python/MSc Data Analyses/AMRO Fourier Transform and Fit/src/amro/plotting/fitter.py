@@ -11,11 +11,18 @@ from ..config.settings import (
     FINAL_DATA_PATH,
     H_PALETTE,
     PROCESSED_FIGURES_PATH,
+    HEADER_ANGLE_DISPLAY,
+    HEADER_ANGLE_CALC,
+    HEADER_TEMP,
+    HEADER_MAGNET,
+    HEADER_RES_UOHM,
+    HEADER_RES_OHM,
 )
 from matplotlib.patches import Patch
 from ..utils import utils as u
 
 
+# TODO: put this into a config file
 sns_context = "poster"
 hspace = 0.05
 wspace = 0.3
@@ -29,8 +36,8 @@ def _plot_fits_with_residuals(
     t_choices=None,
     figsize=None,
     y_scale=1,
-    y_label="Res. ch (ohm-cm)",
-    x_label="Angle (deg)",
+    y_label=HEADER_RES_OHM,
+    x_label=HEADER_ANGLE_DISPLAY,
 ):
     """
     Plotter to display finished fits over AMRO data, with the option
@@ -43,7 +50,7 @@ def _plot_fits_with_residuals(
     sns.set_style("whitegrid")
     sns.set_context(sns_context)  # , font_scale=context_font_scale)
 
-    data_df = u.query_data_frame(
+    data_df = u.query_dataframe(
         fitter.amro_df, act=act_choice, h=h_choices, t=t_choices
     )
     t_vals, h_vals = _get_plot_labels(data_df)
@@ -94,7 +101,7 @@ def _plot_fits_with_residuals_uohm(
         t_choices=t_choices,
         figsize=figsize,
         y_scale=10**6,
-        y_label="Res. (uohm-cm)",
+        y_label=HEADER_RES_UOHM,
     )
     return fig, axes
 
@@ -112,7 +119,7 @@ def _plot_grid(
             ax_resid = fig.add_subplot(gs[i * 2 + 1, j], sharex=ax_fit)
             axes[i, j] = (ax_fit, ax_resid)
 
-            x_data, x_plot, y_data = _get_plot_points(data_df, act, H, T)
+            x_data, x_plot, y_data = _get_data_points(data_df, act, H, T)
 
             params = _get_fit_params(fitter, act, H, T)
             y_fit = _calculate_model_values(x_data, params)
@@ -228,20 +235,20 @@ def _generate_legend(figure):
 
 def _get_plot_labels(data_df):
 
-    t_vals = data_df["T"].unique()
+    t_vals = data_df[HEADER_TEMP].unique()
     t_vals.sort()
 
-    h_vals = data_df["H"].unique()
+    h_vals = data_df[HEADER_MAGNET].unique()
     h_vals.sort()
     return t_vals, h_vals
 
 
-def _get_plot_points(data_df, act_choice, H, T):
+def _get_data_points(data_df, act_choice, H, T):
 
-    plot_df = u.query_data_frame(data_df, act=act_choice, h=H, t=T)
-    x = plot_df["Sample Position (rads)"].values
-    x_plot = plot_df["Sample Position (deg)"].values
-    y_plot = plot_df["Res. (ohm-cm)"].values
+    plot_df = u.query_dataframe(data_df, act=act_choice, h=H, t=T)
+    x = plot_df[HEADER_ANGLE_CALC].values
+    x_plot = plot_df[HEADER_ANGLE_DISPLAY].values
+    y_plot = plot_df[HEADER_ANGLE_DISPLAY].values
 
     return x, x_plot, y_plot
 

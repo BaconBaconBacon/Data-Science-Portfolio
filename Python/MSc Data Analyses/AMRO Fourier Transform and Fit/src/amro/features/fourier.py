@@ -3,7 +3,22 @@ import numpy as np
 import os
 import pandas as pd
 
-from ..config.settings import PROCESSED_DATA_PATH, H_PALETTE
+from ..config.settings import (
+    PROCESSED_DATA_PATH,
+    HEADER_ANGLE_DEG,
+    HEADER_ANGLE_RAD,
+    HEADER_RES_OHM,
+    H_PALETTE,
+    HEADER_ACT,
+    HEADER_TEMP,
+    HEADER_MAGNET,
+    HEADER_MAG_RATIO,
+    HEADER_MAG,
+    HEADER_FREQ,
+    HEADER_PHASE,
+    HEADER_PHASE_RAW,
+    HEADER_GEO,
+)
 from ..plotting.fourier import _plot_n_strongest
 from scipy.fft import rfft, rfftfreq
 from ..utils import utils as u
@@ -12,7 +27,9 @@ from ..utils import utils as u
 class Fourier:
     def __init__(self, amro_df: pd.DataFrame, save_name: str):
         self.amro_data = amro_df
-        self.labels = self.amro_data[["ACT_str", "T", "H"]].drop_duplicates()
+        self.labels = self.amro_data[
+            [HEADER_ACT, HEADER_TEMP, HEADER_MAGNET]
+        ].drop_duplicates()
 
         self.all_results_df = pd.DataFrame()
         self.save_name = save_name
@@ -37,18 +54,17 @@ class Fourier:
 
     def fourier_transform_experiments(self):
         results_list = []
-        for act_label in self.amro_data["ACT_str"].unique():
-            print("FT'ing: " + act_label)
+        for act_label in self.amro_data[HEADER_ACT].unique():
 
-            act_df = u.query_data_frame(self.amro_data, act=act_label)
+            act_df = u.query_dataframe(self.amro_data, act=act_label)
 
             # TODO: Encapsulate
             t_vals, h_vals, geo_label = self._get_experiment_labels(act_df)
 
             # TODO: Encapsulate for loop
             for t, h in itertools.product(t_vals, h_vals):
-
-                ft_df = u.query_data_frame(act_df, h=h, t=t)
+                print(f"Fourier Transforming{act_label}, T={t}K, H={h}T")
+                ft_df = u.query_dataframe(act_df, h=h, t=t)
 
                 xf, yf = self._perform_fourier_transform(ft_df)
 
@@ -64,7 +80,11 @@ class Fourier:
 
     def _get_experiment_labels(self, act_df: pd.DataFrame):
 
-        return act_df["T"].unique(), act_df["H"].unique(), act_df["geo"].unique()[0]
+        return (
+            act_df[HEADER_TEMP].unique(),
+            act_df[HEADER_MAGNET].unique(),
+            act_df[HEADER_GEO].unique()[0],
+        )
 
     def _save_results_df(self) -> None:
         self.all_results_df.to_csv(self.save_fp, sep=",", index=False)
@@ -80,28 +100,28 @@ class Fourier:
         """
         freq_df = pd.DataFrame(
             {
-                "freqs (cycles/rot)": xf,
-                "mag (ohm-cm)": np.abs(yf),
-                "phase": np.angle(yf),
+                HEADER_FREQ: xf,
+                HEADER_MAG: np.abs(yf),
+                HEADER_PHASE: np.angle(yf),
             }
         )
 
         # Amplitudes relative to the strongest
-        freq_df["amp_ratio"] = freq_df["mag (ohm-cm)"] / freq_df["mag (ohm-cm)"].max()
-        freq_df["freqs (cycles/rot)"] = freq_df["freqs (cycles/rot)"].astype(int)
+        freq_df[HEADER_MAG_RATIO] = freq_df[HEADER_MAG] / freq_df[HEADER_MAG].max()
+        freq_df[HEADER_FREQ] = freq_df[HEADER_FREQ].astype(int)
 
         # Force positive phase values
-        freq_df["phase_raw"] = freq_df["phase"].copy()
-        freq_df["phase"] = np.where(
-            freq_df["phase_raw"] < 0,
-            freq_df["phase_raw"] + 2 * np.pi,
-            freq_df["phase_raw"],
+        freq_df[HEADER_PHASE_RAW] = freq_df[HEADER_PHASE].copy()
+        freq_df[HEADER_PHASE] = np.where(
+            freq_df[HEADER_PHASE_RAW] < 0,
+            freq_df[HEADER_PHASE_RAW] + 2 * np.pi,
+            freq_df[HEADER_PHASE_RAW],
         )
 
-        freq_df["ACT_str"] = act_label
-        freq_df["T"] = t
-        freq_df["H"] = h
-        freq_df["geo"] = geo_label
+        freq_df[HEADER_ACT] = act_label
+        freq_df[HEADER_TEMP] = t
+        freq_df[HEADER_MAGNET] = h
+        freq_df[HEADER_GEO] = geo_label
 
         return freq_df
 
@@ -110,11 +130,11 @@ class Fourier:
         Queries the n strongest contributions for each experiment in the data set.
         If n=0, then returns all available contributions sorted by magnitude.
         """
-        sort_vals = ["ACT_str", "H", "T", "mag (ohm-cm)"]
+        sort_vals = [HEADER_ACT, HEADER_MAGNET, HEADER_TEMP, HEADER_MAG]
         strongest_df = self.all_results_df.sort_values(by=sort_vals, ascending=False)
         if n > 0:
             return (
-                strongest_df.groupby(["ACT_str", "H", "T"])
+                strongest_df.groupby([HEADER_ACT, HEADER_MAGNET, HEADER_TEMP])
                 .head(n)
                 .reset_index(drop=True)
             )
