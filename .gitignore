@@ -19,8 +19,8 @@ __pycache__
 *.shp
 *.shx
 
-#data/
-#Data/
+# data/
+# Data/
 .env
 Masters Thesis/
 
