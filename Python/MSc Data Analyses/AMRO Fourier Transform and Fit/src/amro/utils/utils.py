@@ -31,20 +31,28 @@ def query_dataframe(
         q: A string used to query a Pandas DataFrame.
 
     """
-    q = []
-    if type(act) is str:
-        q.append(HEADER_ACT + f' == "{act}"')
-    elif type(act) is list:
-        q.append(HEADER_ACT + f"== {act}")
-    if h is not None:
-        q.append(HEADER_MAGNET + f"== {h}")
-    if t is not None:
-        q.append(HEADER_TEMP + f"== {t}")
+    q = build_query_string(act, h, t)
     if len(q) > 0:
-        q = " & ".join(q)
         return df.query(q)
     else:
         return df
+
+
+def build_query_string(
+    act: str | list | None = None,
+    h: float | int | list | None = None,
+    t: float | int | list | None = None,
+):
+    query = []
+    if type(act) is str:
+        query.append(HEADER_ACT + f' == "{act}"')
+    elif type(act) is list:
+        query.append(HEADER_ACT + f"== {act}")
+    if h is not None:
+        query.append(HEADER_MAGNET + f"== {h}")
+    if t is not None:
+        query.append(HEADER_TEMP + f"== {t}")
+    return " & ".join(query)
 
 
 def sine_builder(
@@ -56,6 +64,27 @@ def sine_builder(
     )
 
     return mean * (summation + 1)
+
+
+def calculate_model_resistivities(x, params):
+    """To be used with the output of convert_params_to_ndarrays(). Assumes x the x variable is in units of rads.
+    The units of y_fit will depend on those of the 'mean' parameter."""
+    (
+        amps_list,
+        freqs_list,
+        phase_list,
+        mean,
+    ) = params
+
+    # Calculate model's values
+    y_fit = sine_builder(
+        x,
+        amps_list,
+        freqs_list,
+        phase_list,
+        mean,
+    )
+    return y_fit
 
 
 def convert_params_to_ndarrays(params: lm.parameter.Parameters):
@@ -84,3 +113,7 @@ def convert_params_to_ndarrays(params: lm.parameter.Parameters):
         np.asarray(phases_list),
         params_dict[HEADER_PARAM_MEAN_PREFIX],
     )
+
+
+def format_oscillation_key(act: str, t: float, h: float) -> str:
+    return f"{act}_T{t}K_H{h}T"

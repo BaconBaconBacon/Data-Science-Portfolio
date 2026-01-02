@@ -29,6 +29,7 @@ from ..config.settings import (
 )
 from ..plotting.loader import _quick_plot_amro
 from ..utils import utils as u
+from pathlib import Path
 
 
 class AMROLoader:
@@ -61,7 +62,7 @@ class AMROLoader:
 
     def __init__(self, file_name: str):
         self.file_name = file_name
-        self.save_folder = RAW_DATA_PATH
+        self.save_folder = Path(RAW_DATA_PATH)
         self.file_path = os.path.join(self.save_folder, self.file_name)
         self.AMRO = pd.DataFrame()
         self.experiment_count = 0

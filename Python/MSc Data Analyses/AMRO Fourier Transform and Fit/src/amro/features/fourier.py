@@ -91,7 +91,9 @@ class Fourier:
         print("Results saved to: {}".format(self.save_name))
         return
 
-    def _pack_ft_result(self, xf, yf, act_label, t, h, geo_label):
+    def _pack_ft_result(
+        self, xf: np.ndarray, yf: np.ndarray, act_label, t, h, geo_label
+    ):
         """
         Performs a Fast Fourier transform on the AMR oscillation of an experiment.
 
@@ -147,7 +149,9 @@ class Fourier:
     def plot_n_strongest(self, n: int, T: list | float, H: list | float):
         return _plot_n_strongest(self, n, T, H)
 
-    def _perform_fourier_transform(self, df: pd.DataFrame):
+    def _perform_fourier_transform(
+        self, df: pd.DataFrame
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Performs a Fourier transform on the AMR oscillation of an experiment,
         where the mean resistivity has been subtracted from the data to centre
@@ -165,4 +169,4 @@ class Fourier:
         yf = rfft(fftdata, n=len(fftdata), norm="ortho")
         xf = rfftfreq(len(fftdata), 1 / len(fftdata))
 
-        return xf, yf  # freq_df
+        return xf, yf

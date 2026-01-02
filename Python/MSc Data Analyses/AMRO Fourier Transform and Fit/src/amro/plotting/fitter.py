@@ -180,26 +180,6 @@ def _plot_bad_fits(fitter, act_choice: str):
     return fig, axes
 
 
-def _calculate_model_values(x, params):
-
-    (
-        amps_list,
-        freqs_list,
-        phase_list,
-        offset,
-    ) = params
-
-    # Calculate model's values
-    y_fit = u.sine_builder(
-        x,
-        amps_list,
-        freqs_list,
-        phase_list,
-        offset,
-    )
-    return y_fit
-
-
 def _format_data_axis(ax_fit, n_rows, i, j, subplot_title, x_label, y_label):
     ax_fit.set_title(subplot_title, fontsize=10)
     ax_fit.set_xticks([0, 90, 180, 270, 360])

@@ -8,7 +8,7 @@ from .models.fitter import AMROFitter
 from .data.data_structures import (
     ExperimentKey,
     FitResult,
-    AMROData,
+    ExperimentalData,
     FourierResult,
     Experiment,
 )
@@ -19,7 +19,7 @@ __all__ = [
     "AMROFitter",
     "ExperimentKey",
     "FitResult",
-    "AMROData",
+    "ExperimentalData",
     "FourierResult",
     "Experiment",
 ]

@@ -8,22 +8,40 @@ from ..utils import utils as u
 
 """
     Classes for storing and accessing experiments and results.
+    
+    Intended loading process is :
+    1) Read in all AMRO data such that each geometry gets an Experiment class instantiation
+        1.1) Each oscillation of which an AMROscillation class instantiation 
+        1.2) Each oscillation's data is stored in an ExperimentalData object
+        1.3) Each AMROscillation has a unique OscillationKey class instantiation to identify it
+    2) Iterate over each experiment's AMROscillation objects
+        2.1) Perform Fourier transforms of AMROscillation data
+        2.2) Store the results in a FourierResult object in the respective AMROscillation object
+    3) Iterate again over each experiment's AMROscillation objects
+        3.1) Perform a best fit using the FourierResult info as an initial guess
+        3.2) Store the results in a FitResult object in the respective AMROscillation object
+    
 """
 
 
 @dataclass(frozen=True)
-class ExperimentKey:
-    """Identifies an AMRO experiment key."""
+class OscillationKey:
+    """Identifies an AMR Oscillation's unique experiment key."""
 
-    act: str
+    experiment_label: str
     temperature: float
     magnetic_field: float
 
     def __str__(self):
-        return f"{self.act}_T{self.temperature}K_H{self.magnetic_field}T"
+        return u.format_oscillation_key(
+            self.experiment_label, self.temperature, self.magnetic_field
+        )
+
+    def __repr__(self):
+        return str(self)
 
     def compare_act(self, other_act: str) -> bool:
-        return self.act == other_act
+        return self.experiment_label == other_act
 
     def compare_temperature(self, other_temperature: float) -> bool:
         return self.temperature == other_temperature
@@ -31,12 +49,21 @@ class ExperimentKey:
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
         return self.magnetic_field == other_magnetic_field
 
+    def get_experiment_label(self) -> str:
+        return self.experiment_label
+
+    def get_temperature(self) -> float:
+        return self.temperature
+
+    def get_magnetic_field(self) -> float:
+        return self.magnetic_field
+
 
 @dataclass
 class FitResult:
-    """Store fit and Fourier transform information"""
+    """Stores a single AMR Oscillation's best fit results."""
 
-    experiment_key: ExperimentKey
+    experiment_key: OscillationKey
     lmfit_result: lm.minimizer.MinimizerResult
     lmfit_params: lm.parameter.Parameters = field(init=False)
 
@@ -107,18 +134,21 @@ class FitResult:
         self.params_dict = params.valuesdict()
         return
 
-    # def _check_fit_success(self):
-    #     if self.covar_matrix is None:
-    #         return False
-    #     else:
-    #         return True
+    def get_experiment_label(self) -> str:
+        return self.experiment_key.get_experiment_label()
+
+    def get_temperature(self) -> float:
+        return self.experiment_key.get_temperature()
+
+    def get_magnetic_field(self) -> float:
+        return self.experiment_key.get_magnetic_field()
 
 
 @dataclass
-class AMROData:
-    """Stores an experiment's AMRO data, i.e. resistivity and sample angle."""
+class ExperimentalData:
+    """Stores a single AMR oscillation's experimental data, i.e. resistivity and sample angle."""
 
-    experiment_key: ExperimentKey
+    experiment_key: OscillationKey
     angles_degs: list | np.ndarray
     res_ohms: list | np.ndarray
 
@@ -194,61 +224,151 @@ class AMROData:
         """Get the resistivity measurement at the very start of the oscillation, i.e. when the sample angle equals 0."""
         return
 
+    def get_experiment_label(self) -> str:
+        return self.experiment_key.get_experiment_label()
+
+    def get_temperature(self) -> float:
+        return self.experiment_key.get_temperature()
+
+    def get_magnetic_field(self) -> float:
+        return self.experiment_key.get_magnetic_field()
+
 
 @dataclass
 class FourierResult:
     """Stores the results of a Fourier Transform."""
 
-    experiment_key: ExperimentKey
+    key: OscillationKey
     symmetries: list | np.ndarray
     phases: list | np.ndarray
     amplitudes: list | np.ndarray
 
     def __str__(self):
-        return f"Fourier_Result_Object_{self.experiment_key}"
+        return f"Fourier_Result_Object_{self.key}"
 
     def get_n_strongest_components(self):
         return
 
     def compare_act(self, other_act: str) -> bool:
-        return self.experiment_key.compare_act(other_act)
+        return self.key.compare_act(other_act)
 
     def compare_temperature(self, other_temperature: float) -> bool:
-        return self.experiment_key.compare_temperature(other_temperature)
+        return self.key.compare_temperature(other_temperature)
 
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
-        return self.experiment_key.compare_magnetic_field(other_magnetic_field)
+        return self.key.compare_magnetic_field(other_magnetic_field)
+
+    def get_experiment_label(self) -> str:
+        return self.key.get_experiment_label()
+
+    def get_temperature(self) -> float:
+        return self.key.get_temperature()
+
+    def get_magnetic_field(self) -> float:
+        return self.key.get_magnetic_field()
 
 
 @dataclass
-class Experiment:
-    """Stores the data and results of an AMRO experiment. fit_result and fourier_result are to be added after the
-    dataclass object is instantiated."""
+class AMROscillation:
+    """Stores the data and analysis results of a single AMR oscillation, at a given T and H.
 
-    experiment_key: ExperimentKey
-    amro_data: AMROData
+    fit_result and fourier_result are to be added after the AMROscillation object is instantiated.
+    """
+
+    key: OscillationKey
+    osc_data: ExperimentalData
 
     fit_result: Optional[FitResult]
     fourier_result: Optional[FourierResult]
 
     def __str__(self):
-        return f"Experiment_Object_{self.experiment_key}"
+        return f"Experiment_Object_{self.key}"
 
     def compare_act(self, other_act: str) -> bool:
-        return self.experiment_key.compare_act(other_act)
+        return self.key.compare_act(other_act)
 
     def compare_temperature(self, other_temperature: float) -> bool:
-        return self.experiment_key.compare_temperature(other_temperature)
+        return self.key.compare_temperature(other_temperature)
 
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
-        return self.experiment_key.compare_magnetic_field(other_magnetic_field)
+        return self.key.compare_magnetic_field(other_magnetic_field)
 
-    def add_fit_result(self, lmfit_result: lm.minimizer.MinimizerResult):
-        self.fit_result = FitResult(lmfit_result)
-        return
-
-    def add_fourier_result(self, fourier_result):
-        self.fourier_result = FourierResult(
-            experiment_key=self.experiment_key,
+    def add_fit_result(
+        self, lmfit_result: lm.minimizer.MinimizerResult, successful: bool
+    ) -> None:
+        model_vals = self._calc_model_resistivities(lmfit_result.params)
+        self.fit_result = FitResult(
+            lmfit_result=lmfit_result,
+            experiment_key=self.key,
+            model_res_ohms=model_vals,
+            fit_succeeded=successful,
         )
         return
+
+    def add_fourier_result(self, xf: np.ndarray, yf: np.ndarray) -> None:
+        """Input are the results of rfft in fourier.py, runs calculates to read into
+        FourierResult. Copy over the fourier._pack_ft_result() function, act, h, and t will
+        have been determined previously when accessing the AMROscillation object."""
+
+        self.fourier_result = FourierResult(
+            key=self.key, symmetries=xf, phases=np.angle(yf), amplitudes=np.abs(yf)
+        )
+        return
+
+    def get_experiment_label(self) -> str:
+        return self.key.get_experiment_label()
+
+    def get_temperature(self) -> float:
+        return self.key.get_temperature()
+
+    def get_magnetic_field(self) -> float:
+        return self.key.get_magnetic_field()
+
+    def _calc_model_resistivities(self, params: lm.parameter.Parameters):
+        params = u.convert_params_to_ndarrays(params)
+        model_res = u.calculate_model_resistivities(self.osc_data.angles_rads, params)
+        return model_res
+
+
+@dataclass
+class Experiment:
+    """Handles dataclasses for all oscillations for a given experimental set up."""
+
+    experiment_label: str  # i.e. ACTRot11
+    geometry: str  # i.e. para/perp
+    oscillations: dict = field(init=False)
+
+    def add_oscillation(self, oscillation: AMROscillation) -> None:
+        new_key = oscillation.key
+        if new_key not in self.oscillations.keys():
+            self.oscillations[new_key] = oscillation
+        else:
+            print(f"Key {new_key} already exists! Use replace_oscillation() instead.")
+        return
+
+    def replace_oscillation(self, oscillation: AMROscillation) -> None:
+        new_key = oscillation.key
+        self.oscillations[new_key] = oscillation
+        return
+
+    def get_oscillation(self, t: float, h: float) -> AMROscillation:
+        request_key = u.format_oscillation_key(self.experiment_label, t, h)
+        return self.oscillations[request_key]
+
+    def get_multiple_oscillations(
+        self,
+        t: float | list | None = None,
+        h: float | list | None = None,
+    ) -> list | None:
+        """If inputs are not None, returns all oscillations whose T and H
+        values exactly match the requested values.  If requested values are
+        None, returns all existing entries for that variable."""
+
+        oscillations = []
+        t = np.asarray(t)
+        h = np.asarray(h)
+        for osc in self.oscillations.values():
+            if osc.key.compare_temperature(t) or osc.key.compare_magnetic_field(h):
+                oscillations.append(osc)
+            print("Invalid inputs for t and h.")
+        return oscillations
