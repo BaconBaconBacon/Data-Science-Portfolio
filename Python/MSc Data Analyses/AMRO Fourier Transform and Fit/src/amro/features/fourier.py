@@ -63,7 +63,7 @@ class Fourier:
 
             # TODO: Encapsulate for loop
             for t, h in itertools.product(t_vals, h_vals):
-                print(f"Fourier Transforming{act_label}, T={t}K, H={h}T")
+                print(f"Fourier Transforming {act_label}, T={t}K, H={h}T")
                 ft_df = u.query_dataframe(act_df, h=h, t=t)
 
                 xf, yf = self._perform_fourier_transform(ft_df)

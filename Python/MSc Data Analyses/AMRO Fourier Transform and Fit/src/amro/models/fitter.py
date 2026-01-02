@@ -324,46 +324,16 @@ class AMROFitter:
         self.fit_amps_df.to_csv(self.fit_amps_fp, sep=",")
         return
 
-    def convert_params_to_ndarrays(
-        self, params_obj: lm.Parameters
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Ensures the parameters are correctly ordered. Aside from the 'mean' parameter, each
-        'phase' and 'freq' are paired based on the 'freq' value. This function ensures the
-        amps and phases are in the correct order relative to the frequencies
-
-        This gets called in the objective function, so the priority is speed. self.current_f_list is calculated
-        beforehand.
-
-        """
-        params_dict = params_obj.valuesdict()
-
-        freqs_list = []
-        for key in params_dict.keys():
-            if HEADER_PARAM_FREQ_PREFIX in key:
-                freqs_list.append(int(params_dict[key]))
-        amps_list = []
-        phases_list = []
-        for freq in freqs_list:
-            amps_list.append(params_dict[HEADER_PARAM_AMP_PREFIX + f"{freq}"])
-            phases_list.append(params_dict[HEADER_PARAM_PHASE_PREFIX + f"{freq}"])
-
-        return (
-            np.asarray(amps_list),
-            np.asarray(freqs_list),
-            np.asarray(phases_list),
-            params_dict[HEADER_PARAM_MEAN_PREFIX],
-        )
-
     def _fast_convert_params_to_ndarrays(
         self, params_obj: lm.Parameters
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
-        Ensures the parameters are correctly ordered. Aside from the 'mean' parameter, each
-        'phase' and 'freq' are paired based on the 'freq' value.
+        Ensures the parameters are correctly ordered for sine_builder.
+        Aside from the 'mean' parameter, each 'phase' and 'freq' are
+        paired based on the 'freq' value.
 
-        This is somewhat slower than _fast_convert_params_to_ndarrays but it can be called outside
-        the class object.
+        A faster version of u.convert_params_to_ndarrays() meant for use
+        in the fitter's objective function.
 
         """
         params_dict = params_obj.valuesdict()

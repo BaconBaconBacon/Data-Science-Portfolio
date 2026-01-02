@@ -254,7 +254,7 @@ def _get_data_points(data_df, act_choice, H, T):
 
 
 def _get_fit_params(fitter, act, h, t):
-
+    """TODO: Should this be a function in /models/fitter.py?"""
     try:
         result = fitter.lmfit_results_objs[act][t][h]
     except KeyError:
@@ -263,7 +263,7 @@ def _get_fit_params(fitter, act, h, t):
     if result is None:
         return None
     fit_params = result.params
-    return fitter.convert_params_to_ndarrays(fit_params)
+    return u.convert_params_to_ndarrays(fit_params)
 
 
 def _calculate_fig_size(n_cols, n_rows):

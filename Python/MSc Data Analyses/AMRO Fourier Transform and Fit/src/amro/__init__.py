@@ -1,4 +1,3 @@
-
 """AMRO Fourier Transform and Fitting Analysis Package"""
 
 __version__ = "0.1.0"

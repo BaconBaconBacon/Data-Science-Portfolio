@@ -7,9 +7,20 @@ __pycache__
 /Written Analysis Excerpt/James Fraser Master
 /SQL/DataCamp Projects/Manufacturing Process Analysis/info.txt
 /SQL/
+
+# Basic data file types
 *.csv
-data/
-Data/
+*.pkl
+
+# GIS file types
+*.cpg
+*.dbf
+*.prj
+*.shp
+*.shx
+
+#data/
+#Data/
 .env
 Masters Thesis/
 
@@ -18,4 +29,4 @@ TODO.txt
 /anaconda_projects
 /.idea
 /anaconda_projects/db
-.egg-info
+*.egg-info/
