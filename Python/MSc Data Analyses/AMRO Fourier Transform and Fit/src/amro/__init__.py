@@ -6,7 +6,7 @@ from .data.loader import AMROLoader
 from .features.fourier import Fourier
 from .models.fitter import AMROFitter
 from .data.data_structures import (
-    ExperimentKey,
+    OscillationKey,
     FitResult,
     ExperimentalData,
     FourierResult,
@@ -17,7 +17,7 @@ __all__ = [
     "AMROLoader",
     "Fourier",
     "AMROFitter",
-    "ExperimentKey",
+    "OscillationKey",
     "FitResult",
     "ExperimentalData",
     "FourierResult",

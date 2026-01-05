@@ -1,6 +1,5 @@
 import itertools
 import numpy as np
-import os
 import pandas as pd
 
 from ..config.settings import (
@@ -22,6 +21,7 @@ from ..config.settings import (
 from ..plotting.fourier import _plot_n_strongest
 from scipy.fft import rfft, rfftfreq
 from ..utils import utils as u
+from pathlib import Path
 
 
 class Fourier:
@@ -34,9 +34,9 @@ class Fourier:
         self.all_results_df = pd.DataFrame()
         self.save_name = save_name
         self.save_dir = PROCESSED_DATA_PATH
-        self.save_fp = os.path.join(self.save_dir, save_name)
+        self.save_fp = self.save_dir / save_name
 
-        if os.path.exists(self.save_fp):
+        if self.save_fp.is_file():
             # TODO: Need to check and make sure it's loading the same data as the AMRO
             print("Loading {}".format(save_name))
             self.all_results_df = pd.read_csv(self.save_fp)
@@ -59,7 +59,7 @@ class Fourier:
             act_df = u.query_dataframe(self.amro_data, act=act_label)
 
             # TODO: Encapsulate
-            t_vals, h_vals, geo_label = self._get_experiment_labels(act_df)
+            t_vals, h_vals, geo_label = self._extract_experiment_labels(act_df)
 
             # TODO: Encapsulate for loop
             for t, h in itertools.product(t_vals, h_vals):
@@ -78,8 +78,8 @@ class Fourier:
         self._save_results_df()
         return
 
-    def _get_experiment_labels(self, act_df: pd.DataFrame):
-
+    def _extract_experiment_labels(self, act_df: pd.DataFrame):
+        """TODO: May be unnecessary after using the new data classes. Could also use .drop_duplicates() to keep pairings"""
         return (
             act_df[HEADER_TEMP].unique(),
             act_df[HEADER_MAGNET].unique(),
@@ -95,9 +95,8 @@ class Fourier:
         self, xf: np.ndarray, yf: np.ndarray, act_label, t, h, geo_label
     ):
         """
-        Performs a Fast Fourier transform on the AMR oscillation of an experiment.
-
-        Extracts the phase and amplitude of each symmetry's Fourier component.
+        This method takes the output of an oscillation's fast Fourier transform, and extracts the frequency, phase,
+        and amplitude of each Fourier component.
 
         """
         freq_df = pd.DataFrame(
@@ -133,18 +132,18 @@ class Fourier:
         If n=0, then returns all available contributions sorted by magnitude.
         """
         sort_vals = [HEADER_ACT, HEADER_MAGNET, HEADER_TEMP, HEADER_MAG]
-        strongest_df = self.all_results_df.sort_values(by=sort_vals, ascending=False)
+        sorted_df = self.all_results_df.sort_values(by=sort_vals, ascending=False)
         if n > 0:
             return (
-                strongest_df.groupby([HEADER_ACT, HEADER_MAGNET, HEADER_TEMP])
+                sorted_df.groupby([HEADER_ACT, HEADER_MAGNET, HEADER_TEMP])
                 .head(n)
                 .reset_index(drop=True)
             )
         elif n == 0:
-            return strongest_df
-        elif n < 0:
-            print("Negative values not accepted.")
-            return
+            return sorted_df
+        else:
+            print("Invalid value of n.")
+            return None
 
     def plot_n_strongest(self, n: int, T: list | float, H: list | float):
         return _plot_n_strongest(self, n, T, H)

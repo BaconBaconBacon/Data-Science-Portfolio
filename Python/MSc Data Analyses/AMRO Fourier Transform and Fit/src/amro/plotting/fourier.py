@@ -11,10 +11,11 @@ from ..config.settings import (
 )
 from ..utils import utils as u
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 def _plot_n_strongest(
-    fourier, n: int, T: list | float, H: list | float
+    fourier, n: int, t: list | float, h: list | float
 ) -> sns.FacetGrid:
     """
     Plots the n-strongest.
@@ -24,8 +25,8 @@ def _plot_n_strongest(
     # TODO: Config file?
     sns.set_context("poster")
 
-    df = fourier.get_n_strongest(n)
-    plot_df = u.query_dataframe(df=df, t=T, h=H)
+    df = fourier.get_n_strongest_results(n)
+    plot_df = u.query_dataframe(df=df, t=t, h=h)
 
     hue_choice = HEADER_ACT
 
@@ -41,5 +42,6 @@ def _plot_n_strongest(
         hue=hue_choice,
         sharex=False,
     )
+    plt.show()
 
     return g

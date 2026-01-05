@@ -2,7 +2,7 @@
 
 from .loader import AMROLoader
 from .data_structures import (
-    ExperimentKey,
+    OscillationKey,
     FitResult,
     ExperimentalData,
     FourierResult,
@@ -11,7 +11,7 @@ from .data_structures import (
 
 __all__ = [
     "AMROLoader",
-    "ExperimentKey",
+    "OscillationKey",
     "FitResult",
     "ExperimentalData",
     "FourierResult",

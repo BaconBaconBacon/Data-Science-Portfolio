@@ -10,17 +10,16 @@ from ..config.settings import (
     HEADER_MAGNET,
     HEADER_TEMP,
     HEADER_ACT,
-    HEADER_ANGLE_RAD,
-    HEADER_RES_DISPLAY,
-    HEADER_ANGLE_DISPLAY,
+    HEADER_ANGLE_DEG,
+    HEADER_RES_DEL_MEAN_UOHM,
 )
 
 
 def _quick_plot_amro(loader) -> None:
     """ """
     _ = sns.relplot(
-        x=HEADER_ANGLE_DISPLAY,
-        y=HEADER_RES_DISPLAY,
+        x=HEADER_ANGLE_DEG,
+        y=HEADER_RES_DEL_MEAN_UOHM,
         hue=HEADER_MAGNET,
         col=HEADER_TEMP,
         row=HEADER_ACT,

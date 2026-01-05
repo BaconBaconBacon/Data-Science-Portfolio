@@ -11,15 +11,16 @@ from ..config.settings import (
     FINAL_DATA_PATH,
     H_PALETTE,
     PROCESSED_FIGURES_PATH,
-    HEADER_ANGLE_DISPLAY,
-    HEADER_ANGLE_CALC,
     HEADER_TEMP,
     HEADER_MAGNET,
     HEADER_RES_UOHM,
     HEADER_RES_OHM,
+    HEADER_ANGLE_RAD,
+    HEADER_ANGLE_DEG,
 )
 from matplotlib.patches import Patch
 from ..utils import utils as u
+from pathlib import Path
 
 
 # TODO: put this into a config file
@@ -37,7 +38,7 @@ def _plot_fits_with_residuals(
     figsize=None,
     y_scale=1,
     y_label=HEADER_RES_OHM,
-    x_label=HEADER_ANGLE_DISPLAY,
+    x_label=HEADER_ANGLE_DEG,
 ):
     """
     Plotter to display finished fits over AMRO data, with the option
@@ -119,10 +120,10 @@ def _plot_grid(
             ax_resid = fig.add_subplot(gs[i * 2 + 1, j], sharex=ax_fit)
             axes[i, j] = (ax_fit, ax_resid)
 
-            x_data, x_plot, y_data = _get_data_points(data_df, act, H, T)
+            x_data, x_plot, y_data = _get_data_plot_points(data_df, act, H, T)
 
             params = _get_fit_params(fitter, act, H, T)
-            y_fit = _calculate_model_values(x_data, params)
+            y_fit = u.calculate_model_resistivities(x_data, params)
             if y_fit is None:
                 print("No lmfit Result found for {} {}K, {}T".format(act, T, H))
                 return
@@ -223,12 +224,12 @@ def _get_plot_labels(data_df):
     return t_vals, h_vals
 
 
-def _get_data_points(data_df, act_choice, H, T):
+def _get_data_plot_points(data_df, act_choice, h, t):
 
-    plot_df = u.query_dataframe(data_df, act=act_choice, h=H, t=T)
-    x = plot_df[HEADER_ANGLE_CALC].values
-    x_plot = plot_df[HEADER_ANGLE_DISPLAY].values
-    y_plot = plot_df[HEADER_ANGLE_DISPLAY].values
+    plot_df = u.query_dataframe(data_df, act=act_choice, h=h, t=t)
+    x = plot_df[HEADER_ANGLE_RAD].values
+    x_plot = plot_df[HEADER_ANGLE_DEG].values
+    y_plot = plot_df[HEADER_RES_OHM].values
 
     return x, x_plot, y_plot
 

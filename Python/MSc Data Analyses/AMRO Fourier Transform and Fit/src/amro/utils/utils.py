@@ -23,6 +23,7 @@ def query_dataframe(
     Utility function to build strings to query Pandas DataFrames.
 
     Args:
+        df: Pandas DataFrame to be queried.
         act: The ACT label(s)
         h: The magnetic field strength(s)
         t: The temperature(s)
@@ -69,13 +70,16 @@ def sine_builder(
 def calculate_model_resistivities(x, params):
     """To be used with the output of convert_params_to_ndarrays(). Assumes x the x variable is in units of rads.
     The units of y_fit will depend on those of the 'mean' parameter."""
-    (
-        amps_list,
-        freqs_list,
-        phase_list,
-        mean,
-    ) = params
-
+    try:
+        (
+            amps_list,
+            freqs_list,
+            phase_list,
+            mean,
+        ) = params
+    except TypeError as e:
+        print(params)
+        raise e
     # Calculate model's values
     y_fit = sine_builder(
         x,

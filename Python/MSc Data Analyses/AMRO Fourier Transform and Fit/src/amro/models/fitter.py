@@ -1,4 +1,5 @@
-import os
+# import os
+from pathlib import Path
 
 import lmfit as lm
 import numpy as np
@@ -65,22 +66,24 @@ class AMROFitter:
         self.ft_results_df = self._filter_guess_params(fourier_results)
         self.act_choices = self._get_h_t_values()
 
-        # Save name info
-        s = "_ratio_{}_maxf_{}_".format(min_amp_ratio, max_freq)
-        self.save_name = save_name + s.replace(".", "p")
-        self._create_save_paths()
+        self._name_save_paths(save_name, min_amp_ratio, max_freq)
         self._read_or_initialize()
 
         # TODO: Address nested list storage
         self.failed_fit_labels = {}
         return
 
-    def _create_save_paths(self):
+    def _name_save_paths(self, name, amp_ratio, freq):
+
+        s = "_ratio_{}_maxf_{}_".format(amp_ratio, freq)
+        self.save_name = name + s.replace(".", "p")
+
         s = self.save_name + "_fit_params.csv"
         self.fit_params_fp = FINAL_DATA_PATH / s
+
         s = self.save_name + "_results.pkl"
-        self.results_fp = FINAL_DATA_PATH / s
-        # may be redundant, could probably get it from the fit_params_df
+        self.lmfit_results_fp = FINAL_DATA_PATH / s
+
         s = self.save_name + "_fit_amps.csv"
         self.fit_amps_fp = FINAL_DATA_PATH / s
         return
@@ -317,7 +320,7 @@ class AMROFitter:
 
     def _save_to_disk(self):
         """ """
-        with open(self.results_fp, "wb") as f:
+        with open(self.lmfit_results_fp, "wb") as f:
             pickle.dump(self.lmfit_results_objs, f)
 
         self.fit_params_df.to_csv(self.fit_params_fp, sep=",")
@@ -392,14 +395,14 @@ class AMROFitter:
 
     def _read_or_initialize(self):
         load_conds = (
-            os.path.exists(self.fit_params_fp)
-            & os.path.exists(self.results_fp)
-            & os.path.exists(self.fit_amps_fp)
+            self.fit_params_fp.is_file()
+            & self.lmfit_results_fp.is_file()
+            & self.fit_amps_fp.is_file()
             & (not self.overwrite)
         )
         if load_conds:
             print("Loading previous fit results.")
-            with open(self.results_fp, "rb") as f:
+            with open(self.lmfit_results_fp, "rb") as f:
                 self.lmfit_results_objs = pickle.load(f)
 
             self.fit_params_df = pd.read_csv(self.fit_params_fp)

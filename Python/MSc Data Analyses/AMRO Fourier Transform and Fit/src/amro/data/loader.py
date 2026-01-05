@@ -1,5 +1,5 @@
 # TODO: Switch it over to using pathlib instead of os
-import os
+# import os
 import numpy as np
 import pandas as pd
 from ..config.settings import (
@@ -63,19 +63,19 @@ class AMROLoader:
     def __init__(self, file_name: str):
         self.file_name = file_name
         self.save_folder = Path(RAW_DATA_PATH)
-        self.file_path = os.path.join(self.save_folder, self.file_name)
+        self.file_path = self.save_folder / self.file_name
         self.AMRO = pd.DataFrame()
         self.experiment_count = 0
 
     def get_amro(self) -> pd.DataFrame:
         """ """
         if self.file_name.endswith(".csv"):
-            if os.path.exists(self.file_path):
+            if self.file_path.is_file():
                 print("Loading : {}".format(self.file_name))
                 self.AMRO = pd.read_csv(self.file_path)
             else:
                 print("Running AMRO ETL. Save name: {}".format(self.file_name))
-                self.AMRO = self._run_amro_etl(self.save_folder)
+                self.AMRO = self._run_amro_etl()
         else:
             raise TypeError("Wrong file type: {}".format(self.file_name))
 
@@ -90,7 +90,7 @@ class AMROLoader:
             print(f"{self.experiment_count} unique experiments were found and loaded.")
             return self.AMRO
 
-    def _run_amro_etl(self, data_dir: str) -> pd.DataFrame:
+    def _run_amro_etl(self) -> pd.DataFrame:
         """
 
         Args:
@@ -100,7 +100,7 @@ class AMROLoader:
 
         """
 
-        filenames = os.listdir(data_dir)
+        filenames = list(self.save_folder.glob())
         amro_df = pd.DataFrame()
         # TODO: add some flexibility to naming schemes. Maybe just check whether filename has been loaded already,
         # and whether the H and T data are new
@@ -108,8 +108,7 @@ class AMROLoader:
             # Ensure we are selecting only AMRO data
             if self._is_valid_amro_filename(filename):
                 # EXTRACT
-                fp = os.path.join(data_dir, filename)
-                data_df = self._extract_experiment_data(fp)
+                data_df = self._extract_experiment_data(filename)
 
                 # TRANSFORM
                 data_df = self._transform_experiment_data(data_df)
@@ -117,21 +116,23 @@ class AMROLoader:
                 # LOAD
                 amro_df = self._load_to_csv(data_df, amro_df)
             else:
-                print("Invalid file name found:\t" + filename)
+                print("Invalid file name found:\t" + str(filename))
         return amro_df
 
-    def _is_valid_amro_filename(self, filename: str) -> bool:
+    def _is_valid_amro_filename(self, filename: Path) -> bool:
 
         valid_act_label = any(key in filename for key in self.META_DATA.keys())
         valid_amro_label = "AMRO" in filename
         return valid_amro_label and valid_act_label
 
-    def _extract_experiment_data(self, file_path: str) -> pd.DataFrame:
+    def _extract_experiment_data(self, filename: Path) -> pd.DataFrame:
         """ """
+
+        file_path = self.save_folder / filename
         experiment_df = pd.read_csv(file_path, sep=",")
 
         # Extract experiment's T and H info from file_path
-        exp_labels = self._parse_experiment_name(file_path)
+        exp_labels = self._parse_experiment_name(filename)
 
         experiment_df = self._parse_experiment_labels(exp_labels, experiment_df)
 
@@ -141,10 +142,13 @@ class AMROLoader:
         ]
         return experiment_df
 
-    def _parse_experiment_name(self, filepath):
-        fn = filepath.split(os.path.sep)[-1]
-        # TODO: Generalize replace with a regex editor
-        temp_name = fn.replace(".csv", "").replace("0_5", "0.5").replace("1p9", "1.9")
+    def _parse_experiment_name(self, filename: Path):
+
+        # TODO: Generalize replace with a regex editor in  filename_handling.py
+        temp_name = str(filename)
+        temp_name = (
+            temp_name.replace(".csv", "").replace("0_5", "0.5").replace("1p9", "1.9")
+        )
 
         # TODO: Move this to another function once you think of a not-dumb name for it
         conds = lambda x: ("ACT" in x or x.endswith(HEADER_TEMP) or x.endswith("K"))

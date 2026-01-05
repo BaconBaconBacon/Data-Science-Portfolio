@@ -42,16 +42,15 @@ HEADER_RES_UOHM = "Res. (uohm-cm)"
 
 # todo: make sure to update the various labels throughout, and add missed labels to this config file here
 # Columns used for plots and figures
-HEADER_ANGLE_DISPLAY = HEADER_ANGLE_DEG
-HEADER_RES_DISPLAY = HEADER_RES_UOHM
-
-# Columns used for calculations
-HEADER_ANGLE_CALC = HEADER_ANGLE_RAD
-HEADER_RES_CALC = HEADER_RES_OHM
+# HEADER_ANGLE_DISPLAY = HEADER_ANGLE_DEG
+# HEADER_RES_DISPLAY = HEADER_RES_UOHM
+#
+# # Columns used for calculations
+# HEADER_ANGLE_CALC = HEADER_ANGLE_RAD
+# HEADER_RES_CALC = HEADER_RES_OHM
 
 
 # AMRO DataFrame header labels
-# TODO: Update the DF headers in the code
 HEADER_TEMP = "T"
 HEADER_MAGNET = "H"
 HEADER_ACT = "ACT_str"
