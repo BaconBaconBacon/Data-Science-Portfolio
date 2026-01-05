@@ -91,7 +91,9 @@ def calculate_model_resistivities(x, params):
     return y_fit
 
 
-def convert_params_to_ndarrays(params: lm.parameter.Parameters):
+def convert_params_to_ndarrays(
+    params: lm.parameter.Parameters, include_errs: bool = False
+) -> tuple:
     """
     Ensures the parameters are correctly ordered for sine_builder. Aside from the
     'mean' parameter, each 'phase' and 'freq' are paired based on the 'freq' value.
@@ -99,7 +101,7 @@ def convert_params_to_ndarrays(params: lm.parameter.Parameters):
     the frequencies.
 
     """
-    params_dict = params.valuesdict()
+    params_dict = params.create_uvars()  # params.valuesdict()
 
     freqs_list = []
     for key in params_dict.keys():
@@ -107,16 +109,35 @@ def convert_params_to_ndarrays(params: lm.parameter.Parameters):
             freqs_list.append(int(params_dict[key]))
     amps_list = []
     phases_list = []
-    for freq in freqs_list:
-        amps_list.append(params_dict[HEADER_PARAM_AMP_PREFIX + f"{freq}"])
-        phases_list.append(params_dict[HEADER_PARAM_PHASE_PREFIX + f"{freq}"])
+    amps_errs_list = []
+    phases_errs_list = []
 
-    return (
-        np.asarray(amps_list),
-        np.asarray(freqs_list),
-        np.asarray(phases_list),
-        params_dict[HEADER_PARAM_MEAN_PREFIX],
-    )
+    for freq in freqs_list:
+        amps_list.append(params_dict[HEADER_PARAM_AMP_PREFIX + f"{freq}"].n)
+        phases_list.append(params_dict[HEADER_PARAM_PHASE_PREFIX + f"{freq}"].n)
+
+        amps_errs_list.append(params_dict[HEADER_PARAM_AMP_PREFIX + f"{freq}"].s)
+        phases_errs_list.append(params_dict[HEADER_PARAM_PHASE_PREFIX + f"{freq}"].s)
+
+    if include_errs:
+        (
+            np.asarray(amps_list),
+            np.asarray(amps_errs_list),
+            np.asarray(freqs_list),
+            np.asarray(phases_list),
+            p.asarray(phases_errs_list),
+            params_dict[HEADER_PARAM_MEAN_PREFIX].n,
+            params_dict[HEADER_PARAM_MEAN_PREFIX].s,
+        )
+    elif not include_errs:
+        return (
+            np.asarray(amps_list),
+            np.asarray(freqs_list),
+            np.asarray(phases_list),
+            params_dict[HEADER_PARAM_MEAN_PREFIX].n,
+        )
+    else:
+        raise Error
 
 
 def format_oscillation_key(act: str, t: float, h: float) -> str:

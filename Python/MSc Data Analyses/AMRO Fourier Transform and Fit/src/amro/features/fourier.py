@@ -17,6 +17,7 @@ from ..config.settings import (
     HEADER_PHASE,
     HEADER_PHASE_RAW,
     HEADER_GEO,
+    HEADER_RES_DEL_MEAN_OHM,
 )
 from ..plotting.fourier import _plot_n_strongest
 from scipy.fft import rfft, rfftfreq
@@ -79,7 +80,9 @@ class Fourier:
         return
 
     def _extract_experiment_labels(self, act_df: pd.DataFrame):
-        """TODO: May be unnecessary after using the new data classes. Could also use .drop_duplicates() to keep pairings"""
+        """TODO: May be unnecessary after using the new data classes.
+        Could also use .drop_duplicates() to keep pairings
+        """
         return (
             act_df[HEADER_TEMP].unique(),
             act_df[HEADER_MAGNET].unique(),
@@ -145,8 +148,8 @@ class Fourier:
             print("Invalid value of n.")
             return None
 
-    def plot_n_strongest(self, n: int, T: list | float, H: list | float):
-        return _plot_n_strongest(self, n, T, H)
+    def plot_n_strongest(self, n: int, t: list | float, h: list | float):
+        return _plot_n_strongest(self, n, t, h)
 
     def _perform_fourier_transform(
         self, df: pd.DataFrame
@@ -162,10 +165,10 @@ class Fourier:
             yf: List of complex numbers storing the amplitudes and phases
             xf: List of the rotational symmetries
         """
-        fftdata = df["Delta Res. Mean (ohm-cm)"].values
+        fft_data = df[HEADER_RES_DEL_MEAN_OHM].values
 
         # Perform the FFT, where
-        yf = rfft(fftdata, n=len(fftdata), norm="ortho")
-        xf = rfftfreq(len(fftdata), 1 / len(fftdata))
+        yf = rfft(fft_data, n=len(fft_data), norm="ortho")
+        xf = rfftfreq(len(fft_data), 1 / len(fft_data))
 
         return xf, yf

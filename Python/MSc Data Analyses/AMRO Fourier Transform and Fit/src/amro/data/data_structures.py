@@ -72,12 +72,12 @@ class FitResult:
     symmetries: list | np.ndarray = field(init=False)
     phases: list | np.ndarray = field(init=False)
     amplitudes: list | np.ndarray = field(init=False)
+    mean: float = field(init=False)
 
     symmetries_errs: list | np.ndarray = field(init=False)
     phases_errs: list | np.ndarray = field(init=False)
     amplitudes_errs: list | np.ndarray = field(init=False)
-
-    uvars_dict: dict = field(init=False)
+    mean_err: float = field(init=False)
 
     chi_squared: float = field(init=False)
     red_chi_squared: float = field(init=False)
@@ -89,7 +89,7 @@ class FitResult:
     model_residuals_ohms: list | np.ndarray = field(init=False)
     model_residuals_uohms: list | np.ndarray = field(init=False)
 
-    required_refit: bool = field(init=False)
+    required_refit: bool
     fit_report: str = field(init=False)
 
     def __str__(self):
@@ -104,8 +104,6 @@ class FitResult:
         self.fit_succeeded = self.lmfit_result.success  # self._check_fit_success()
 
         self._parse_params(self.lmfit_result.params)
-
-        self.uvars_dict = self.lmfit_result.uvar
 
         self.model_res_uohms = c.convert_ohms_to_uohms(self.model_res_ohms)
         self.model_residuals_ohms = self.lmfit_result.residual
@@ -122,16 +120,36 @@ class FitResult:
         return self.experiment_key.compare_magnetic_field(other_magnetic_field)
 
     def get_fitted_params(self):
-        return
+        return u.convert_params_to_ndarrays(self.lmfit_params, include_errs=False)
 
-    def get_fitted_param_errs(self):
-        return
+    def get_fitted_params_with_errs(self):
+        return u.convert_params_to_ndarrays(self.lmfit_params, include_errs=True)
 
     def _parse_params(self, params: lm.Parameters) -> None:
         """Must parse the keys and values of the Parameters objects"""
         self.lmfit_params = params
         self.fit_report = lm.report_fit(params)
-        self.params_dict = params.valuesdict()
+
+        (
+            amps_list,
+            amps_err_list,
+            freqs_list,
+            phases_list,
+            phases_err_list,
+            mean,
+            mean_err,
+        ) = u.convert_params_to_ndarrays(params, include_errs=True)
+
+        self.symmetries = np.asarray(freqs_list)
+
+        self.phases = np.asarray(phases_list)
+        self.phases_errs = np.asarray(phases_err_list)
+
+        self.amplitudes = np.asarray(amps_list)
+        self.amplitudes_errs = np.asarray(amps_err_list)
+
+        self.mean = mean
+        self.mean_err = mean_err
         return
 
     def get_experiment_label(self) -> str:
@@ -153,7 +171,7 @@ class ExperimentalData:
     res_ohms: list | np.ndarray
 
     # Values for calculations
-    angles_rads: list | np.ndarray = field(init=False)
+    angles_rads: np.ndarray = field(init=False)
 
     # res_{mean}
     mean_res_ohms: float = field(init=False)
@@ -165,29 +183,38 @@ class ExperimentalData:
 
     # Values for plotting
     # val = (res-res_{mean})
-    delta_res_mean_ohms: list | np.ndarray = field(init=False)
-    delta_res_mean_uohms: list | np.ndarray = field(init=False)
+    delta_res_mean_ohms: np.ndarray = field(init=False)
+    delta_res_mean_uohms: np.ndarray = field(init=False)
 
     # val = (res-res_{\theta=0})
-    delta_res_0deg_ohms: list | np.ndarray = field(init=False)
-    delta_rest_0deg_uohms: list | np.ndarray = field(init=False)
+    delta_res_0deg_ohms: np.ndarray = field(init=False)
+    delta_res_0deg_uohms: np.ndarray = field(init=False)
 
     # val = (res-res_{constant})/res_{constant}
-    delta_res_mean_norm: list | np.ndarray = field(init=False)
-    delta_res_0deg_norm: list | np.ndarray = field(init=False)
+    delta_res_mean_norm: np.ndarray = field(init=False)
+    delta_res_0deg_norm: np.ndarray = field(init=False)
+
+    # val = (res-res_{constant})/res_{constant}*100
+    delta_res_mean_norm_pct: np.ndarray = field(init=False)
+    delta_res_0deg_norm_pct: np.ndarray = field(init=False)
 
     def __str__(self):
         return f"AMRO_Data_Object_{self.experiment_key}"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        self._validate_inputs()
+
+        self.angles_degs = np.asarray(self.angles_degs)
+        self.res_ohms = np.asarray(self.res_ohms)
+
         self.mean_res_ohms = np.mean(self.res_ohms, dtype=float)
         self._get_angle_zero_res()
 
         self.angles_rads = c.convert_degs_to_rads(self.angles_degs)
 
-        self._calc_plotting_values()
+        self._calc_delta_res()
         self._calc_res_uohm_values()
-        self._calc_res_normed_values()
+        self._calc_normed_res()
 
     def compare_act(self, other_act: str) -> bool:
         return self.experiment_key.compare_act(other_act)
@@ -198,19 +225,28 @@ class ExperimentalData:
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
         return self.experiment_key.compare_magnetic_field(other_magnetic_field)
 
-    def _calc_res_normed_values(self):
-        self.delta_res_0deg_norm = self.delta_res_mean_ohms / self.mean_res_ohms
-        self.delta_res_mean_norm = self.delta_res_0deg_ohms / self.deg0_res_ohms
+    def _calc_normed_res(self) -> None:
+        self.delta_res_mean_norm = self.delta_res_mean_ohms / self.mean_res_ohms
+        self.delta_res_0deg_norm = self.delta_res_0deg_ohms / self.deg0_res_ohms
 
-    def _calc_plotting_values(self):
+        self.delta_res_mean_norm_pct = self.delta_res_mean_norm * 100
+        self.delta_res_0deg_norm_pct = self.delta_res_0deg_norm * 100
+
+    def _calc_delta_res(self) -> None:
         """Calculates various values using different units for clearer plotting."""
 
         self.delta_res_mean_ohms = self.res_ohms - self.mean_res_ohms
-
+        self.delta_res_0deg_ohms = self.res_ohms - self.deg0_res_ohms
         return
 
-    def _calc_res_uohm_values(self) -> None:
+    def _validate_inputs(self):
+        if min(self.angles_degs) < 0:
+            raise ValueError("Angles must be non-negative")
+        elif min(self.res_ohms) < 0:
+            raise ValueError("Resistivity must be non-negative")
 
+    def _calc_res_uohm_values(self) -> None:
+        """Call this last at initialization. Iterates over the class object's attributes."""
         for attribute in fields(self):
             if attribute.name.endswith("_ohm"):
                 vals = getattr(self, attribute.name)
@@ -220,8 +256,10 @@ class ExperimentalData:
 
         return
 
-    def _get_angle_zero_res(self):
+    def _get_angle_zero_res(self) -> None:
         """Get the resistivity measurement at the very start of the oscillation, i.e. when the sample angle equals 0."""
+        id_min = np.argmin(self.angles_degs)
+        self.deg0_res_ohms = self.res_ohms[id_min]
         return
 
     def get_experiment_label(self) -> str:
@@ -236,18 +274,44 @@ class ExperimentalData:
 
 @dataclass
 class FourierResult:
-    """Stores the results of a Fourier Transform."""
+    """
+    Stores the results of a Fourier Transform. yf is a list of complex numbers outputted by
+    rfft()
+    """
 
     key: OscillationKey
+
     symmetries: list | np.ndarray
-    phases: list | np.ndarray
-    amplitudes: list | np.ndarray
+    yf: list | np.ndarray
+
+    phases: np.ndarray = field(init=False)
+    amplitudes: np.ndarray = field(init=False)
+
+    amplitudes_ratio: np.ndarray = field(init=False)
+    phases_pos: np.ndarray = field(init=False)
+
+    def __post_init__(self) -> None:
+
+        self.symmetries = np.asarray(self.symmetries).astype(int)
+        self.yf = np.asarray(self.yf)
+
+        self.phases = np.angle(self.yf)
+        self.amplitudes = np.abs(self.yf)
+        self.amplitudes_ratio = np.divide(self.amplitudes, self.amplitudes.max())
+        self.phases_pos = np.where(
+            self.phases < 0,
+            self.phases + 2 * np.pi,
+            self.phases,
+        )
 
     def __str__(self):
         return f"Fourier_Result_Object_{self.key}"
 
-    def get_n_strongest_components(self):
-        return
+    def get_n_strongest_components(self, n=0):
+        idx_largest = np.argpartition(self.amplitudes_ratio, -n)[-n:]
+        n_syms = self.symmetries[idx_largest]
+        n_ratios = self.amplitudes_ratio[idx_largest]
+        return zip(n_syms, n_ratios)
 
     def compare_act(self, other_act: str) -> bool:
         return self.key.compare_act(other_act)
@@ -294,14 +358,18 @@ class AMROscillation:
         return self.key.compare_magnetic_field(other_magnetic_field)
 
     def add_fit_result(
-        self, lmfit_result: lm.minimizer.MinimizerResult, successful: bool
+        self,
+        lmfit_result: lm.minimizer.MinimizerResult,
+        refitted: bool,
+        successful_fit: bool,
     ) -> None:
         model_vals = self._calc_model_resistivities(lmfit_result.params)
         self.fit_result = FitResult(
             lmfit_result=lmfit_result,
             experiment_key=self.key,
             model_res_ohms=model_vals,
-            fit_succeeded=successful,
+            required_refit=refitted,
+            fit_succeeded=successful_fit,
         )
         return
 
@@ -310,9 +378,7 @@ class AMROscillation:
         FourierResult. Copy over the fourier._pack_ft_result() function, act, h, and t will
         have been determined previously when accessing the AMROscillation object."""
 
-        self.fourier_result = FourierResult(
-            key=self.key, symmetries=xf, phases=np.angle(yf), amplitudes=np.abs(yf)
-        )
+        self.fourier_result = FourierResult(key=self.key, symmetries=xf, yf=yf)
         return
 
     def get_experiment_label(self) -> str:
@@ -329,6 +395,13 @@ class AMROscillation:
         model_res = u.calculate_model_resistivities(self.osc_data.angles_rads, params)
         return model_res
 
+    def get_n_strongest_fourier(self, n=0):
+        if self.fourier_result is not None:
+            return self.fourier_result.get_n_strongest_components(n)
+        else:
+            print("Fourier result not present.")
+            return None
+
 
 @dataclass
 class Experiment:
@@ -336,7 +409,7 @@ class Experiment:
 
     experiment_label: str  # i.e. ACTRot11
     geometry: str  # i.e. para/perp
-    oscillations: dict = field(init=False)
+    oscillations: dict = field(default_factory=dict)
 
     def add_oscillation(self, oscillation: AMROscillation) -> None:
         new_key = oscillation.key
@@ -352,7 +425,7 @@ class Experiment:
         return
 
     def get_oscillation(self, t: float, h: float) -> AMROscillation:
-        request_key = u.format_oscillation_key(self.experiment_label, t, h)
+        request_key = OscillationKey(self.experiment_label, t, h)
         return self.oscillations[request_key]
 
     def get_multiple_oscillations(
@@ -370,5 +443,45 @@ class Experiment:
         for osc in self.oscillations.values():
             if osc.key.compare_temperature(t) or osc.key.compare_magnetic_field(h):
                 oscillations.append(osc)
-            print("Invalid inputs for t and h.")
         return oscillations
+
+
+@dataclass
+class ProjectData:
+    """Handles dataclasses for all experiments for a given project"""
+
+    project_name: str
+    experiments_dict: dict = field(default_factory=dict)
+
+    def add_experiment(self, exp: Experiment) -> None:
+        self.experiments_dict[exp.experiment_label] = exp
+
+    def save_to_file(self) -> None:
+        return
+
+    def load_from_file(self) -> None:
+        return
+
+    def get_experiment(self, label: str) -> Experiment:
+        return self.experiments_dict[label]
+
+    def get_experiment_labels(self):
+        return self.experiments_dict.keys()
+
+    def filter_oscillations(
+        self,
+        experiments: str | list | None = None,
+        t_vals: float | list | None = None,
+        h_vals: float | list | None = None,
+    ) -> list:
+        if experiments is None:
+            experiments = self.experiments_dict.keys()
+        elif isinstance(experiments, str):
+            experiments = [experiments]
+
+        osc_list = []
+        for exp_label in experiments:
+            exp = self.experiments_dict[exp_label]
+            oscs = exp.get_oscillations(t_vals, h_vals)
+            osc_list.append(oscs)
+        return osc_list

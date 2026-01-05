@@ -30,6 +30,13 @@ from ..config.settings import (
 from ..plotting.loader import _quick_plot_amro
 from ..utils import utils as u
 from pathlib import Path
+from .data_structures import (
+    ProjectData,
+    Experiment,
+    AMROscillation,
+    ExperimentalData,
+    OscillationKey,
+)
 
 
 class AMROLoader:
