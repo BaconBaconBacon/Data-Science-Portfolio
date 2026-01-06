@@ -115,13 +115,14 @@ class AMROFitter:
             else:
                 print("Fitting {}, {}K, {}T.".format(label, T_label, H_label))
 
-                results_obj = self.fit_amro_data(label, H_label, T_label)
+                results_obj, refit_bool = self.fit_amro_data(label, H_label, T_label)
 
                 self._pack_act_fit_results(
                     results_obj,
                     act_label=label,
                     h_label=H_label,
                     t_label=T_label,  # , all_fits_df, all_results_dict, fitted_amps
+                    refitted=refit_bool,
                 )
                 self._save_to_disk()
         return
@@ -155,11 +156,12 @@ class AMROFitter:
         # Perform the minimization
         minner = lm.Minimizer(self._obj_func, initial_params, fcn_args=(x, y_norm))
         results = minner.minimize()
-
+        was_refitted = False
         # Check if the covariant matrix is singular
         if self._is_covar_matrix_singular(results):
             print("Covariance matrix is singular.")
             results = self._refit(initial_params, x, y_norm)
+            was_refitted = True
             if self._is_covar_matrix_singular(results):
                 print("Covariance matrix is still singular. Setting errors to np.inf")
                 bad_fit_params = []
@@ -175,7 +177,7 @@ class AMROFitter:
             print("\n", lm.fit_report(results, show_correl=False), "\n")
         del self.current_f_list
 
-        return results
+        return results, was_refitted
 
     def _record_failed_fit(self, act_label, h_label, t_label) -> None:
         # TODO : Address nested dict storage method
@@ -421,30 +423,26 @@ class AMROFitter:
         act_label: str,
         t_label: str,
         h_label: str,
+        refitted: bool,
     ):
         """"""
 
         # Pack just amplitude parameters
-        var_names = lmfit_result.var_names
         param_results = lmfit_result.params
 
-        f_list = self._get_init_freqs(act_label, t_label, h_label)
+        # f_list = self._get_init_freqs(act_label, t_label, h_label)
 
-        f_info = pd.DataFrame(
-            {
-                HEADER_ACT: act_label,
-                HEADER_TEMP: t_label,
-                HEADER_MAGNET: h_label,
-                HEADER_FREQ_LIST: f_list,
-            }
-        )
-        self.fit_amps_df = pd.concat([self.fit_amps_df, f_info])
+        # f_info = pd.DataFrame(
+        #     {
+        #         HEADER_ACT: act_label,
+        #         HEADER_TEMP: t_label,
+        #         HEADER_MAGNET: h_label,
+        #         HEADER_FREQ_LIST: f_list,
+        #     }
+        # )
+        # self.fit_amps_df = pd.concat([self.fit_amps_df, f_info])
 
         # Pack all fit parameters
-        # TODO: Fix this with maybe a custom data class
-        # - Dynamic keys via string concatenation: var + " err"
-        # - Mixes domain fields with fit parameters
-        # - Converted to DataFrame (should be a class)
 
         params_dict = {
             HEADER_ACT: act_label,
@@ -453,6 +451,7 @@ class AMROFitter:
             HEADER_FIT_CHISQ: float(lmfit_result.redchi),
         }
 
+        var_names = lmfit_result.var_names
         for var in var_names:
             params_dict[var] = param_results[var].value
             params_dict[var + " err"] = param_results[var].stderr
@@ -472,7 +471,7 @@ class AMROFitter:
             self.lmfit_results_objs[act_label] = {}
         if t_label not in self.lmfit_results_objs[act_label].keys():
             self.lmfit_results_objs[act_label][t_label] = {}
-        self.lmfit_results_objs[act_label][t_label][h_label] = lmfit_result
+        self.lmfit_results_objs[act_label][t_label][h_label] = (lmfit_result, refitted)
 
         return
 

@@ -2,6 +2,8 @@
 
 from .loader import AMROLoader
 from .data_structures import (
+    AMROscillation,
+    ProjectData,
     OscillationKey,
     FitResult,
     ExperimentalData,
@@ -10,10 +12,12 @@ from .data_structures import (
 )
 
 __all__ = [
+    "AMROscillation",
     "AMROLoader",
-    "OscillationKey",
-    "FitResult",
-    "ExperimentalData",
-    "FourierResult",
+    "ProjectData",
     "Experiment",
+    "ExperimentalData",
+    "FitResult",
+    "FourierResult",
+    "OscillationKey",
 ]

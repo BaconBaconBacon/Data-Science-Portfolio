@@ -237,12 +237,11 @@ def _get_data_plot_points(data_df, act_choice, h, t):
 def _get_fit_params(fitter, act, h, t):
     """TODO: Should this be a function in /models/fitter.py?"""
     try:
-        result = fitter.lmfit_results_objs[act][t][h]
+        result, _ = fitter.lmfit_results_objs[act][t][h]
     except KeyError:
         print(f"Fit parameters for {act}. {t}K. {h}T not found")
         return None
-    if result is None:
-        return None
+
     fit_params = result.params
     return u.convert_params_to_ndarrays(fit_params)
 

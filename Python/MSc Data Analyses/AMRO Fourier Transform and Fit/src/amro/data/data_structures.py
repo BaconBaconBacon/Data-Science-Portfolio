@@ -1,8 +1,22 @@
 from dataclasses import dataclass, field, fields
-from typing import Optional
 import numpy as np
 import pandas as pd
 import lmfit as lm
+import pickle
+
+from ..config import FINAL_DATA_PATH
+from ..config.settings import (
+    HEADER_ACT,
+    HEADER_TEMP,
+    HEADER_MAGNET,
+    HEADER_GEO,
+    HEADER_ANGLE_RAD,
+    HEADER_ANGLE_DEG,
+    HEADER_RES_OHM,
+    HEADER_FREQ,
+    HEADER_MAG,
+    HEADER_PHASE,
+)
 from ..utils import conversions as c
 from ..utils import utils as u
 
@@ -342,8 +356,8 @@ class AMROscillation:
     key: OscillationKey
     osc_data: ExperimentalData
 
-    fit_result: Optional[FitResult]
-    fourier_result: Optional[FourierResult]
+    fit_result: FitResult = field(init=False)
+    fourier_result: FourierResult = field(init=False)
 
     def __str__(self):
         return f"Experiment_Object_{self.key}"
@@ -435,13 +449,24 @@ class Experiment:
     ) -> list | None:
         """If inputs are not None, returns all oscillations whose T and H
         values exactly match the requested values.  If requested values are
-        None, returns all existing entries for that variable."""
+        None, returns all existing entries for that variable.
+
+        If for whatever reason this ever gets slow, try usings sets() for t and h."""
+
+        if t is None and h is None:
+            return list(self.oscillations.values())
+
+        if t is not None:
+            t = np.atleast_1d(t).flatten()
+
+        if h is not None:
+            h = np.atleast_1d(h).flatten()
 
         oscillations = []
-        t = np.asarray(t)
-        h = np.asarray(h)
         for osc in self.oscillations.values():
-            if osc.key.compare_temperature(t) or osc.key.compare_magnetic_field(h):
+            t_matches = (t is None) or (osc.compare_temperature(t))
+            h_matches = (h is None) or (osc.compare_magnetic_field(h))
+            if t_matches and h_matches:
                 oscillations.append(osc)
         return oscillations
 
@@ -453,14 +478,12 @@ class ProjectData:
     project_name: str
     experiments_dict: dict = field(default_factory=dict)
 
+    def __post_init__(self):
+
+        self.pickle_fp = FINAL_DATA_PATH / self.project_name + "_exp_dict.pickle"
+
     def add_experiment(self, exp: Experiment) -> None:
         self.experiments_dict[exp.experiment_label] = exp
-
-    def save_to_file(self) -> None:
-        return
-
-    def load_from_file(self) -> None:
-        return
 
     def get_experiment(self, label: str) -> Experiment:
         return self.experiments_dict[label]
@@ -482,6 +505,124 @@ class ProjectData:
         osc_list = []
         for exp_label in experiments:
             exp = self.experiments_dict[exp_label]
-            oscs = exp.get_oscillations(t_vals, h_vals)
+            oscs = exp.get_multiple_oscillations(t_vals, h_vals)
             osc_list.append(oscs)
         return osc_list
+
+    def read_amro_data_from_dataframe(self, df: pd.DataFrame) -> None:
+        """Temporary stop-gap. Want to remove pandas entirely, eventually."""
+
+        for act in df[HEADER_ACT].unique():
+            sub_df = u.query_dataframe(df, act=act)
+            geom = sub_df[HEADER_GEO].unique()[0]
+
+            try:
+                exper = self.get_experiment(act)
+            except KeyError:
+                exper = Experiment(experiment_label=act, geometry=geom)
+                self.add_experiment(exper)
+
+            for t in sub_df[HEADER_TEMP].unique():
+                sub_sub_df = u.query_dataframe(sub_df, t=t)
+                for h in sub_sub_df[HEADER_MAGNET].unique():
+                    experiment_df = u.query_dataframe(sub_sub_df, h=h)
+
+                    key = OscillationKey(
+                        experiment_label=act, temperature=t, magnetic_field=h
+                    )
+                    angles = experiment_df[HEADER_ANGLE_DEG]
+                    res = experiment_df[HEADER_RES_OHM]
+
+                    exp_data = ExperimentalData(
+                        experiment_key=key, angles_degs=angles, res_ohms=res
+                    )
+                    osc = AMROscillation(key=key, osc_data=exp_data)
+                    exper.add_oscillation(osc)
+        return
+
+    def read_fit_results_from_dataframe(
+        self, df: pd.DataFrame, lmfit_results_dict: dict
+    ) -> None:
+        """Temporary stop-gap. Want to remove pandas entirely, eventually.
+
+        df: fit_params_df
+        lmfit_results_dict: lmfit_results_objs
+        """
+
+        for act in df[HEADER_ACT].unique():
+            sub_df = u.query_dataframe(df, act=act)
+            try:
+                exper = self.get_experiment(act)
+            except KeyError:
+                print(
+                    "No Experiment found for "
+                    + act
+                    + ". Create Experiment before adding Fourier Results."
+                )
+                return
+
+            for t in sub_df[HEADER_TEMP].unique():
+                sub_sub_df = u.query_dataframe(sub_df, t=t)
+                for h in sub_sub_df[HEADER_MAGNET].unique():
+
+                    fit_result_df = u.query_dataframe(sub_sub_df, h=h)
+                    lmfit_obj, refitted = lmfit_results_dict[act][t][h]
+
+                    osc = exper.get_oscillation(t=t, h=h)
+
+                    osc.add_fit_result(
+                        lmfit_result=lmfit_obj,
+                        successful_fit=lmfit_obj.success,
+                        refitted=refitted,
+                    )
+
+        return
+
+    def read_fourier_results_from_dataframe(self, df: pd.DataFrame) -> None:
+        """Temporary stop-gap. Want to remove pandas entirely, eventually."""
+        for act in df[HEADER_ACT].unique():
+            sub_df = u.query_dataframe(df, act=act)
+
+            try:
+                exper = self.get_experiment(act)
+            except KeyError:
+                print(
+                    "No Experiment found for "
+                    + act
+                    + ". Create Experiment before adding Fourier Results."
+                )
+                continue
+
+            for t in sub_df[HEADER_TEMP].unique():
+                sub_sub_df = u.query_dataframe(sub_df, t=t)
+                for h in sub_sub_df[HEADER_MAGNET].unique():
+                    fourier_result_df = u.query_dataframe(sub_sub_df, h=h)
+                    osc = exper.get_oscillation(t=t, h=h)
+
+                    freqs = fourier_result_df[HEADER_FREQ].values
+
+                    mags = fourier_result_df[HEADER_MAG].values
+                    phases = fourier_result_df[HEADER_PHASE].values
+                    yf = mags[:, 0] + phases[:, 0] * 1j
+
+                    osc.add_fourier_result(xf=freqs, yf=yf)
+
+        return
+
+    def save_to_pickle(self) -> None:
+        with open(self.pickle_fp, "wb") as f:
+            pickle.dump(self.experiments_dict, f)
+        return
+
+    def load_from_pickle(self) -> None:
+        with open(self.pickle_fp, "rb") as f:
+            self.experiments_dict = pickle.load(f)
+        return
+
+    def export_fit_results_to_csv(self):
+        """Nice-to-have once the dataclasses are implemented in code base."""
+        return
+
+    def export_fourier_results_to_csv(self):
+        """Nice-to-have once the dataclasses are implemented in code base."""
+        return

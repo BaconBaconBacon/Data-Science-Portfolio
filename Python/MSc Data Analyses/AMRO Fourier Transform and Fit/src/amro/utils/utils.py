@@ -106,38 +106,45 @@ def convert_params_to_ndarrays(
     freqs_list = []
     for key in params_dict.keys():
         if HEADER_PARAM_FREQ_PREFIX in key:
-            freqs_list.append(int(params_dict[key]))
+            f = params_dict[key].nominal_value
+            freqs_list.append(int(f))
+
     amps_list = []
     phases_list = []
     amps_errs_list = []
     phases_errs_list = []
 
-    for freq in freqs_list:
-        amps_list.append(params_dict[HEADER_PARAM_AMP_PREFIX + f"{freq}"].n)
-        phases_list.append(params_dict[HEADER_PARAM_PHASE_PREFIX + f"{freq}"].n)
+    mean = params_dict[HEADER_PARAM_MEAN_PREFIX].nominal_value
+    mean_err = params_dict[HEADER_PARAM_MEAN_PREFIX].std_dev
 
-        amps_errs_list.append(params_dict[HEADER_PARAM_AMP_PREFIX + f"{freq}"].s)
-        phases_errs_list.append(params_dict[HEADER_PARAM_PHASE_PREFIX + f"{freq}"].s)
+    for freq in freqs_list:
+        amps_list.append(params_dict[HEADER_PARAM_AMP_PREFIX + f"{freq}"].nominal_value)
+        phases_list.append(
+            params_dict[HEADER_PARAM_PHASE_PREFIX + f"{freq}"].nominal_value
+        )
+
+        amps_errs_list.append(params_dict[HEADER_PARAM_AMP_PREFIX + f"{freq}"].std_dev)
+        phases_errs_list.append(
+            params_dict[HEADER_PARAM_PHASE_PREFIX + f"{freq}"].std_dev
+        )
 
     if include_errs:
-        (
+        return (
             np.asarray(amps_list),
             np.asarray(amps_errs_list),
             np.asarray(freqs_list),
             np.asarray(phases_list),
-            p.asarray(phases_errs_list),
-            params_dict[HEADER_PARAM_MEAN_PREFIX].n,
-            params_dict[HEADER_PARAM_MEAN_PREFIX].s,
+            np.asarray(phases_errs_list),
+            mean,
+            mean_err,
         )
-    elif not include_errs:
+    else:
         return (
             np.asarray(amps_list),
             np.asarray(freqs_list),
             np.asarray(phases_list),
-            params_dict[HEADER_PARAM_MEAN_PREFIX].n,
+            mean,
         )
-    else:
-        raise Error
 
 
 def format_oscillation_key(act: str, t: float, h: float) -> str:
