@@ -69,6 +69,7 @@ HEADER_PHASE_RAW = "phase_raw"
 
 #  Fitter DF header Labels
 HEADER_FIT_CHISQ = "chi_squared"
+HEADER_FIT_RED_CHISQ = "red_chi_squared"
 HEADER_PARAM_AMP_PREFIX = "amp"
 HEADER_PARAM_FREQ_PREFIX = "freq"
 HEADER_PARAM_PHASE_PREFIX = "phase"

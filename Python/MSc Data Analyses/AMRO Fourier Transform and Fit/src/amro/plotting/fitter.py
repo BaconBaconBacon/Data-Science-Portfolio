@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
+from .. import Experiment
 from ..config.settings import (
     PROCESSED_DATA_PATH,
     FINAL_DATA_PATH,
@@ -46,6 +47,8 @@ def _plot_fits_with_residuals(
     Plotter to display finished fits over AMRO data, with the option
     to show the residuals. Not intended to be for a polished final
     version.
+
+    Assumes each experiment at a given T has the same H values as all the others in the experiment
     """
     # Set seaborn style
     # TODO: Use set_context or rcParams to set the plotting parameters like hspace and wspace
@@ -53,10 +56,10 @@ def _plot_fits_with_residuals(
     sns.set_style("whitegrid")
     sns.set_context(sns_context)  # , font_scale=context_font_scale)
 
-    data_df = u.query_dataframe(
-        fitter.project_data, act=act_choice, h=h_choices, t=t_choices
-    )
-    t_vals, h_vals = _get_plot_labels(data_df)
+    experiment = project_data.get_experiment(act_choice)
+
+    exp_keys = experiment.oscillations_dict.keys()
+    t_vals, h_vals = _get_plot_labels(exp_keys)
 
     n_cols = len(t_vals)
     n_rows = len(h_vals)
@@ -75,11 +78,7 @@ def _plot_fits_with_residuals(
     )
 
     _plot_grid(
-        data_df,
-        fitter,
-        act_choice,
-        h_vals,
-        t_vals,
+        experiment,
         fig,
         gs,
         axes,
@@ -95,10 +94,14 @@ def _plot_fits_with_residuals(
 
 
 def _plot_fits_with_residuals_uohm(
-    fitter, act_choice: str, h_choices=None, t_choices=None, figsize=None
+    project_data: ProjectData,
+    act_choice: str,
+    h_choices=None,
+    t_choices=None,
+    figsize=None,
 ):
     fig, axes = _plot_fits_with_residuals(
-        fitter=fitter,
+        project_data=project_data,
         act_choice=act_choice,
         h_choices=h_choices,
         t_choices=t_choices,
@@ -110,7 +113,7 @@ def _plot_fits_with_residuals_uohm(
 
 
 def _plot_grid(
-    data_df, fitter, act, h_vals, t_vals, fig, gs, axes, y_scale, x_label, y_label
+    experiment: Experiment, h_vals, t_vals, fig, gs, axes, y_scale, x_label, y_label
 ):
     n_rows = len(h_vals)
 
@@ -122,13 +125,12 @@ def _plot_grid(
             ax_resid = fig.add_subplot(gs[i * 2 + 1, j], sharex=ax_fit)
             axes[i, j] = (ax_fit, ax_resid)
 
-            x_data, x_plot, y_data = _get_data_plot_points(data_df, act, H, T)
+            osc = experiment.get_oscillation(t=T, h=H)
 
-            params = _get_fit_params(fitter, act, H, T)
-            y_fit = u.calculate_model_resistivities(x_data, params)
-            if y_fit is None:
-                print("No lmfit Result found for {} {}K, {}T".format(act, T, H))
-                return
+            y_data = osc.osc_data.res_ohms
+            x_plot = osc.osc_data.angles_degs
+
+            y_fit = osc.fit_result.model_res_ohms
 
             y_data = y_data * y_scale
             y_fit = y_fit * y_scale
@@ -216,35 +218,27 @@ def _generate_legend(figure):
     return
 
 
-def _get_plot_labels(data_df):
+def _get_plot_labels(exp_keys: list):
 
-    t_vals = data_df[HEADER_TEMP].unique()
+    t_vals = []
+    h_vals = []
+    for key in exp_keys:
+        t_vals.append(key.temperature)
+        h_vals.append(key.magnetic_field)
     t_vals.sort()
-
-    h_vals = data_df[HEADER_MAGNET].unique()
     h_vals.sort()
     return t_vals, h_vals
 
 
-def _get_data_plot_points(data_df, act_choice, h, t):
-
-    plot_df = u.query_dataframe(data_df, act=act_choice, h=h, t=t)
-    x = plot_df[HEADER_ANGLE_RAD].values
-    x_plot = plot_df[HEADER_ANGLE_DEG].values
-    y_plot = plot_df[HEADER_RES_OHM].values
-
-    return x, x_plot, y_plot
-
-
-def _get_fit_params(
-    project_data: ProjectData, act: str, h: float, t: float
-) -> dict | None:
-    exp = project_data.get_experiment(act)
-    osc = exp.get_oscillation(t=t, h=h)
-    if osc.fit_result is None:
-        return None
-    else:
-        return osc.fit_result.guesses_dict
+# def _get_fit_params(
+#     project_data: ProjectData, act: str, h: float, t: float
+# ) -> dict | None:
+#     exp = project_data.get_experiment(act)
+#     osc = exp.get_oscillation(t=t, h=h)
+#     if osc.fit_result is None:
+#         return None
+#     else:
+#         return osc.fit_result.guesses_dict
 
 
 def _calculate_fig_size(n_cols, n_rows):

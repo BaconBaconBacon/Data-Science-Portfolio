@@ -193,8 +193,8 @@ class AMROFitter:
 
         # Append all Parameter objects, except for the last one (must deal with appended 2)
 
-        for freq in fourier_result.guesses_dict.keys():
-            amp_ratio_guess, phase_guess = fourier_result.guesses_dict[freq]
+        for freq in fourier_result.fourier_results_dict.keys():
+            amp_ratio_guess, phase_guess = fourier_result.fourier_results_dict[freq]
 
             # Apply filter
             if freq > self.max_freq or amp_ratio_guess < self.min_amp_ratio:

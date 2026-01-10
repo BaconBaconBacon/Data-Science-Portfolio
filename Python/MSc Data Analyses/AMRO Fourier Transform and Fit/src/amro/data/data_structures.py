@@ -16,6 +16,14 @@ from amro.config.settings import (
     HEADER_FREQ,
     HEADER_MAG,
     HEADER_PHASE,
+    HEADER_MEAN,
+    HEADER_PARAM_AMP_PREFIX,
+    HEADER_PARAM_FREQ_PREFIX,
+    HEADER_PARAM_MEAN_PREFIX,
+    HEADER_PARAM_PHASE_PREFIX,
+    HEADER_FIT_RED_CHISQ,
+    HEADER_FIT_CHISQ,
+    HEADER_PHASE_RAW,
 )
 from amro.utils import conversions as c
 from amro.utils import utils as u
@@ -88,7 +96,6 @@ class FitResult:
     amplitudes: list | np.ndarray = field(init=False)
     mean: float = field(init=False)
 
-    symmetries_errs: list | np.ndarray = field(init=False)
     phases_errs: list | np.ndarray = field(init=False)
     amplitudes_errs: list | np.ndarray = field(init=False)
     mean_err: float = field(init=False)
@@ -106,6 +113,8 @@ class FitResult:
     required_refit: bool
     fit_report: str = field(init=False)
 
+    fitted_params_dict: dict = field(default_factory=dict)
+
     def __str__(self):
         return f"Fit_Result_Object_{self.experiment_key}"
 
@@ -118,6 +127,7 @@ class FitResult:
         self.fit_succeeded = self.lmfit_result.success  # self._check_fit_success()
 
         self._parse_params(self.lmfit_result.params)
+        self._build_params_dict()
 
         self.model_res_uohms = c.convert_ohms_to_uohms(self.model_res_ohms)
         self.model_residuals_ohms = self.lmfit_result.residual
@@ -126,6 +136,15 @@ class FitResult:
 
     def compare_act(self, other_act: str) -> bool:
         return self.experiment_key.compare_act(other_act)
+
+    def _build_params_dict(self):
+        self.fitted_params_dict[HEADER_MEAN] = (self.mean, self.mean_err)
+        for i, freq in enumerate(self.symmetries):
+            self.fitted_params_dict[freq] = (
+                (self.amplitudes[i], self.amplitudes_errs[i]),
+                (self.phases[i], self.phases_errs[i]),
+            )
+        return
 
     def compare_temperature(self, other_temperature: float) -> bool:
         return self.experiment_key.compare_temperature(other_temperature)
@@ -304,7 +323,7 @@ class FourierResult:
     amplitudes_ratio: np.ndarray = field(init=False)
     phases_pos: np.ndarray = field(init=False)
 
-    guesses_dict: dict = field(default_factory=dict)
+    fourier_results_dict: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
 
@@ -320,7 +339,11 @@ class FourierResult:
             self.phases,
         )
         for i, f in enumerate(self.symmetries):
-            self.guesses_dict[f] = (self.amplitudes_ratio[i], self.phases_pos[i])
+            self.fourier_results_dict[f] = (
+                self.amplitudes[i],
+                self.amplitudes_ratio[i],
+                self.phases_pos[i],
+            )
 
     def __str__(self):
         return f"Fourier_Result_Object_{self.key}"
@@ -586,14 +609,13 @@ class ProjectData:
                 sub_sub_df = u.query_dataframe(sub_df, t=t)
                 for h in sub_sub_df[HEADER_MAGNET].unique():
 
-                    fit_result_df = u.query_dataframe(sub_sub_df, h=h)
+                    # fit_result_df = u.query_dataframe(sub_sub_df, h=h)
                     lmfit_obj, refitted = lmfit_results_dict[act][t][h]
 
                     osc = exper.get_oscillation(t=t, h=h)
 
                     osc.add_fit_result(
                         lmfit_result=lmfit_obj,
-                        # successful_fit=lmfit_obj.success,
                         refitted=refitted,
                     )
 
@@ -630,30 +652,129 @@ class ProjectData:
 
         return
 
-    def save_to_pickle(self, fp: Path = None) -> None:
+    def save_project_to_pickle(self, fp: Path = None) -> None:
         if fp is None:
             fp = self.pickle_fp
         with open(fp, "wb") as f:
             pickle.dump(self.experiments_dict, f)
         return
 
-    def load_from_pickle(self) -> None:
+    def load_project_from_pickle(self) -> None:
         with open(self.pickle_fp, "rb") as f:
             self.experiments_dict = pickle.load(f)
         return
 
-    def export_fit_results_to(self, suffix=".csv"):
-        """Nice-to-have once the dataclasses are implemented in code base."""
+    def get_fit_results_as_df(self, filepath: Path | str | None = None) -> pd.DataFrame:
+        """One fit result per row"""
+
+        rows = []
+        for act_label in self.experiments_dict.keys():
+            experiment = self.experiments_dict[act_label]
+            for osc_key in experiment.oscillations_dict.keys():
+                osc = experiment.oscillations_dict[osc_key]
+                fit_result = osc.fit_result
+                row = {
+                    HEADER_ACT: osc_key.experiment_label,
+                    HEADER_TEMP: osc_key.temperature,
+                    HEADER_MAGNET: osc_key.magnetic_field,
+                    HEADER_GEO: experiment.geometry,
+                    HEADER_PARAM_MEAN_PREFIX: fit_result.mean,
+                    HEADER_PARAM_MEAN_PREFIX + "_err": fit_result.mean_err,
+                    HEADER_FIT_CHISQ: fit_result.chi_squared,
+                    HEADER_FIT_RED_CHISQ: fit_result.red_chi_squared,
+                    "fit_succeeded": fit_result.fit_succeeded,
+                    "required_refit": fit_result.required_refit,
+                }
+                for freq in fit_result.fitted_params_dict.keys():
+                    params = fit_result.fitted_params_dict[freq]
+                    row[HEADER_PARAM_FREQ_PREFIX + str(freq)] = freq
+                    row[HEADER_PARAM_AMP_PREFIX] = params[0][0]
+                    row[HEADER_PARAM_AMP_PREFIX + "_err"] = params[0][1]
+                    row[HEADER_PARAM_PHASE_PREFIX] = params[1][0]
+                    row[HEADER_PARAM_PHASE_PREFIX + "_err"] = params[1][1]
+                rows.append(row)
+
+        return pd.DataFrame(rows)
+
+    def save_fit_results_to_csv(self, filepath: Path | str | None = None) -> None:
+        if filepath is None:
+            filepath = FINAL_DATA_PATH / f"{self.project_name}_fit_results.csv"
+
+        df = self.get_fit_results_as_df(filepath=filepath)
+        df.to_csv(filepath, index=False)
         return
 
-    def import_fit_results_from(self, suffix=".csv"):
-        """Nice-to-have once the dataclasses are implemented in code base."""
+    def load_fit_results_from_csv(self, filepath: Path | str | None = None) -> None:
+        if filepath is None:
+            filepath = FINAL_DATA_PATH / f"{self.project_name}_fit_results.csv"
+        df = pd.read_csv(filepath, index_col=0)
+        self.read_fit_results_from_dataframe(df=df)
         return
 
-    def export_fourier_results_to(self, suffix=".csv"):
-        """Nice-to-have once the dataclasses are implemented in code base."""
+    def get_fourier_results_as_df(
+        self, filepath: Path | str | None = None
+    ) -> pd.DataFrame:
+
+        rows = []
+        for act_label in self.experiments_dict.keys():
+            experiment = self.experiments_dict[act_label]
+            for osc_key in experiment.oscillations_dict.keys():
+                osc = experiment.oscillations_dict[osc_key]
+                fourier_dict = osc.fourier_result.fourier_results_dict
+                for freq in fourier_dict:
+                    ft = fourier_dict[freq]
+                    row = {
+                        HEADER_ACT: osc_key.experiment_label,
+                        HEADER_TEMP: osc_key.temperature,
+                        HEADER_MAGNET: osc_key.magnetic_field,
+                        HEADER_GEO: osc_key.geometry,
+                        HEADER_PARAM_FREQ_PREFIX: freq,
+                        HEADER_PARAM_AMP_PREFIX: ft[0],
+                        HEADER_PARAM_AMP_PREFIX + "_ratio": ft[1],
+                        HEADER_PHASE + "_rads": ft[2],
+                    }
+                    rows.append(row)
+
+        return pd.DataFrame(rows)
+
+    def save_fourier_results_to_csv(self, filepath: Path | str | None = None):
+        if filepath is None:
+            filepath = FINAL_DATA_PATH / f"{self.project_name}_fourier_results.csv"
+        df = self.get_fourier_results_as_df(filepath=filepath)
+        df.to_csv(filepath, index=False)
         return
 
-    def import_fourier_results_from(self, suffix=".csv"):
-        """Nice-to-have once the dataclasses are implemented in code base."""
+    def load_fourier_results_from_csv(self, filepath: Path | str | None = None):
+        if filepath is None:
+            filepath = FINAL_DATA_PATH / f"{self.project_name}_fourier_results.csv"
+        df = pd.read_csv(filepath, index_col=0)
+        self.read_fourier_results_from_dataframe(df=df)
         return
+
+    def change_project_name(self, new_name: str) -> None:
+        self.project_name = new_name
+        return
+
+    def get_summary_statistics(self) -> dict:
+        n_oscillations = sum(
+            len(exp.oscillations) for exp in self.experiments_dict.values()
+        )
+        n_fourier = sum(
+            1
+            for exp in self.experiments_dict.values()
+            for osc in exp.oscillations.values()
+            if hasattr(osc, "fourier_result")
+        )
+        n_fits = sum(
+            1
+            for exp in self.experiments_dict.values()
+            for osc in exp.oscillations.values()
+            if hasattr(osc, "fit_result")
+        )
+
+        return {
+            "n_experiments": len(self.experiments_dict),
+            "n_oscillations": n_oscillations,
+            "n_fourier_completed": n_fourier,
+            "n_fits_completed": n_fits,
+        }

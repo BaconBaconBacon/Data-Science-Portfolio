@@ -101,7 +101,7 @@ def convert_params_to_ndarrays(
     the frequencies.
 
     """
-    params_dict = params.create_uvars()  # params.valuesdict()
+    params_dict = params.create_uvars()
 
     freqs_list = []
     for key in params_dict.keys():
