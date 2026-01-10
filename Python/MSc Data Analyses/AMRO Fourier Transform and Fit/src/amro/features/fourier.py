@@ -2,7 +2,8 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from ..config.settings import (
+from amro import ExperimentalData
+from amro.config.settings import (
     PROCESSED_DATA_PATH,
     HEADER_ANGLE_DEG,
     HEADER_ANGLE_RAD,
@@ -19,18 +20,16 @@ from ..config.settings import (
     HEADER_GEO,
     HEADER_RES_DEL_MEAN_OHM,
 )
-from ..plotting.fourier import _plot_n_strongest
+from amro.data import ProjectData, FourierResult, OscillationKey
+from amro.plotting.fourier import _plot_n_strongest
 from scipy.fft import rfft, rfftfreq
-from ..utils import utils as u
+from amro.utils import utils as u
 from pathlib import Path
 
 
 class Fourier:
-    def __init__(self, amro_df: pd.DataFrame, save_name: str):
-        self.amro_data = amro_df
-        self.labels = self.amro_data[
-            [HEADER_ACT, HEADER_TEMP, HEADER_MAGNET]
-        ].drop_duplicates()
+    def __init__(self, amro_data: ProjectData, save_name: str):
+        self.project_data = amro_data
 
         self.all_results_df = pd.DataFrame()
         self.save_name = save_name
@@ -40,9 +39,7 @@ class Fourier:
         if self.save_fp.is_file():
             # TODO: Need to check and make sure it's loading the same data as the AMRO
             print("Loading {}".format(save_name))
-            self.all_results_df = pd.read_csv(self.save_fp)
 
-            # TODO: self._check_results_against_amro()
         return
 
     def _check_results_against_amro(self):
@@ -55,104 +52,46 @@ class Fourier:
 
     def fourier_transform_experiments(self):
         results_list = []
-        for act_label in self.amro_data[HEADER_ACT].unique():
+        for exp_label in self.project_data.get_experiment_labels():
 
-            act_df = u.query_dataframe(self.amro_data, act=act_label)
-
-            # TODO: Encapsulate
-            t_vals, h_vals, geo_label = self._extract_experiment_labels(act_df)
+            experiment = self.project_data.get_experiment(exp_label)
 
             # TODO: Encapsulate for loop
-            for t, h in itertools.product(t_vals, h_vals):
-                print(f"Fourier Transforming {act_label}, T={t}K, H={h}T")
-                ft_df = u.query_dataframe(act_df, h=h, t=t)
-
-                xf, yf = self._perform_fourier_transform(ft_df)
-
-                result_df = self._pack_ft_result(xf, yf, act_label, t, h, geo_label)
-
-                results_list.append(result_df)
-                self.all_results_df = pd.concat(
-                    [self.all_results_df, result_df], ignore_index=True
+            for key in experiment.oscillations_dict.keys():
+                osc = experiment.get_oscillation_from_key(key)
+                print(
+                    f"Fourier Transforming {key.experiment_label}, T={key.temperature}K, H={key.magnetic_field}T"
                 )
-        self.all_results_df = pd.concat(results_list, ignore_index=True)
-        self._save_results_df()
+
+                xf, yf = self._perform_fourier_transform(osc.osc_data)
+                osc.add_fourier_result(xf, yf)
         return
 
-    def _extract_experiment_labels(self, act_df: pd.DataFrame):
-        """TODO: May be unnecessary after using the new data classes.
-        Could also use .drop_duplicates() to keep pairings
-        """
-        return (
-            act_df[HEADER_TEMP].unique(),
-            act_df[HEADER_MAGNET].unique(),
-            act_df[HEADER_GEO].unique()[0],
-        )
-
-    def _save_results_df(self) -> None:
-        self.all_results_df.to_csv(self.save_fp, sep=",", index=False)
-        print("Results saved to: {}".format(self.save_name))
-        return
-
-    def _pack_ft_result(
-        self, xf: np.ndarray, yf: np.ndarray, act_label, t, h, geo_label
-    ):
-        """
-        This method takes the output of an oscillation's fast Fourier transform, and extracts the frequency, phase,
-        and amplitude of each Fourier component.
-
-        """
-        freq_df = pd.DataFrame(
-            {
-                HEADER_FREQ: xf,
-                HEADER_MAG: np.abs(yf),
-                HEADER_PHASE: np.angle(yf),
-            }
-        )
-
-        # Amplitudes relative to the strongest
-        freq_df[HEADER_MAG_RATIO] = freq_df[HEADER_MAG] / freq_df[HEADER_MAG].max()
-        freq_df[HEADER_FREQ] = freq_df[HEADER_FREQ].astype(int)
-
-        # Force positive phase values
-        freq_df[HEADER_PHASE_RAW] = freq_df[HEADER_PHASE].copy()
-        freq_df[HEADER_PHASE] = np.where(
-            freq_df[HEADER_PHASE_RAW] < 0,
-            freq_df[HEADER_PHASE_RAW] + 2 * np.pi,
-            freq_df[HEADER_PHASE_RAW],
-        )
-
-        freq_df[HEADER_ACT] = act_label
-        freq_df[HEADER_TEMP] = t
-        freq_df[HEADER_MAGNET] = h
-        freq_df[HEADER_GEO] = geo_label
-
-        return freq_df
-
-    def get_n_strongest_results(self, n: int):
+    def get_n_strongest_results(
+        self,
+        n=0,
+        act: str | list = None,
+        t: float | list = None,
+        h: float | list = None,
+    ) -> list:
         """
         Queries the n strongest contributions for each experiment in the data set.
         If n=0, then returns all available contributions sorted by magnitude.
         """
-        sort_vals = [HEADER_ACT, HEADER_MAGNET, HEADER_TEMP, HEADER_MAG]
-        sorted_df = self.all_results_df.sort_values(by=sort_vals, ascending=False)
-        if n > 0:
-            return (
-                sorted_df.groupby([HEADER_ACT, HEADER_MAGNET, HEADER_TEMP])
-                .head(n)
-                .reset_index(drop=True)
-            )
-        elif n == 0:
-            return sorted_df
-        else:
-            print("Invalid value of n.")
-            return None
+        oscillations = self.project_data.filter_oscillations(experiments=act, t=t, h=h)
+
+        results = []
+        for osc in oscillations:
+            if osc.fourier_result is not None:
+                strongest = osc.fourier_result.get_n_strongest_components(n)
+                results.append((osc.key, strongest))
+        return results
 
     def plot_n_strongest(self, n: int, t: list | float, h: list | float):
         return _plot_n_strongest(self, n, t, h)
 
     def _perform_fourier_transform(
-        self, df: pd.DataFrame
+        self, data: ExperimentalData
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Performs a Fourier transform on the AMR oscillation of an experiment,
@@ -165,7 +104,7 @@ class Fourier:
             yf: List of complex numbers storing the amplitudes and phases
             xf: List of the rotational symmetries
         """
-        fft_data = df[HEADER_RES_DEL_MEAN_OHM].values
+        fft_data = data.delta_res_mean_ohms
 
         # Perform the FFT, where
         yf = rfft(fft_data, n=len(fft_data), norm="ortho")

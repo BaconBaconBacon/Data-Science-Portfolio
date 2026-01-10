@@ -19,6 +19,8 @@ from ..config.settings import (
     HEADER_ANGLE_DEG,
 )
 from matplotlib.patches import Patch
+
+from ..data import ProjectData
 from ..utils import utils as u
 from pathlib import Path
 
@@ -31,7 +33,7 @@ context_font_scale = 1
 
 
 def _plot_fits_with_residuals(
-    fitter,
+    project_data: ProjectData,
     act_choice: str,
     h_choices=None,
     t_choices=None,
@@ -52,7 +54,7 @@ def _plot_fits_with_residuals(
     sns.set_context(sns_context)  # , font_scale=context_font_scale)
 
     data_df = u.query_dataframe(
-        fitter.amro_df, act=act_choice, h=h_choices, t=t_choices
+        fitter.project_data, act=act_choice, h=h_choices, t=t_choices
     )
     t_vals, h_vals = _get_plot_labels(data_df)
 
@@ -234,16 +236,15 @@ def _get_data_plot_points(data_df, act_choice, h, t):
     return x, x_plot, y_plot
 
 
-def _get_fit_params(fitter, act, h, t):
-    """TODO: Should this be a function in /models/fitter.py?"""
-    try:
-        result, _ = fitter.lmfit_results_objs[act][t][h]
-    except KeyError:
-        print(f"Fit parameters for {act}. {t}K. {h}T not found")
+def _get_fit_params(
+    project_data: ProjectData, act: str, h: float, t: float
+) -> dict | None:
+    exp = project_data.get_experiment(act)
+    osc = exp.get_oscillation(t=t, h=h)
+    if osc.fit_result is None:
         return None
-
-    fit_params = result.params
-    return u.convert_params_to_ndarrays(fit_params)
+    else:
+        return osc.fit_result.guesses_dict
 
 
 def _calculate_fig_size(n_cols, n_rows):

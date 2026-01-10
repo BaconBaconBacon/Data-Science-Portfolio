@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 import lmfit as lm
 import pickle
-
-from ..config import FINAL_DATA_PATH
-from ..config.settings import (
+from pathlib import Path
+from amro.config import FINAL_DATA_PATH
+from amro.config.settings import (
     HEADER_ACT,
     HEADER_TEMP,
     HEADER_MAGNET,
@@ -17,8 +17,8 @@ from ..config.settings import (
     HEADER_MAG,
     HEADER_PHASE,
 )
-from ..utils import conversions as c
-from ..utils import utils as u
+from amro.utils import conversions as c
+from amro.utils import utils as u
 
 """
     Classes for storing and accessing experiments and results.
@@ -304,6 +304,8 @@ class FourierResult:
     amplitudes_ratio: np.ndarray = field(init=False)
     phases_pos: np.ndarray = field(init=False)
 
+    guesses_dict: dict = field(default_factory=dict)
+
     def __post_init__(self) -> None:
 
         self.symmetries = np.asarray(self.symmetries).astype(int)
@@ -317,6 +319,8 @@ class FourierResult:
             self.phases + 2 * np.pi,
             self.phases,
         )
+        for i, f in enumerate(self.symmetries):
+            self.guesses_dict[f] = (self.amplitudes_ratio[i], self.phases_pos[i])
 
     def __str__(self):
         return f"Fourier_Result_Object_{self.key}"
@@ -344,6 +348,10 @@ class FourierResult:
 
     def get_magnetic_field(self) -> float:
         return self.key.get_magnetic_field()
+
+    def get_init_params(self):
+        """returns fourier component symmetries, their amplitudes and phases, and the mean"""
+        return
 
 
 @dataclass
@@ -375,7 +383,6 @@ class AMROscillation:
         self,
         lmfit_result: lm.minimizer.MinimizerResult,
         refitted: bool,
-        successful_fit: bool,
     ) -> None:
         model_vals = self._calc_model_resistivities(lmfit_result.params)
         self.fit_result = FitResult(
@@ -383,7 +390,7 @@ class AMROscillation:
             experiment_key=self.key,
             model_res_ohms=model_vals,
             required_refit=refitted,
-            fit_succeeded=successful_fit,
+            fit_succeeded=lmfit_result.success,
         )
         return
 
@@ -416,6 +423,9 @@ class AMROscillation:
             print("Fourier result not present.")
             return None
 
+    def get_fourier_init_params(self):
+        return self.fit_result.get_init_params()
+
 
 @dataclass
 class Experiment:
@@ -423,24 +433,33 @@ class Experiment:
 
     experiment_label: str  # i.e. ACTRot11
     geometry: str  # i.e. para/perp
-    oscillations: dict = field(default_factory=dict)
+
+    length: float
+    width: float
+    height: float
+    oscillations_dict: dict = field(default_factory=dict)
+    oscillations_count: float = 0
 
     def add_oscillation(self, oscillation: AMROscillation) -> None:
         new_key = oscillation.key
-        if new_key not in self.oscillations.keys():
-            self.oscillations[new_key] = oscillation
+        if new_key not in self.oscillations_dict.keys():
+            self.oscillations_dict[new_key] = oscillation
+            self.oscillations_count += 1
         else:
             print(f"Key {new_key} already exists! Use replace_oscillation() instead.")
         return
 
     def replace_oscillation(self, oscillation: AMROscillation) -> None:
         new_key = oscillation.key
-        self.oscillations[new_key] = oscillation
+        self.oscillations_dict[new_key] = oscillation
         return
 
     def get_oscillation(self, t: float, h: float) -> AMROscillation:
         request_key = OscillationKey(self.experiment_label, t, h)
-        return self.oscillations[request_key]
+        return self.oscillations_dict[request_key]
+
+    def get_oscillation_from_key(self, request_key: OscillationKey) -> AMROscillation:
+        return self.oscillations_dict[request_key]
 
     def get_multiple_oscillations(
         self,
@@ -454,7 +473,7 @@ class Experiment:
         If for whatever reason this ever gets slow, try usings sets() for t and h."""
 
         if t is None and h is None:
-            return list(self.oscillations.values())
+            return list(self.oscillations_dict.values())
 
         if t is not None:
             t = np.atleast_1d(t).flatten()
@@ -463,7 +482,7 @@ class Experiment:
             h = np.atleast_1d(h).flatten()
 
         oscillations = []
-        for osc in self.oscillations.values():
+        for osc in self.oscillations_dict.values():
             t_matches = (t is None) or (osc.compare_temperature(t))
             h_matches = (h is None) or (osc.compare_magnetic_field(h))
             if t_matches and h_matches:
@@ -477,16 +496,18 @@ class ProjectData:
 
     project_name: str
     experiments_dict: dict = field(default_factory=dict)
+    experiments_count: float = 0
 
     def __post_init__(self):
 
-        self.pickle_fp = FINAL_DATA_PATH / self.project_name + "_exp_dict.pickle"
+        self.pickle_fp = FINAL_DATA_PATH / self.project_name + ".pkl"
 
     def add_experiment(self, exp: Experiment) -> None:
         self.experiments_dict[exp.experiment_label] = exp
+        self.experiments_count += 1
 
-    def get_experiment(self, label: str) -> Experiment:
-        return self.experiments_dict[label]
+    def get_experiment(self, act_label: str) -> Experiment:
+        return self.experiments_dict[act_label]
 
     def get_experiment_labels(self):
         return self.experiments_dict.keys()
@@ -572,7 +593,7 @@ class ProjectData:
 
                     osc.add_fit_result(
                         lmfit_result=lmfit_obj,
-                        successful_fit=lmfit_obj.success,
+                        # successful_fit=lmfit_obj.success,
                         refitted=refitted,
                     )
 
@@ -609,8 +630,10 @@ class ProjectData:
 
         return
 
-    def save_to_pickle(self) -> None:
-        with open(self.pickle_fp, "wb") as f:
+    def save_to_pickle(self, fp: Path = None) -> None:
+        if fp is None:
+            fp = self.pickle_fp
+        with open(fp, "wb") as f:
             pickle.dump(self.experiments_dict, f)
         return
 
@@ -619,10 +642,18 @@ class ProjectData:
             self.experiments_dict = pickle.load(f)
         return
 
-    def export_fit_results_to_csv(self):
+    def export_fit_results_to(self, suffix=".csv"):
         """Nice-to-have once the dataclasses are implemented in code base."""
         return
 
-    def export_fourier_results_to_csv(self):
+    def import_fit_results_from(self, suffix=".csv"):
+        """Nice-to-have once the dataclasses are implemented in code base."""
+        return
+
+    def export_fourier_results_to(self, suffix=".csv"):
+        """Nice-to-have once the dataclasses are implemented in code base."""
+        return
+
+    def import_fourier_results_from(self, suffix=".csv"):
         """Nice-to-have once the dataclasses are implemented in code base."""
         return

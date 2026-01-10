@@ -26,7 +26,7 @@ def _quick_plot_amro(loader) -> None:
         palette=H_PALETTE,
         linewidth=0,
         facet_kws={"sharey": False},
-        data=loader.AMRO,
+        data=loader.AMRO_df,
     )
     plt.show()
     return
