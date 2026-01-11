@@ -201,6 +201,13 @@ class AMROFitter:
             )
             current_freqs.append(freq)
 
+        if self.force_four_and_two_sym:
+            if 2 not in current_freqs:
+                self._add_parameter(2, initial_p_guesses, 0, 0)
+                current_freqs.append(2)
+            if 4 not in current_freqs:
+                self._add_parameter(4, initial_p_guesses, 0, 0)
+                current_freqs.append(4)
         return initial_p_guesses, current_freqs
 
     def _add_parameter(
