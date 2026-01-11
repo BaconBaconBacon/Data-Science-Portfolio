@@ -529,6 +529,8 @@ class ProjectData:
     experiments_dict: dict = field(default_factory=dict)
     experiments_count: float = 0
 
+    fit_filter_str: str | None = None
+
     def __post_init__(self):
 
         self.pickle_fp = FINAL_DATA_PATH / (self.project_name + ".pkl")
@@ -706,7 +708,11 @@ class ProjectData:
 
     def save_fit_results_to_csv(self, filepath: Path | str | None = None) -> None:
         if filepath is None:
-            filepath = FINAL_DATA_PATH / f"{self.project_name}_fit_results.csv"
+            filepath = (
+                FINAL_DATA_PATH / f"{self.project_name}_"
+                + self.fit_filter_str
+                + "_fit_results.csv"
+            )
 
         df = self.get_fit_results_as_df(filepath=filepath)
         df.to_csv(filepath, index=False)

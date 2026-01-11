@@ -26,21 +26,20 @@ from pathlib import Path
 
 
 # TODO: put this into a config file
-sns_context = "poster"
 hspace = 0.05
 wspace = 0.3
 context_font_scale = 1
 
 
 def _plot_fits_with_residuals(
-    project_data: ProjectData,
+    fitter,
     act_choice: str,
-    h_choices=None,
-    t_choices=None,
-    figsize=None,
-    y_scale=1,
-    y_label=HEADER_RES_OHM,
-    x_label=HEADER_ANGLE_DEG,
+    h_choices: list | None | np.ndarray = None,
+    t_choices: list | None | np.ndarray = None,
+    figsize: tuple | None = None,
+    y_scale: float = 1,
+    y_label: str = HEADER_RES_OHM,
+    x_label: str = HEADER_ANGLE_DEG,
 ):
     """
     Plotter to display finished fits over AMRO data, with the option
@@ -48,17 +47,25 @@ def _plot_fits_with_residuals(
     version.
 
     Assumes each experiment at a given T has the same H values as all the others in the experiment
+
+    TODO: Runs too slow, switch from sns.scatterplot-> ax.scatter and sns.lineplot -> ax.plot
     """
     # Set seaborn style
-    # TODO: Use set_context or rcParams to set the plotting parameters like hspace and wspace
-
-    sns.set_style("whitegrid")
-    sns.set_context(sns_context)  # , font_scale=context_font_scale)
+    project_data = fitter.project_data
 
     experiment = project_data.get_experiment(act_choice)
 
     exp_keys = experiment.oscillations_dict.keys()
     t_vals, h_vals = _get_plot_labels(exp_keys)
+
+    if t_choices is not None:
+        t_vals = [t for t in t_vals if t in t_choices]
+
+    if h_choices is not None:
+        h_vals = [h for h in h_vals if h in h_choices]
+
+    t_vals.sort()
+    h_vals.sort()
 
     n_cols = len(t_vals)
     n_rows = len(h_vals)
@@ -77,13 +84,15 @@ def _plot_fits_with_residuals(
     )
 
     _plot_grid(
-        experiment,
-        fig,
-        gs,
-        axes,
-        y_scale,
-        x_label,
-        y_label,
+        experiment=experiment,
+        t_vals=t_vals,
+        h_vals=h_vals,
+        fig=fig,
+        gs=gs,
+        axes=axes,
+        y_scale=y_scale,
+        x_label=x_label,
+        y_label=y_label,
     )
 
     # Generate legend
@@ -93,14 +102,14 @@ def _plot_fits_with_residuals(
 
 
 def _plot_fits_with_residuals_uohm(
-    project_data: ProjectData,
+    fitter,
     act_choice: str,
     h_choices=None,
     t_choices=None,
     figsize=None,
 ):
     fig, axes = _plot_fits_with_residuals(
-        project_data=project_data,
+        fitter=fitter,
         act_choice=act_choice,
         h_choices=h_choices,
         t_choices=t_choices,
@@ -167,21 +176,27 @@ def _plot_fit_over_data(x_plot, y, y_fit, ax, color):
 
 def _plot_bad_fits(fitter, act_choice: str):
 
-    # TODO: Need to fixed the nested dictionary usage
-    # Failed fit labels might benefit from using a DataFrame
-    try:
-        h_labels = fitter.failed_fit_labels[act_choice].keys()
-    except KeyError:
-        print("No bad fits found for {}".format(act_choice))
-        return None, None
+    if len(fitter.failed_fits) == 0:
+        print("No fits failed.")
+        return
+
     t_labels = []
-    for h_label in h_labels:
-        t_labels.append(fitter.failed_fit_labels[act_choice][h_label])
+    h_labels = []
+    for osc_key in fitter.failed_fits:
+        if osc_key.experiment_label == act_choice:
+            t_labels.append(osc_key.temperature)
+            h_labels.append(osc_key.magnetic_field)
 
-    fig, axes = fitter.plot_fits(act_choice, T_choices=t_labels, H_choices=h_labels)
+    if len(t_labels) > 0 and len(h_labels) > 0:
+        fig, axes = _plot_fits_with_residuals(
+            fitter=fitter, act_choice=act_choice, t_choices=t_labels, h_choices=h_labels
+        )
 
-    plt.show()
-    return fig, axes
+        plt.show()
+        return fig, axes
+    else:
+        print(f"No fits failed for {act_choice}.")
+        return None, None
 
 
 def _format_data_axis(ax_fit, n_rows, i, j, subplot_title, x_label, y_label):
@@ -224,8 +239,10 @@ def _get_plot_labels(exp_keys: list):
     for key in exp_keys:
         t_vals.append(key.temperature)
         h_vals.append(key.magnetic_field)
-    t_vals.sort()
-    h_vals.sort()
+
+    t_vals = list(set(t_vals))
+    h_vals = list(set(h_vals))
+
     return t_vals, h_vals
 
 

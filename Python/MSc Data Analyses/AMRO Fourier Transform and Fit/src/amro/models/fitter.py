@@ -70,29 +70,10 @@ class AMROFitter:
         self.verbose = verbose
         self.overwrite = if_save_file_exists_overwrite
 
-        # self.ft_results_df = self._filter_guess_params(fourier_results)
-        # self.act_choices = self._get_h_t_values()
-
-        # self._name_save_paths(save_name, min_amp_ratio, max_freq)
-        # self._read_or_initialize()
+        self.filter_str = "ratio_{}_maxf_{}_".format(min_amp_ratio, max_freq)
 
         self.failed_fits = []
         return
-
-    # def _name_save_paths(self, name, amp_ratio, freq):
-    #
-    #     s = "_ratio_{}_maxf_{}_".format(amp_ratio, freq)
-    #     self.save_name = name + s.replace(".", "p")
-    #
-    #     s = self.save_name + "_fit_params.csv"
-    #     self.fit_params_fp = FINAL_DATA_PATH / s
-    #
-    #     s = self.save_name + "_results.pkl"
-    #     self.lmfit_results_fp = FINAL_DATA_PATH / s
-    #
-    #     s = self.save_name + "_fit_amps.csv"
-    #     self.fit_amps_fp = FINAL_DATA_PATH / s
-    #     return
 
     def _obj_func(self, params: lm.Parameters, angle, res_data):
         """
@@ -109,6 +90,9 @@ class AMROFitter:
 
     def fit_act_experiment(self, act_label: str) -> None:
         """"""
+        if self.project_data.fit_filter_str is None:
+            self.project_data.fit_filter_str = self.filter_str
+
         experiment = self.project_data.get_experiment(act_label)
         for osc_key in experiment.oscillations_dict.keys():
             osc = experiment.get_oscillation_from_key(osc_key)
@@ -162,8 +146,8 @@ class AMROFitter:
             results = self._refit(initial_params, x, y_norm)
             was_refitted = True
 
-        # if self.verbose:
-        #     print("\n", lm.fit_report(results, show_correl=False), "\n")
+        if self.verbose:
+            print("\n", lm.fit_report(results, show_correl=False), "\n")
         results.params = self._denormalize_parameters(results.params, norm_scale)
         del self.current_f_list
         return results, was_refitted
