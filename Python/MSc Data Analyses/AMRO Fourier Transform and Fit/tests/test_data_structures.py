@@ -639,9 +639,7 @@ class TestProjectData:
         sample_project_data.add_experiment(exp)
         result = sample_project_data.filter_oscillations()
 
-        # Returns list of lists (one per experiment)
-        assert len(result) == 1
-        assert len(result[0]) == 2
+        assert len(result) == 2
 
     def test_filter_oscillations_by_experiment(self, sample_project_data):
         """Test filtering by experiment label."""

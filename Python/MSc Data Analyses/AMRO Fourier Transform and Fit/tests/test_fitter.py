@@ -396,6 +396,8 @@ class TestRefit:
             max=2 * np.pi,
         )
 
+        fitter_instance.current_f_list = [4]
+
         x = np.linspace(0, 2 * np.pi, 100)
         y = np.ones(100)
 

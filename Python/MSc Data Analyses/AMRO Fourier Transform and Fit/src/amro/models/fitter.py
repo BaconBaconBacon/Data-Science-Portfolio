@@ -81,7 +81,7 @@ class AMROFitter:
         """
 
         amps_list, freqs_list, phase_list, offset = (
-            self._fast_convert_params_to_ndarrays(params)
+            self._fast_convert_params_to_ndarrays(params, f_list=self.current_f_list)
         )
 
         res_model = u.sine_builder(angle, amps_list, freqs_list, phase_list, offset)
@@ -247,8 +247,9 @@ class AMROFitter:
 
         return
 
-    def _are_residuals_acceptable(self) -> bool:
+    def _are_residuals_acceptable(self, residuals) -> bool:
         # TODO: Check the mean absolute residual against some value. This lets us better track poor fits.
+        # The average absolute residual is not greater than 1% of the mean?
         return
 
     def plot_fits_with_residuals(self, act_choice, **kwargs):
@@ -273,7 +274,7 @@ class AMROFitter:
         return
 
     def _fast_convert_params_to_ndarrays(
-        self, params_obj: lm.Parameters
+        self, params_obj: lm.Parameters, f_list: list
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Ensures the parameters are correctly ordered for sine_builder.
@@ -290,12 +291,12 @@ class AMROFitter:
                 params_dict[HEADER_PARAM_AMP_PREFIX + f"{str(f)}"],
                 params_dict[HEADER_PARAM_PHASE_PREFIX + f"{str(f)}"],
             )
-            for f in self.current_f_list
+            for f in f_list
         ]
         amps_list, phase_list = zip(*amps_phase)
         return (
             np.asarray(amps_list),
-            np.asarray(self.current_f_list.copy()),
+            np.asarray(f_list),
             np.asarray(phase_list),
             params_dict[HEADER_PARAM_MEAN_PREFIX],
         )

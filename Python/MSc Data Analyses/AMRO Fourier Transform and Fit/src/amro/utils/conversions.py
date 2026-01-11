@@ -6,8 +6,9 @@ import pandas as pd
 
 def convert_degs_to_rads(
     degs: list | np.ndarray | float | pd.Series,
-) -> list | np.ndarray | float:
-
+) -> np.ndarray | float:
+    if isinstance(degs, list):
+        degs = np.asarray(degs)
     return degs * (np.pi / 180)
 
 

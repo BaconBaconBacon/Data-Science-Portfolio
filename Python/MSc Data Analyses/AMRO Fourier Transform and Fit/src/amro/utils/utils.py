@@ -67,6 +67,11 @@ def sine_builder(
     return mean * (summation + 1)
 
 
+def flatten_list(lst: list) -> list:
+    """Flatten a nested list."""
+    return [item for sublist in lst for item in sublist]
+
+
 def calculate_model_resistivities(x, params: tuple):
     """To be used with the output of convert_params_to_ndarrays(). Assumes x the x variable is in units of rads.
     The units of y_fit will depend on those of the 'mean' parameter."""

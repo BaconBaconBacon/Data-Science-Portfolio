@@ -561,6 +561,7 @@ class ProjectData:
             exp = self.experiments_dict[exp_label]
             oscs = exp.get_multiple_oscillations(t_vals, h_vals)
             osc_list.append(oscs)
+        osc_list = u.flatten_list(osc_list)
         return osc_list
 
     def read_amro_data_from_dataframe(self, df: pd.DataFrame) -> None:
