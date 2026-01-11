@@ -2,8 +2,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from amro import ExperimentalData
-from amro.config.settings import (
+from ..config.settings import (
     PROCESSED_DATA_PATH,
     HEADER_ANGLE_DEG,
     HEADER_ANGLE_RAD,
@@ -20,10 +19,15 @@ from amro.config.settings import (
     HEADER_GEO,
     HEADER_RES_DEL_MEAN_OHM,
 )
-from amro.data import ProjectData, FourierResult, OscillationKey
-from amro.plotting.fourier import _plot_n_strongest
+from ..data.data_structures import (
+    ProjectData,
+    FourierResult,
+    OscillationKey,
+    ExperimentalData,
+)
+from ..plotting.fourier import _plot_n_strongest
 from scipy.fft import rfft, rfftfreq
-from amro.utils import utils as u
+from ..utils import utils as u
 from pathlib import Path
 
 
@@ -78,7 +82,9 @@ class Fourier:
         Queries the n strongest contributions for each experiment in the data set.
         If n=0, then returns all available contributions sorted by magnitude.
         """
-        oscillations = self.project_data.filter_oscillations(experiments=act, t=t, h=h)
+        oscillations = self.project_data.filter_oscillations(
+            experiments=act, t_vals=t, h_vals=h
+        )
 
         results = []
         for osc in oscillations:
@@ -110,4 +116,7 @@ class Fourier:
         yf = rfft(fft_data, n=len(fft_data), norm="ortho")
         xf = rfftfreq(len(fft_data), 1 / len(fft_data))
 
+        if xf[0] == 0:
+            xf = xf[1:]
+            yf = yf[1:]
         return xf, yf

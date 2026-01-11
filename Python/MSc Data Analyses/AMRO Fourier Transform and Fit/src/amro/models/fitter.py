@@ -7,16 +7,15 @@ import pickle
 
 from statsmodels.sandbox.distributions.try_pot import mean_residual_life
 
-from amro import FourierResult
-from amro.utils import utils as u
-from amro.plotting.fitter import (
+from ..utils import utils as u
+from ..plotting.fitter import (
     _plot_fits_with_residuals,
     _plot_fits_with_residuals_uohm,
     _plot_bad_fits,
     _save_plot,
 )
 
-from amro.config.settings import (
+from ..config.settings import (
     PROCESSED_DATA_PATH,
     FINAL_DATA_PATH,
     PROCESSED_FIGURES_PATH,
@@ -37,16 +36,16 @@ from amro.config.settings import (
     HEADER_PHASE,
     HEADER_MAG,
 )
-from amro.data import (
+from ..data.data_structures import (
     FitResult,
     OscillationKey,
+    FourierResult,
     ProjectData,
     AMROscillation,
 )
 
 
 class AMROFitter:
-    # FIT_SYMMETRIES = [2, 4]
 
     def __init__(
         self,
@@ -72,30 +71,30 @@ class AMROFitter:
         self.overwrite = if_save_file_exists_overwrite
 
         # self.ft_results_df = self._filter_guess_params(fourier_results)
-        self.act_choices = self._get_h_t_values()
+        # self.act_choices = self._get_h_t_values()
 
-        self._name_save_paths(save_name, min_amp_ratio, max_freq)
-        self._read_or_initialize()
+        # self._name_save_paths(save_name, min_amp_ratio, max_freq)
+        # self._read_or_initialize()
 
         self.failed_fits = []
         return
 
-    def _name_save_paths(self, name, amp_ratio, freq):
+    # def _name_save_paths(self, name, amp_ratio, freq):
+    #
+    #     s = "_ratio_{}_maxf_{}_".format(amp_ratio, freq)
+    #     self.save_name = name + s.replace(".", "p")
+    #
+    #     s = self.save_name + "_fit_params.csv"
+    #     self.fit_params_fp = FINAL_DATA_PATH / s
+    #
+    #     s = self.save_name + "_results.pkl"
+    #     self.lmfit_results_fp = FINAL_DATA_PATH / s
+    #
+    #     s = self.save_name + "_fit_amps.csv"
+    #     self.fit_amps_fp = FINAL_DATA_PATH / s
+    #     return
 
-        s = "_ratio_{}_maxf_{}_".format(amp_ratio, freq)
-        self.save_name = name + s.replace(".", "p")
-
-        s = self.save_name + "_fit_params.csv"
-        self.fit_params_fp = FINAL_DATA_PATH / s
-
-        s = self.save_name + "_results.pkl"
-        self.lmfit_results_fp = FINAL_DATA_PATH / s
-
-        s = self.save_name + "_fit_amps.csv"
-        self.fit_amps_fp = FINAL_DATA_PATH / s
-        return
-
-    def _obj_func(self, params, angle, res_data):
+    def _obj_func(self, params: lm.Parameters, angle, res_data):
         """
         The sinebuilder is fitted by minimizing this least squares objective function.
         """
@@ -108,23 +107,26 @@ class AMROFitter:
 
         return res_model - res_data
 
-    def fit_act_experiment(self, act_label: str):
+    def fit_act_experiment(self, act_label: str) -> None:
         """"""
         experiment = self.project_data.get_experiment(act_label)
         for osc_key in experiment.oscillations_dict.keys():
             osc = experiment.get_oscillation_from_key(osc_key)
 
-            if osc.fit_result is not None:
+            if hasattr(osc, "fit_result"):
                 print(f"Already fitted {osc_key}. Skipping...")
                 continue
-            if osc.fourier_result is None:
+            if not hasattr(osc, "fourier_result"):
                 print(f"No Fourier for {osc_key}. Skipping...")
-
+                continue
             print(f"Fitting {osc_key}.")
 
             lmfit_result, refit_bool = self._fit_oscillation(osc)
 
-            osc.add_fit_result(refit_bool, lmfit_result)
+            osc.add_fit_result(
+                lmfit_result=lmfit_result,
+                refitted=refit_bool,
+            )
 
             if not lmfit_result.success:
                 self.failed_fits.append(osc.key)
@@ -144,45 +146,49 @@ class AMROFitter:
         x = osc.osc_data.angles_rads
         y = osc.osc_data.res_ohms
 
-        initial_params = self._initialize_parameters_from_fourier(
+        initial_params, f_list = self._initialize_parameters_from_fourier(
             osc.fourier_result, osc.osc_data.mean_res_ohms
         )
+        self.current_f_list = f_list
 
         y_norm, norm_scale = self._normalize_data(y)
 
-        # Perform the minimization
         minner = lm.Minimizer(self._obj_func, initial_params, fcn_args=(x, y_norm))
         results = minner.minimize()
 
         was_refitted = False
-        # Check if the covariant matrix is singular
         if results.covar is None:
+            print("Attempting re-fit with infinite bounds for phase.")
             results = self._refit(initial_params, x, y_norm)
             was_refitted = True
 
-        if self.verbose:
-            print("\n", lm.fit_report(results, show_correl=False), "\n")
+        # if self.verbose:
+        #     print("\n", lm.fit_report(results, show_correl=False), "\n")
         results.params = self._denormalize_parameters(results.params, norm_scale)
+        del self.current_f_list
         return results, was_refitted
 
     def _normalize_data(self, y):
-        """Normalize y-values to O(1) for better numerical conditioning."""
         y_scale = np.abs(y).max()
         if y_scale < 1e-10:
             y_scale = 1.0
         return y / y_scale, y_scale
 
     def _denormalize_parameters(self, params, y_scale):
-        """Normalize y-values to O(1) for better numerical conditioning."""
         params[HEADER_PARAM_MEAN_PREFIX].value *= y_scale
-        params[HEADER_PARAM_MEAN_PREFIX].stderr *= y_scale
+
+        try:
+            params[HEADER_PARAM_MEAN_PREFIX].stderr *= y_scale
+        except TypeError:
+            print("Fit's covar matrix is singular...")
+
         return params
 
     def _initialize_parameters_from_fourier(
         self,
         fourier_result: FourierResult,
         mean_res: float,
-    ) -> lm.Parameters:
+    ) -> tuple[lm.Parameters, list]:
         """Note that the value of the 'mean' value should have been normalized
         TODO: Need to implement a way to filter the guesses for a minimum ratio and max freq
         """
@@ -192,9 +198,9 @@ class AMROFitter:
         initial_p_guesses.add(HEADER_PARAM_MEAN_PREFIX, value=mean_res, min=0)
 
         # Append all Parameter objects, except for the last one (must deal with appended 2)
-
+        current_freqs = []
         for freq in fourier_result.fourier_results_dict.keys():
-            amp_ratio_guess, phase_guess = fourier_result.fourier_results_dict[freq]
+            amp_ratio_guess, phase_guess = fourier_result.get_fit_guess(freq)
 
             # Apply filter
             if freq > self.max_freq or amp_ratio_guess < self.min_amp_ratio:
@@ -203,8 +209,9 @@ class AMROFitter:
             self._add_parameter(
                 int(freq), initial_p_guesses, amp_ratio_guess, phase_guess
             )
+            current_freqs.append(freq)
 
-        return initial_p_guesses
+        return initial_p_guesses, current_freqs
 
     def _add_parameter(
         self,
@@ -243,16 +250,17 @@ class AMROFitter:
 
         return
 
-    def _get_freqs_guesses(self, act, h, t):
-        guess_df = u.query_dataframe(self.ft_results_df, act=act, h=h, t=t)
-        self.current_f_list = guess_df[HEADER_FREQ].unique()
-        if self.force_four_and_two_sym:
-            self.current_f_list = np.append(self.current_f_list, [2, 4])
-
-            # Drop duplicates
-            self.current_f_list = list(set(self.current_f_list))
-
-        return guess_df
+    #
+    # def _get_freqs_guesses(self, act, h, t):
+    #     guess_df = u.query_dataframe(self.ft_results_df, act=act, h=h, t=t)
+    #     self.current_f_list = guess_df[HEADER_FREQ].unique()
+    #     if self.force_four_and_two_sym:
+    #         self.current_f_list = np.append(self.current_f_list, [2, 4])
+    #
+    #         # Drop duplicates
+    #         self.current_f_list = list(set(self.current_f_list))
+    #
+    #     return guess_df
 
     def _are_residuals_acceptable(self) -> bool:
         # TODO: Check the mean absolute residual against some value. This lets us better track poor fits.
@@ -300,7 +308,6 @@ class AMROFitter:
 
         """
         params_dict = params_obj.valuesdict()
-        # TODO: Fix this with the data class. The naming format is 'fragile to naming convention changes'
         amps_phase = [
             (
                 params_dict[HEADER_PARAM_AMP_PREFIX + f"{str(f)}"],
@@ -316,60 +323,70 @@ class AMROFitter:
             params_dict[HEADER_PARAM_MEAN_PREFIX],
         )
 
-    def _filter_guess_params(self, guess_params: pd.DataFrame) -> pd.DataFrame:
-        """
-        Filter the fit parameter initial guesses from the Fourier transform
-        using the given parameters.
+    def _refit(self, params, x, y_norm):
 
-        The amp_ratio is the ratio of the amplitude of a given frequency divided
-        by that of the strongest frequency's amplitude.
+        for name, param in params.items():
+            if HEADER_PARAM_PHASE_PREFIX in name:
+                param.set(min=-np.inf, max=np.inf)
+        minner = lm.Minimizer(self._obj_func, params, fcn_args=(x, y_norm))
+        results = minner.minimize()
 
-        The freq is the number of oscillations per rotation of the sample.
-        """
+        return results
 
-        q = HEADER_MAG_RATIO + f" > {self.min_amp_ratio} "
-        q += f"& `{HEADER_FREQ}`<{self.max_freq}"
-        return guess_params.query(q)
+    # def _filter_guess_params(self, guess_params: pd.DataFrame) -> pd.DataFrame:
+    #     """
+    #     Filter the fit parameter initial guesses from the Fourier transform
+    #     using the given parameters.
+    #
+    #     The amp_ratio is the ratio of the amplitude of a given frequency divided
+    #     by that of the strongest frequency's amplitude.
+    #
+    #     The freq is the number of oscillations per rotation of the sample.
+    #     """
+    #
+    #     q = HEADER_MAG_RATIO + f" > {self.min_amp_ratio} "
+    #     q += f"& `{HEADER_FREQ}`<{self.max_freq}"
+    #     return guess_params.query(q)
+    #
+    # def _get_init_params(
+    #     self, act: str | list, T: float | int | list, H: float | int | list
+    # ) -> pd.DataFrame:
+    #
+    #     f_info = u.query_dataframe(self.ft_results_df, act=act, h=H, t=T)
+    #
+    #     return f_info[[HEADER_FREQ, HEADER_MAG_RATIO]]
 
-    def _get_init_params(
-        self, act: str | list, T: float | int | list, H: float | int | list
-    ) -> pd.DataFrame:
-
-        f_info = u.query_dataframe(self.ft_results_df, act=act, h=H, t=T)
-
-        return f_info[[HEADER_FREQ, HEADER_MAG_RATIO]]
-
-    def _get_init_freqs(self, act: str, T: str, H: str) -> np.ndarray:
-        f_info = self._get_init_params(act, T, H)
-        return f_info[HEADER_FREQ].values
-
-    def _check_if_already_fitted(self, act, t, h) -> bool:
-        """
-        Check if the experiment has already been fitted
-        # TODO: Need to use ProjectData
-        """
-        try:
-            _ = self.lmfit_results_objs[act][t][h]
-            return True
-        except KeyError:
-            return False
-
-    def _read_or_initialize(self):
-
-        # TODO: Checks if saved fitted results exists via the ProjectData object
-
-        return
-
-    def _get_h_t_values(self):
-        """"""
-        h_t_dict = {}
-        grouped = self.project_data[
-            [HEADER_ACT, HEADER_MAGNET, HEADER_TEMP]
-        ].drop_duplicates()
-
-        for act in grouped[HEADER_ACT].unique():
-            tmp_list = []
-            for _, row in grouped.query(HEADER_ACT + f'=="{act}"').iterrows():
-                tmp_list.append((float(row[HEADER_TEMP]), float(row[HEADER_MAGNET])))
-            h_t_dict[act] = tmp_list
-        return h_t_dict
+    # def _get_init_freqs(self, act: str, T: str, H: str) -> np.ndarray:
+    #     f_info = self._get_init_params(act, T, H)
+    #     return f_info[HEADER_FREQ].values
+    #
+    # def _check_if_already_fitted(self, act, t, h) -> bool:
+    #     """
+    #     Check if the experiment has already been fitted
+    #     # TODO: Need to use ProjectData
+    #     """
+    #     try:
+    #         _ = self.lmfit_results_objs[act][t][h]
+    #         return True
+    #     except KeyError:
+    #         return False
+    #
+    # def _read_or_initialize(self):
+    #
+    #     # TODO: Checks if saved fitted results exists via the ProjectData object
+    #
+    #     return
+    #
+    # # def _get_h_t_values(self):
+    #     """"""
+    #     h_t_dict = {}
+    #     grouped = self.project_data[
+    #         [HEADER_ACT, HEADER_MAGNET, HEADER_TEMP]
+    #     ].drop_duplicates()
+    #
+    #     for act in grouped[HEADER_ACT].unique():
+    #         tmp_list = []
+    #         for _, row in grouped.query(HEADER_ACT + f'=="{act}"').iterrows():
+    #             tmp_list.append((float(row[HEADER_TEMP]), float(row[HEADER_MAGNET])))
+    #         h_t_dict[act] = tmp_list
+    #     return h_t_dict

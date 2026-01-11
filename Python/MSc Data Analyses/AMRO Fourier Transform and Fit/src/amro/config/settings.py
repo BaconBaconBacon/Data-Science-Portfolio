@@ -51,6 +51,7 @@ HEADER_RES_UOHM = "Res. (uohm-cm)"
 
 
 # AMRO DataFrame header labels
+
 HEADER_TEMP = "T"
 HEADER_MAGNET = "H"
 HEADER_ACT = "ACT_str"
@@ -58,6 +59,10 @@ HEADER_GEO = "geo"
 HEADER_LENGTH = "L (cm)"
 HEADER_WIDTH = "W (cm)"
 HEADER_HEIGHT = "H (cm)"
+
+# TODO: Fix these with the future cleaning code for the AS code for raw AMRO
+HEADER_TEMP_RAW = "Temperature (K)"
+HEADER_MAGNET_RAW_OE = "Abs. Magnetic Field (Oe)"
 
 # Fourier DataFrame header labels
 HEADER_MAG = "mag (ohm-cm)"

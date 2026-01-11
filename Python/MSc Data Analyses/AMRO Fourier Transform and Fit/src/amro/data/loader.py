@@ -2,7 +2,7 @@
 # import os
 import numpy as np
 import pandas as pd
-from amro.config.settings import (
+from ..config.settings import (
     RAW_DATA_PATH,
     HEADER_ANGLE_DEG,
     HEADER_ANGLE_RAD,
@@ -26,17 +26,24 @@ from amro.config.settings import (
     KEY_RES_CONSTANTS,
     KEY_TEMP_LABELS,
     KEY_MAGNET_LABELS,
+    HEADER_TEMP_RAW,
+    HEADER_MAGNET_RAW_OE,
 )
-from amro.plotting.loader import _quick_plot_amro
-from amro.utils import utils as u
+from ..plotting.loader import _quick_plot_amro
+from ..utils import utils as u
+from ..utils import conversions as c
+
 from pathlib import Path
-from amro.data import (
+from .data_structures import (
     ProjectData,
     Experiment,
     AMROscillation,
     ExperimentalData,
     OscillationKey,
 )
+
+# TODO : Hacky solution since .csv files don't have the geometries. Will need to fix when you add the code to AS the AMRO
+GEO_DICT = {"ACTRot11": "perp", "ACTRot12": "para"}
 
 
 class AMROLoader:
@@ -60,25 +67,17 @@ class AMROLoader:
         self.project_name = project_name
         self.project_data = ProjectData(project_name=project_name)
         self.save_folder = RAW_DATA_PATH
-        self.file_path = self.project_data.pickle_fp
+        self.pickle_fp = self.project_data.pickle_fp
 
     def load_amro(self) -> ProjectData:
         """ """
-        if self.project_name.endswith(".pkl"):
-            if self.file_path.is_file():
-                print("Loading : {}".format(self.project_name))
-                self.project_data.load_from_pickle()
-            else:
-                print("Running AMRO ETL. Save name: {}".format(self.project_name))
-                self._run_amro_etl()
+        if self.pickle_fp.is_file():
+            print("Loading : {}".format(self.project_name))
+            self.project_data.load_project_from_pickle()
         else:
-            raise TypeError("Wrong file type: {}".format(self.project_name))
-
-        if self.project_data.experiment_count == 0:
-            raise Exception("No AMRO files found in {}".format(self.save_folder))
-        else:
-            print(f"{self.experiment_count} unique experiments were found and loaded.")
-            return self.project_data
+            print("Running AMRO ETL. Save name: {}".format(self.project_name))
+            self._run_amro_etl()
+        return self.project_data
 
     def get_amro_data(self):
         return self.project_data
@@ -93,9 +92,10 @@ class AMROLoader:
 
         """
 
-        filenames = list(self.save_folder.glob())
+        filenames = list(self.save_folder.glob("*.csv"))
         # TODO: add some flexibility to naming schemes. Maybe just check whether
         # filename has been loaded already, and whether the H and T data are new
+
         for filename in filenames:
             # Ensure we are selecting only AMRO data
             if self._is_valid_amro_filename(filename):
@@ -142,9 +142,9 @@ class AMROLoader:
         return None
 
     def _is_valid_amro_filename(self, filename: Path) -> bool:
-
-        valid_act_label = any(key in filename for key in self.META_DATA.keys())
-        valid_amro_label = "AMRO" in filename
+        # TODO: Needs to generalize this with the filename handling code
+        valid_act_label = "ACTRot" in filename.name
+        valid_amro_label = "AMRO" in filename.name
         return valid_amro_label and valid_act_label
 
     def _extract_experiment_data(self, filename: Path) -> tuple:
@@ -152,9 +152,9 @@ class AMROLoader:
 
         file_path = self.save_folder / filename
         experiment_df = pd.read_csv(file_path, sep=",")
-
+        experiment_df = experiment_df.rename(columns=LOADER_COL_RENAME_DICT)
         (act_label, T_label, H_label, geometry, length, height, width) = (
-            self._parse_experiment_metadata(experiment_df)
+            self._parse_experiment_metadata(experiment_df, filename)
         )
 
         angles = experiment_df[HEADER_ANGLE_DEG].values
@@ -171,25 +171,24 @@ class AMROLoader:
             resistivities,
         )
 
-    def _parse_experiment_metadata(self, temp_df):
+    def _parse_experiment_metadata(self, temp_df: pd.DataFrame, filename: str) -> tuple:
+        for item in filename.name.split("_"):
+            if "ACTRot" in item:
+                act_label = item
+
         length = temp_df[HEADER_LENGTH].unique()[0]
         height = temp_df[HEADER_HEIGHT].unique()[0]
         width = temp_df[HEADER_WIDTH].unique()[0]
-        geometry = temp_df[HEADER_GEO].unique()[0]
-        act_label = temp_df[HEADER_ACT].unique()[0]
-        T_label = temp_df[HEADER_TEMP].unique()[0]
-        H_label = temp_df[HEADER_MAGNET].unique()[0]
-        tup = (act_label, T_label, H_label, geometry, length, height, width)
-        self._verify_metadata_tuple(tup)
-        return tup
 
-    def _verify_metadata_tuple(self, tup: tuple):
-        for item in tup:
-            if len(item) > 1:
-                raise ValueError(
-                    "Non-unique metadata entry detected. Script expects each \
-                    AMRO file being loaded is a unique experiment."
-                )
+        # TODO: These will need to be adjusted when the AMRO cleaning code is added
+        H_vals = c.convert_oe_to_teslas(temp_df[HEADER_MAGNET_RAW_OE]).round(1)
+        H_label = H_vals.unique()[0]
+        geometry = GEO_DICT[act_label]
+        T_vals = temp_df[HEADER_TEMP_RAW].round(1)
+        T_label = T_vals.unique()[0]
+
+        tup = (act_label, T_label, H_label, geometry, length, height, width)
+        return tup
 
     def _convert_degs_to_rads(
         self, degs: np.ndarray | pd.Series

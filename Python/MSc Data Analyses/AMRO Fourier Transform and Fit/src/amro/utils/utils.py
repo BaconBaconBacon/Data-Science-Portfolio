@@ -67,19 +67,16 @@ def sine_builder(
     return mean * (summation + 1)
 
 
-def calculate_model_resistivities(x, params):
+def calculate_model_resistivities(x, params: tuple):
     """To be used with the output of convert_params_to_ndarrays(). Assumes x the x variable is in units of rads.
     The units of y_fit will depend on those of the 'mean' parameter."""
-    try:
-        (
-            amps_list,
-            freqs_list,
-            phase_list,
-            mean,
-        ) = params
-    except TypeError as e:
-        print(params)
-        raise e
+    (
+        amps_list,
+        freqs_list,
+        phase_list,
+        mean,
+    ) = params
+
     # Calculate model's values
     y_fit = sine_builder(
         x,

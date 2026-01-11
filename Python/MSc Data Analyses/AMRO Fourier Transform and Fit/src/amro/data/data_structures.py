@@ -4,8 +4,8 @@ import pandas as pd
 import lmfit as lm
 import pickle
 from pathlib import Path
-from amro.config import FINAL_DATA_PATH
-from amro.config.settings import (
+from ..config import FINAL_DATA_PATH
+from ..config.settings import (
     HEADER_ACT,
     HEADER_TEMP,
     HEADER_MAGNET,
@@ -25,8 +25,8 @@ from amro.config.settings import (
     HEADER_FIT_CHISQ,
     HEADER_PHASE_RAW,
 )
-from amro.utils import conversions as c
-from amro.utils import utils as u
+from ..utils import conversions as c
+from ..utils import utils as u
 
 """
     Classes for storing and accessing experiments and results.
@@ -161,7 +161,7 @@ class FitResult:
     def _parse_params(self, params: lm.Parameters) -> None:
         """Must parse the keys and values of the Parameters objects"""
         self.lmfit_params = params
-        self.fit_report = lm.report_fit(params)
+        self.fit_report = lm.fit_report(params)
 
         (
             amps_list,
@@ -314,7 +314,7 @@ class FourierResult:
 
     key: OscillationKey
 
-    symmetries: list | np.ndarray
+    xf: list | np.ndarray
     yf: list | np.ndarray
 
     phases: np.ndarray = field(init=False)
@@ -327,7 +327,7 @@ class FourierResult:
 
     def __post_init__(self) -> None:
 
-        self.symmetries = np.asarray(self.symmetries).astype(int)
+        self.xf = np.asarray(self.xf).astype(int)
         self.yf = np.asarray(self.yf)
 
         self.phases = np.angle(self.yf)
@@ -338,19 +338,27 @@ class FourierResult:
             self.phases + 2 * np.pi,
             self.phases,
         )
-        for i, f in enumerate(self.symmetries):
-            self.fourier_results_dict[f] = (
-                self.amplitudes[i],
-                self.amplitudes_ratio[i],
-                self.phases_pos[i],
-            )
+        for i, f in enumerate(self.xf):
+
+            if f > 0:
+                self.fourier_results_dict[f] = (
+                    self.amplitudes[i],
+                    self.amplitudes_ratio[i],
+                    self.phases_pos[i],
+                )
+            else:
+                raise ValueError(f"Invalid symmetry! {f} in {self.key}")
+
+    def get_fit_guess(self, freq):
+        item = self.fourier_results_dict[freq]
+        return item[1], item[2]
 
     def __str__(self):
         return f"Fourier_Result_Object_{self.key}"
 
     def get_n_strongest_components(self, n=0):
         idx_largest = np.argpartition(self.amplitudes_ratio, -n)[-n:]
-        n_syms = self.symmetries[idx_largest]
+        n_syms = self.xf[idx_largest]
         n_ratios = self.amplitudes_ratio[idx_largest]
         return zip(n_syms, n_ratios)
 
@@ -422,7 +430,7 @@ class AMROscillation:
         FourierResult. Copy over the fourier._pack_ft_result() function, act, h, and t will
         have been determined previously when accessing the AMROscillation object."""
 
-        self.fourier_result = FourierResult(key=self.key, symmetries=xf, yf=yf)
+        self.fourier_result = FourierResult(key=self.key, xf=xf, yf=yf)
         return
 
     def get_experiment_label(self) -> str:
@@ -523,7 +531,7 @@ class ProjectData:
 
     def __post_init__(self):
 
-        self.pickle_fp = FINAL_DATA_PATH / self.project_name + ".pkl"
+        self.pickle_fp = FINAL_DATA_PATH / (self.project_name + ".pkl")
 
     def add_experiment(self, exp: Experiment) -> None:
         self.experiments_dict[exp.experiment_label] = exp
@@ -599,9 +607,7 @@ class ProjectData:
                 exper = self.get_experiment(act)
             except KeyError:
                 print(
-                    "No Experiment found for "
-                    + act
-                    + ". Create Experiment before adding Fourier Results."
+                    f"No Experiment found for {act}. Create Experiment before adding Fourier Results."
                 )
                 return
 
@@ -630,9 +636,7 @@ class ProjectData:
                 exper = self.get_experiment(act)
             except KeyError:
                 print(
-                    "No Experiment found for "
-                    + act
-                    + ". Create Experiment before adding Fourier Results."
+                    f"No Experiment found for {act}. Create Experiment before adding Fourier Results."
                 )
                 continue
 
@@ -672,7 +676,11 @@ class ProjectData:
             experiment = self.experiments_dict[act_label]
             for osc_key in experiment.oscillations_dict.keys():
                 osc = experiment.oscillations_dict[osc_key]
-                fit_result = osc.fit_result
+                try:
+                    fit_result = osc.fit_result
+                except AttributeError as e:
+                    print(f"No fit result found for {osc_key}")
+                    continue
                 row = {
                     HEADER_ACT: osc_key.experiment_label,
                     HEADER_TEMP: osc_key.temperature,
@@ -727,7 +735,7 @@ class ProjectData:
                         HEADER_ACT: osc_key.experiment_label,
                         HEADER_TEMP: osc_key.temperature,
                         HEADER_MAGNET: osc_key.magnetic_field,
-                        HEADER_GEO: osc_key.geometry,
+                        HEADER_GEO: experiment.geometry,
                         HEADER_PARAM_FREQ_PREFIX: freq,
                         HEADER_PARAM_AMP_PREFIX: ft[0],
                         HEADER_PARAM_AMP_PREFIX + "_ratio": ft[1],
@@ -757,18 +765,18 @@ class ProjectData:
 
     def get_summary_statistics(self) -> dict:
         n_oscillations = sum(
-            len(exp.oscillations) for exp in self.experiments_dict.values()
+            len(exp.oscillations_dict) for exp in self.experiments_dict.values()
         )
         n_fourier = sum(
             1
             for exp in self.experiments_dict.values()
-            for osc in exp.oscillations.values()
+            for osc in exp.oscillations_dict.values()
             if hasattr(osc, "fourier_result")
         )
         n_fits = sum(
             1
             for exp in self.experiments_dict.values()
-            for osc in exp.oscillations.values()
+            for osc in exp.oscillations_dict.values()
             if hasattr(osc, "fit_result")
         )
 
