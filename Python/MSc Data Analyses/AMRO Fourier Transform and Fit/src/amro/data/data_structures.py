@@ -281,9 +281,9 @@ class ExperimentalData:
     def _calc_res_uohm_values(self) -> None:
         """Call this last at initialization. Iterates over the class object's attributes."""
         for attribute in fields(self):
-            if attribute.name.endswith("_ohm"):
+            if attribute.name.endswith("_ohms"):
                 vals = getattr(self, attribute.name)
-                new_name = attribute.name.replace("_ohm", "_uohm")
+                new_name = attribute.name.replace("_ohms", "_uohms")
                 new_vals = c.convert_ohms_to_uohms(vals)
                 setattr(self, new_name, new_vals)
 
