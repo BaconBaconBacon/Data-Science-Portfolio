@@ -32,14 +32,14 @@ from pathlib import Path
 
 
 class Fourier:
-    def __init__(self, amro_data: ProjectData, save_name: str):
+    def __init__(self, amro_data: ProjectData, save_name: str, verbose: bool = False):
         self.project_data = amro_data
 
         self.all_results_df = pd.DataFrame()
         self.save_name = save_name
         self.save_dir = PROCESSED_DATA_PATH
         self.save_fp = self.save_dir / save_name
-
+        self.verbose = verbose
         if self.save_fp.is_file():
             # TODO: Need to check and make sure it's loading the same data as the AMRO
             print("Loading {}".format(save_name))

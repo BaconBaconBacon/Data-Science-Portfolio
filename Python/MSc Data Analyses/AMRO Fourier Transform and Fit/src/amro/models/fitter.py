@@ -94,7 +94,9 @@ class AMROFitter:
             self.project_data.fit_filter_str = self.filter_str
 
         experiment = self.project_data.get_experiment(act_label)
+        i = 0
         for osc_key in experiment.oscillations_dict.keys():
+            i += 1
             osc = experiment.get_oscillation_from_key(osc_key)
 
             if hasattr(osc, "fit_result"):
@@ -114,6 +116,7 @@ class AMROFitter:
 
             if not lmfit_result.success:
                 self.failed_fits.append(osc.key)
+        print(f"Total fitted: {i}")
         return
 
     def _fit_oscillation(
@@ -145,9 +148,13 @@ class AMROFitter:
             print("Attempting re-fit with infinite bounds for phase.")
             results = self._refit(initial_params, x, y_norm)
             was_refitted = True
-
-        if self.verbose:
-            print("\n", lm.fit_report(results, show_correl=False), "\n")
+            if results.covar is None:
+                print("Covar matrix is remains singular.")
+            else:
+                print("Fit was improved.")
+            print("Continuing...")
+        # if self.verbose:
+        #     print("\n", lm.fit_report(results, show_correl=False), "\n")
         results.params = self._denormalize_parameters(results.params, norm_scale)
         del self.current_f_list
         return results, was_refitted
@@ -161,10 +168,8 @@ class AMROFitter:
     def _denormalize_parameters(self, params, y_scale):
         params[HEADER_PARAM_MEAN_PREFIX].value *= y_scale
 
-        try:
+        if params[HEADER_PARAM_MEAN_PREFIX].stderr is not None:
             params[HEADER_PARAM_MEAN_PREFIX].stderr *= y_scale
-        except TypeError:
-            print("Fit's covar matrix is singular...")
 
         return params
 
@@ -175,6 +180,7 @@ class AMROFitter:
     ) -> tuple[lm.Parameters, list]:
         """Note that the value of the 'mean' value should have been normalized
         TODO: Need to implement a way to filter the guesses for a minimum ratio and max freq
+        TODO: Critical, need to implement code for force_four_and_two_sym
         """
 
         # Generate a Parameters ordered dictionary, to which we add Parameter objects
@@ -234,29 +240,9 @@ class AMROFitter:
 
         return
 
-    #
-    # def _get_freqs_guesses(self, act, h, t):
-    #     guess_df = u.query_dataframe(self.ft_results_df, act=act, h=h, t=t)
-    #     self.current_f_list = guess_df[HEADER_FREQ].unique()
-    #     if self.force_four_and_two_sym:
-    #         self.current_f_list = np.append(self.current_f_list, [2, 4])
-    #
-    #         # Drop duplicates
-    #         self.current_f_list = list(set(self.current_f_list))
-    #
-    #     return guess_df
-
     def _are_residuals_acceptable(self) -> bool:
         # TODO: Check the mean absolute residual against some value. This lets us better track poor fits.
         return
-
-    # def get_fitted_parameters(
-    #     self,
-    #     act: str | list | None = None,
-    #     h: int | float | list | None = None,
-    #     t: int | float | list | None = None,
-    # ) -> pd.DataFrame:
-    #     return u.query_dataframe(self.fit_params_df, act=act, h=h, t=t)
 
     def plot_fits_with_residuals(self, act_choice, **kwargs):
         return _plot_fits_with_residuals(self, act_choice, **kwargs)
@@ -316,61 +302,3 @@ class AMROFitter:
         results = minner.minimize()
 
         return results
-
-    # def _filter_guess_params(self, guess_params: pd.DataFrame) -> pd.DataFrame:
-    #     """
-    #     Filter the fit parameter initial guesses from the Fourier transform
-    #     using the given parameters.
-    #
-    #     The amp_ratio is the ratio of the amplitude of a given frequency divided
-    #     by that of the strongest frequency's amplitude.
-    #
-    #     The freq is the number of oscillations per rotation of the sample.
-    #     """
-    #
-    #     q = HEADER_MAG_RATIO + f" > {self.min_amp_ratio} "
-    #     q += f"& `{HEADER_FREQ}`<{self.max_freq}"
-    #     return guess_params.query(q)
-    #
-    # def _get_init_params(
-    #     self, act: str | list, T: float | int | list, H: float | int | list
-    # ) -> pd.DataFrame:
-    #
-    #     f_info = u.query_dataframe(self.ft_results_df, act=act, h=H, t=T)
-    #
-    #     return f_info[[HEADER_FREQ, HEADER_MAG_RATIO]]
-
-    # def _get_init_freqs(self, act: str, T: str, H: str) -> np.ndarray:
-    #     f_info = self._get_init_params(act, T, H)
-    #     return f_info[HEADER_FREQ].values
-    #
-    # def _check_if_already_fitted(self, act, t, h) -> bool:
-    #     """
-    #     Check if the experiment has already been fitted
-    #     # TODO: Need to use ProjectData
-    #     """
-    #     try:
-    #         _ = self.lmfit_results_objs[act][t][h]
-    #         return True
-    #     except KeyError:
-    #         return False
-    #
-    # def _read_or_initialize(self):
-    #
-    #     # TODO: Checks if saved fitted results exists via the ProjectData object
-    #
-    #     return
-    #
-    # # def _get_h_t_values(self):
-    #     """"""
-    #     h_t_dict = {}
-    #     grouped = self.project_data[
-    #         [HEADER_ACT, HEADER_MAGNET, HEADER_TEMP]
-    #     ].drop_duplicates()
-    #
-    #     for act in grouped[HEADER_ACT].unique():
-    #         tmp_list = []
-    #         for _, row in grouped.query(HEADER_ACT + f'=="{act}"').iterrows():
-    #             tmp_list.append((float(row[HEADER_TEMP]), float(row[HEADER_MAGNET])))
-    #         h_t_dict[act] = tmp_list
-    #     return h_t_dict

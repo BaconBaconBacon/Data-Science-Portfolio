@@ -61,13 +61,15 @@ class AMROLoader:
     orthogonal to the magnetic field for the entire rotation of the sample.
 
     TODO: Add the cleaning and symmetrization functionality into the ETL pipeline.
+    TODO: Add verbose functionality
     """
 
-    def __init__(self, project_name: str):
+    def __init__(self, project_name: str, verbose: bool = False):
         self.project_name = project_name
         self.project_data = ProjectData(project_name=project_name)
         self.save_folder = RAW_DATA_PATH
         self.pickle_fp = self.project_data.pickle_fp
+        self.verbose = verbose
 
     def load_amro(self) -> ProjectData:
         """ """
