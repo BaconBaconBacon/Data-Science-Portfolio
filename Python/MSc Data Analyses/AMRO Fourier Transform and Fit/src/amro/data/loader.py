@@ -62,7 +62,6 @@ class AMROLoader:
     magnetic field at 90deg. For the 'perp' geometry, the current vector is held
     orthogonal to the magnetic field for the entire rotation of the sample.
 
-    TODO: Add the cleaning and symmetrization functionality into the ETL pipeline.
     TODO: Add verbose functionality
     todo: Move saving/loading functionality involving X_DATA_PATH to data_structures and loader.py
     """

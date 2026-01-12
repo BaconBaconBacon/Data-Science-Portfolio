@@ -48,6 +48,9 @@ from ..config.settings import (
     HEADER_EXP_LABEL,
     HEADER_CROSS_SECTION,
     CLEANER_T_MIN_RESOLUTION,
+    HEADER_RES_OHM,
+    CLEANER_DROP_COLS,
+    HEADER_WIRE_SEP,
 )
 import pandas as pd
 from pathlib import Path
@@ -75,9 +78,11 @@ class AMROCleaner:
         filepaths = list(self.load_path.glob("*" + self.datafile_type))
         for filepath in filepaths:
             if HEADER_EXPERIMENT_PREFIX in filepath.name:
+
                 if self.verbose:
                     print(f"Reading {filepath.name}")
                 exp_label_fn = self._get_experiment_label_from_fn(filepath.name)
+
                 # For each file, reads and parses the header info
                 fp = self.load_path / filepath
                 with open(fp) as file:
@@ -89,7 +94,7 @@ class AMROCleaner:
 
                 # then reads the data into one large df
                 data = self._load_file(fp)
-                data = self._create_columns_for_calcs(data)
+                data = self._get_columns_for_calcs(data)
 
                 # Identifies the unique H and T pairings
                 osc_labels = self._get_oscillation_labels(data)
@@ -101,16 +106,20 @@ class AMROCleaner:
                     subset_df = data.query(q)
                     clean_osc = self._anti_symmetrize_oscillation(subset_df)
                     cleaned_oscs.append(clean_osc)
-
                 cleaned_df = pd.concat(cleaned_oscs)
 
-                cleaned_df = cleaned_df.rename(columns=CLEANER_COL_RENAME_DICT)
                 cleaned_df[HEADER_EXP_LABEL] = exp_label
                 cleaned_df[HEADER_GEO] = geom
                 cleaned_df[HEADER_CROSS_SECTION] = cross_section
+                cleaned_df[HEADER_WIRE_SEP] = wire_sep
 
-                # Save to Processed
-                cleaned_df.to_csv(PROCESSED_DATA_PATH, sep=",")
+                cleaned_df = cleaned_df.drop(
+                    columns=[HEADER_MAGNET_RAW_OE, HEADER_MAGNET_RAW_OE_ABS]
+                )
+                fn = f"{exp_label}_antisymmetrized.csv"
+                if self.verbose:
+                    print(f"Saving as {fn}")
+                cleaned_df.to_csv(PROCESSED_DATA_PATH / fn, sep=",", index=False)
             else:
                 print(
                     f"HEADER_EXPERIMENT_PREFIX not found in filename, skipping: {filepath.name}"
@@ -151,7 +160,7 @@ class AMROCleaner:
         # Raises a warning if the cross-section and length are both the default of 1
         if wire_sep == 1 or cross_section == 1:
             warn(
-                f"Default values detected for wire separation ({wire_sep}) or cross section ({cross_section}). AMRO package expects measurements of resistivity, not resistance."
+                f"Default values detected for wire separation ({wire_sep}) or cross section ({cross_section}). Note that this package expects measurements of resistivity, not resistance."
             )
         if not ("para" in geom.lower() or "perp" in geom.lower()):
             warn(f"Unexpected geometry found in header: {geom}")
@@ -182,48 +191,105 @@ class AMROCleaner:
         # If greater than 25% of the pairs are missing one member, logs the result and skips
 
         # For each angle, verify there are two resistivities and the +/- mag field values match
-        grouped_df = raw_df.groupby([HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG])
+        grouped_df = raw_df.groupby(
+            [HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG], as_index=False
+        )
 
-        avg_count = np.mean(grouped_df.count()[HEADER_ANGLE_DEG].values)
-        mean_angle = np.mean(grouped_df.mean()[HEADER_ANGLE_DEG])
-        if avg_count != 2:
-            print(f"Measurement angles need cleaning.")
-            print(f"Average angle count: {avg_count}")
-            print(f"Average mean angle: {mean_angle}")
-            raw_df = self._handle_missing_measurements(raw_df, avg_count)
-        # elif np.abs(mean_angle) > 0.5:
+        # There should be only 2 measurements per angle, per T, per H
+        counted_df = grouped_df.count()
+        avg_count = np.mean(counted_df[HEADER_RES_OHM].values)
+        if avg_count < 2:
+            raw_df = self._handle_missing_measurements(raw_df, counted_df)
+        elif avg_count > 2:
+            raw_df = self._handle_extra_measurements(raw_df, counted_df)
 
-        # Raises an Exception if there are multiple resistivities for any given angle
-        # which would occur if two oscillations have the same H and T pairing
+        averaged_df = grouped_df.mean()
 
-        return
+        self._verify_averaged_df(averaged_df, raw_df)
+
+        return averaged_df
 
     def _handle_missing_measurements(
-        self, df: pd.DataFrame, avg_count: float
+        self, df: pd.DataFrame, counted_df: pd.DataFrame
     ) -> pd.DataFrame:
-        if avg_count > 2:
-            # Extra measurements
-            return
-        elif avg_count < 2:
-            # Missing measurement
-            return
-        return
+        if self.verbose:
+            print("Handling missing measurements...")
+
+        missing_angles = counted_df[counted_df[HEADER_RES_OHM] < 2][
+            HEADER_ANGLE_DEG
+        ].values
+
+        print(f"Angles with missing measurements: {missing_angles}")
+
+        # Remove those rows
+        df = df.query(f"`{HEADER_ANGLE_DEG}` not in {missing_angles}")
+        return df
+
+    def _handle_extra_measurements(
+        self, df: pd.DataFrame, counted_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        if self.verbose:
+            print("Handling extra measurements...")
+
+        # ID angles with extra measurements
+        extra_angles = counted_df[counted_df[HEADER_RES_OHM] > 2][
+            HEADER_ANGLE_DEG
+        ].values
+
+        print(f"Angles with extra measurements: {extra_angles}")
+        # extra_angles_df = df.query(f"`{HEADER_ANGLE_DEG}` in {extra_angles}")
+
+        # Could implement more adaptive code, but for now the user should be inputting
+        # better data
+        df = df.drop_duplicates(
+            subset=[HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG], keep="first"
+        )
+        return df
 
     def _load_file(self, fp: Path) -> pd.DataFrame:
         data = pd.read_table(fp, skiprows=CLEANER_HEADER_LENGTH, delimiter=",")
         return data
 
-    def _create_columns_for_calcs(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _get_columns_for_calcs(self, df: pd.DataFrame) -> pd.DataFrame:
         """Creates columns to perform anti-symmetrization"""
+
+        df = df.rename(columns=CLEANER_COL_RENAME_DICT)
+        df = df.drop(columns=CLEANER_DROP_COLS)
+
         df[HEADER_TEMP] = df[HEADER_TEMP_RAW].round(1)
 
         df[HEADER_MAGNET_RAW_OE_ABS] = df[HEADER_MAGNET_RAW_OE].abs()
         df[HEADER_MAGNET] = c.convert_oe_to_teslas(df[HEADER_MAGNET_RAW_OE_ABS]).round(
             CLEANER_T_MIN_RESOLUTION
         )
-        df["Field Polarity"] = np.sign(df[HEADER_MAGNET_RAW_OE])
+        # df["Field Polarity"] = np.sign(df[HEADER_MAGNET_RAW_OE])
 
         return df
+
+    def _verify_averaged_df(
+        self, averaged_df: pd.DataFrame, raw_df: pd.DataFrame
+    ) -> None:
+        # averaged_df has half the number of rows of raw_df
+        assert averaged_df.shape[0] == raw_df.shape[0] / 2.0
+
+        # average H matches up to 0.1 Oe
+        assert np.round(averaged_df[HEADER_MAGNET_RAW_OE].mean(), 1) == (
+            np.round(raw_df[HEADER_MAGNET_RAW_OE].mean(), 1)
+        )
+
+        assert averaged_df[HEADER_TEMP].mean() == raw_df[HEADER_TEMP].mean()
+        assert averaged_df[HEADER_MAGNET].mean() == raw_df[HEADER_MAGNET].mean()
+
+        # Min and max angles match
+        assert averaged_df[HEADER_ANGLE_DEG].max() == raw_df[HEADER_ANGLE_DEG].max()
+        assert averaged_df[HEADER_ANGLE_DEG].min() == raw_df[HEADER_ANGLE_DEG].min()
+
+        # Mean resistivities match up to nohm-cm
+        assert np.round(averaged_df[HEADER_RES_OHM].mean(), 9) == np.round(
+            raw_df[HEADER_RES_OHM].mean(), 9
+        )
+
+        return
 
     def _get_experiment_label_from_fn(self, filename) -> None | str:
         items = filename.split("_")
