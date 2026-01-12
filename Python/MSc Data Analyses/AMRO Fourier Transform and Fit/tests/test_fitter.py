@@ -36,7 +36,7 @@ def sample_project_data_with_fourier():
     exp = Experiment(
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
-        length=1.0,
+        wire_sep=1.0,
         width=0.5,
         height=0.1,
     )
@@ -118,18 +118,14 @@ class TestAMROFitterInit:
 
 
 class TestInitializeParametersFromFourier:
-    def test_returns_params_and_freq_list(
-        self, fitter_instance, sample_fourier_result
-    ):
+    def test_returns_params_and_freq_list(self, fitter_instance, sample_fourier_result):
         params, f_list = fitter_instance._initialize_parameters_from_fourier(
             sample_fourier_result, mean_res=1e-5
         )
         assert isinstance(params, lm.Parameters)
         assert isinstance(f_list, list)
 
-    def test_includes_mean_parameter(
-        self, fitter_instance, sample_fourier_result
-    ):
+    def test_includes_mean_parameter(self, fitter_instance, sample_fourier_result):
         params, _ = fitter_instance._initialize_parameters_from_fourier(
             sample_fourier_result, mean_res=1e-5
         )
@@ -334,7 +330,7 @@ class TestFitActExperiment:
         exp = Experiment(
             experiment_label=HEADER_EXPERIMENT_PREFIX + "12",
             geometry="para",
-            length=1.0,
+            wire_sep=1.0,
             width=0.5,
             height=0.1,
         )
@@ -422,7 +418,7 @@ class TestFitterIntegration:
         exp = Experiment(
             experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
             geometry="perp",
-            length=1.0,
+            wire_sep=1.0,
             width=0.5,
             height=0.1,
         )

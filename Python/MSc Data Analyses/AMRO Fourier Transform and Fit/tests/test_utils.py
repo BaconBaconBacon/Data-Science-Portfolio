@@ -11,7 +11,7 @@ from amro.config.settings import (
     HEADER_PARAM_PHASE_PREFIX,
     HEADER_PARAM_AMP_PREFIX,
     HEADER_PARAM_FREQ_PREFIX,
-    HEADER_ACT,
+    HEADER_EXP_LABEL,
     HEADER_TEMP,
     HEADER_MAGNET,
 )
@@ -119,7 +119,7 @@ def sample_df():
     """Create a sample DataFrame for query tests."""
     return pd.DataFrame(
         {
-            HEADER_ACT: [
+            HEADER_EXP_LABEL: [
                 HEADER_EXPERIMENT_PREFIX + "11",
                 HEADER_EXPERIMENT_PREFIX + "11",
                 HEADER_EXPERIMENT_PREFIX + "12",
@@ -136,7 +136,7 @@ class TestQueryDataframe:
     def test_query_by_act(self, sample_df):
         result = query_dataframe(sample_df, act=HEADER_EXPERIMENT_PREFIX + "11")
         assert len(result) == 2
-        assert all(result[HEADER_ACT] == HEADER_EXPERIMENT_PREFIX + "11")
+        assert all(result[HEADER_EXP_LABEL] == HEADER_EXPERIMENT_PREFIX + "11")
 
     def test_query_by_temperature(self, sample_df):
         result = query_dataframe(sample_df, t=2.0)
@@ -149,9 +149,7 @@ class TestQueryDataframe:
         assert all(result[HEADER_MAGNET] == 3.0)
 
     def test_query_combined(self, sample_df):
-        result = query_dataframe(
-            sample_df, act=HEADER_EXPERIMENT_PREFIX + "11", t=2.0
-        )
+        result = query_dataframe(sample_df, act=HEADER_EXPERIMENT_PREFIX + "11", t=2.0)
         assert len(result) == 1
         assert result.iloc[0]["value"] == 1
 
@@ -167,7 +165,7 @@ class TestQueryDataframe:
 class TestBuildQueryString:
     def test_act_only(self):
         query = build_query_string(act=HEADER_EXPERIMENT_PREFIX + "11")
-        assert HEADER_ACT in query
+        assert HEADER_EXP_LABEL in query
         assert HEADER_EXPERIMENT_PREFIX + "11" in query
 
     def test_temperature_only(self):
@@ -181,11 +179,9 @@ class TestBuildQueryString:
         assert "3.0" in query
 
     def test_combined_query(self):
-        query = build_query_string(
-            act=HEADER_EXPERIMENT_PREFIX + "11", t=2.0, h=3.0
-        )
+        query = build_query_string(act=HEADER_EXPERIMENT_PREFIX + "11", t=2.0, h=3.0)
         assert "&" in query
-        assert HEADER_ACT in query
+        assert HEADER_EXP_LABEL in query
         assert HEADER_TEMP in query
         assert HEADER_MAGNET in query
 
@@ -221,7 +217,9 @@ class TestConvertParamsToNdarrays:
     def test_returns_tuple_with_errors(self, sample_params):
         result = convert_params_to_ndarrays(sample_params, include_errs=True)
         assert isinstance(result, tuple)
-        assert len(result) == 7  # amps, amps_err, freqs, phases, phases_err, mean, mean_err
+        assert (
+            len(result) == 7
+        )  # amps, amps_err, freqs, phases, phases_err, mean, mean_err
 
     def test_extracts_frequencies(self, sample_params):
         amps, freqs, phases, mean = convert_params_to_ndarrays(
@@ -287,22 +285,16 @@ class TestCalculateModelResistivities:
 
 class TestFormatOscillationKey:
     def test_basic_format(self):
-        result = format_oscillation_key(
-            HEADER_EXPERIMENT_PREFIX + "11", 2.0, 3.0
-        )
+        result = format_oscillation_key(HEADER_EXPERIMENT_PREFIX + "11", 2.0, 3.0)
         assert HEADER_EXPERIMENT_PREFIX + "11" in result
         assert "2" in result or "2.0" in result
         assert "3" in result or "3.0" in result
 
     def test_contains_temperature_marker(self):
-        result = format_oscillation_key(
-            HEADER_EXPERIMENT_PREFIX + "11", 2.0, 3.0
-        )
+        result = format_oscillation_key(HEADER_EXPERIMENT_PREFIX + "11", 2.0, 3.0)
         assert "T" in result or "K" in result
 
     def test_contains_field_marker(self):
-        result = format_oscillation_key(
-            HEADER_EXPERIMENT_PREFIX + "11", 2.0, 3.0
-        )
+        result = format_oscillation_key(HEADER_EXPERIMENT_PREFIX + "11", 2.0, 3.0)
         # Should contain H or T (Tesla) marker for field
         assert "H" in result or "T" in result

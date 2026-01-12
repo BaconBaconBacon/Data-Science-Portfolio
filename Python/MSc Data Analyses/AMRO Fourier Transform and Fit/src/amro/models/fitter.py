@@ -24,7 +24,7 @@ from ..config.settings import (
     HEADER_RES_OHM,
     HEADER_MAGNET,
     HEADER_TEMP,
-    HEADER_ACT,
+    HEADER_EXP_LABEL,
     HEADER_FREQ_LIST,
     HEADER_FIT_CHISQ,
     HEADER_FREQ,

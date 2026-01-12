@@ -11,7 +11,7 @@ from amro.config.settings import (
     HEADER_PARAM_PHASE_PREFIX,
     HEADER_PARAM_AMP_PREFIX,
     HEADER_PARAM_FREQ_PREFIX,
-    HEADER_ACT,
+    HEADER_EXP_LABEL,
     HEADER_TEMP,
     HEADER_MAGNET,
     HEADER_GEO,
@@ -162,7 +162,7 @@ def sample_experiment():
     return Experiment(
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
-        length=1.0,
+        wire_sep=1.0,
         width=0.5,
         height=0.1,
     )
@@ -180,7 +180,7 @@ def populated_experiment():
     exp = Experiment(
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
-        length=1.0,
+        wire_sep=1.0,
         width=0.5,
         height=0.1,
     )
@@ -217,7 +217,7 @@ def sample_amro_dataframe():
 
     return pd.DataFrame(
         {
-            HEADER_ACT: [HEADER_EXPERIMENT_PREFIX + "11"] * n_points,
+            HEADER_EXP_LABEL: [HEADER_EXPERIMENT_PREFIX + "11"] * n_points,
             HEADER_TEMP: [2.0] * n_points,
             HEADER_MAGNET: [3.0] * n_points,
             HEADER_GEO: ["perp"] * n_points,

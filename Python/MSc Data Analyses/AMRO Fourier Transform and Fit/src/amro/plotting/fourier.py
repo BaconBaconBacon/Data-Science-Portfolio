@@ -7,7 +7,7 @@ from ..config.settings import (
     HEADER_MAG_RATIO,
     HEADER_TEMP,
     HEADER_MAGNET,
-    HEADER_ACT,
+    HEADER_EXP_LABEL,
 )
 from ..utils import utils as u
 import seaborn as sns
@@ -28,7 +28,7 @@ def _plot_n_strongest(
     df = fourier.get_n_strongest_results(n)
     plot_df = u.query_dataframe(df=df, t=t, h=h)
 
-    hue_choice = HEADER_ACT
+    hue_choice = HEADER_EXP_LABEL
 
     plot_df = plot_df.sort_values(hue_choice)
     plot_df[hue_choice] = plot_df[hue_choice].astype(str)

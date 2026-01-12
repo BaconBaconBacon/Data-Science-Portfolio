@@ -27,7 +27,7 @@ def sample_project_data_with_oscillations():
     exp = Experiment(
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
-        length=1.0,
+        wire_sep=1.0,
         width=0.5,
         height=0.1,
     )
@@ -109,9 +109,7 @@ class TestPerformFourierTransform:
         assert xf is not None
         assert yf is not None
 
-    def test_xf_contains_frequencies(
-        self, fourier_instance, sample_experimental_data
-    ):
+    def test_xf_contains_frequencies(self, fourier_instance, sample_experimental_data):
         xf, yf = fourier_instance._perform_fourier_transform(sample_experimental_data)
         # Should contain integer frequencies
         assert len(xf) > 0
@@ -222,7 +220,7 @@ class TestKnownSignalRecovery:
         exp = Experiment(
             experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
             geometry="perp",
-            length=1.0,
+            wire_sep=1.0,
             width=0.5,
             height=0.1,
         )
@@ -252,7 +250,7 @@ class TestKnownSignalRecovery:
         exp = Experiment(
             experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
             geometry="perp",
-            length=1.0,
+            wire_sep=1.0,
             width=0.5,
             height=0.1,
         )

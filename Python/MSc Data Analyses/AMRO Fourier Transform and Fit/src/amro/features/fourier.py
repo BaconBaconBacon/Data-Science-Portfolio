@@ -2,13 +2,14 @@ import itertools
 import numpy as np
 import pandas as pd
 
+from ..config import FINAL_DATA_PATH
 from ..config.settings import (
     PROCESSED_DATA_PATH,
     HEADER_ANGLE_DEG,
     HEADER_ANGLE_RAD,
     HEADER_RES_OHM,
     H_PALETTE,
-    HEADER_ACT,
+    HEADER_EXP_LABEL,
     HEADER_TEMP,
     HEADER_MAGNET,
     HEADER_MAG_RATIO,
@@ -32,12 +33,18 @@ from pathlib import Path
 
 
 class Fourier:
+    """
+
+    todo: Move saving/loading functionality involving X_DATA_PATH to data_structures and loader.py
+
+    """
+
     def __init__(self, amro_data: ProjectData, save_name: str, verbose: bool = False):
         self.project_data = amro_data
 
         self.all_results_df = pd.DataFrame()
         self.save_name = save_name
-        self.save_dir = PROCESSED_DATA_PATH
+        self.save_dir = FINAL_DATA_PATH
         self.save_fp = self.save_dir / save_name
         self.verbose = verbose
         if self.save_fp.is_file():

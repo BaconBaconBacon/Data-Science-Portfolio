@@ -32,8 +32,6 @@ LOADER_DESIRED_COLS = [
     "geo",
 ]
 
-# This is how we let the loader re-name the columns of the cleaned AMRO data
-LOADER_COL_RENAME_DICT = {"Res. ch2 (ohm-cm)": "Res. (ohm-cm)"}
 
 HEADER_ANGLE_DEG = "Sample Position (deg)"
 HEADER_ANGLE_RAD = "Sample Position (rads)"
@@ -46,15 +44,18 @@ HEADER_EXPERIMENT_PREFIX = "ACTRot"
 # AMRO DataFrame header labels
 HEADER_TEMP = "T"
 HEADER_MAGNET = "H"
-HEADER_ACT = "ACT_str"
+HEADER_EXP_LABEL = "ACT_str"
 HEADER_GEO = "geo"
-HEADER_LENGTH = "L (cm)"
+HEADER_WIRE_SEP = "L (cm)"
+
+# TODO: Sort out the cross section vs width/height stuff.
 HEADER_WIDTH = "W (cm)"
 HEADER_HEIGHT = "H (cm)"
+HEADER_CROSS_SECTION = "cross (cm^2)"
 
-# TODO: Fix these with the future cleaning code for the AS code for raw AMRO
 HEADER_TEMP_RAW = "Temperature (K)"
-HEADER_MAGNET_RAW_OE = "Abs. Magnetic Field (Oe)"
+HEADER_MAGNET_RAW_OE = "Magnetic Field (Oe)"
+HEADER_MAGNET_RAW_OE_ABS = "Abs. Magnetic Field (Oe)"
 
 # Fourier DataFrame header labels
 HEADER_MAG = "mag (ohm-cm)"
@@ -97,3 +98,19 @@ HEADER_RES_DEL_0DEG_NORM = f"Delta Res./R0 {HEADER_0DEG}".replace("(ohm-cm)", ""
 # value = (res-res_{constant})/res_{constant}*100
 HEADER_RES_DEL_MEAN_NORM_PCT = HEADER_RES_DEF_MEAN_NORM + " (%)"
 HEADER_RES_DEL_0DEG_NORM_PCT = HEADER_RES_DEL_0DEG_NORM + " (%)"
+
+
+# For use in cleaner.py
+CLEANER_HEADER_LENGTH = 25
+# (row, col), zero indexed
+CLEANER_WIRE_SEP_COORD = (13, 1)
+CLEANER_CROSS_SEC_COORD = (14, 1)
+CLEANER_LABEL_COORD = (11, 1)
+CLEANER_GEOM_COORD = (12, 1)
+
+CLEANER_OPTION_COORD = (5, 1)
+CLEANER_OPTION_LABEL = "ACTRANSPORT"
+
+CLEANER_T_MIN_RESOLUTION = 1  # round digit places
+
+CLEANER_COL_RENAME_DICT = {"Res. ch2 (ohm-cm)": "Res. (ohm-cm)"}

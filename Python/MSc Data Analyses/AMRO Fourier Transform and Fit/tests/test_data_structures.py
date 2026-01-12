@@ -131,7 +131,7 @@ def sample_experiment():
     return Experiment(
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
-        length=1.0,
+        wire_sep=1.0,
         width=0.5,
         height=0.1,
     )
@@ -170,12 +170,14 @@ class TestOscillationKey:
 
     def test_compare_act_true(self, sample_oscillation_key):
         assert (
-            sample_oscillation_key.compare_act(HEADER_EXPERIMENT_PREFIX + "11") is True
+            sample_oscillation_key.compare_exp_label(HEADER_EXPERIMENT_PREFIX + "11")
+            is True
         )
 
     def test_compare_act_false(self, sample_oscillation_key):
         assert (
-            sample_oscillation_key.compare_act(HEADER_EXPERIMENT_PREFIX + "12") is False
+            sample_oscillation_key.compare_exp_label(HEADER_EXPERIMENT_PREFIX + "12")
+            is False
         )
 
     def test_compare_temperature_true(self, sample_oscillation_key):

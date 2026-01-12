@@ -6,7 +6,7 @@ import pickle
 from pathlib import Path
 from ..config import FINAL_DATA_PATH
 from ..config.settings import (
-    HEADER_ACT,
+    HEADER_EXP_LABEL,
     HEADER_TEMP,
     HEADER_MAGNET,
     HEADER_GEO,
@@ -62,7 +62,7 @@ class OscillationKey:
     def __repr__(self):
         return str(self)
 
-    def compare_act(self, other_act: str) -> bool:
+    def compare_exp_label(self, other_act: str) -> bool:
         return self.experiment_label == other_act
 
     def compare_temperature(self, other_temperature: float) -> bool:
@@ -70,6 +70,12 @@ class OscillationKey:
 
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
         return self.magnetic_field == other_magnetic_field
+
+    def compare_keys(self, other_key):
+        same_act = self.compare_exp_label(other_key.experiment_label)
+        same_temp = self.compare_temperature(other_key.temperature)
+        same_field = self.compare_magnetic_field(other_key.magnetic_field)
+        return same_act and same_temp and same_field and same_field
 
     def get_experiment_label(self) -> str:
         return self.experiment_label
@@ -135,7 +141,7 @@ class FitResult:
         return
 
     def compare_act(self, other_act: str) -> bool:
-        return self.experiment_key.compare_act(other_act)
+        return self.experiment_key.compare_exp_label(other_act)
 
     def _build_params_dict(self):
         self.fitted_params_dict[HEADER_MEAN] = (self.mean, self.mean_err)
@@ -250,7 +256,7 @@ class ExperimentalData:
         self._calc_normed_res()
 
     def compare_act(self, other_act: str) -> bool:
-        return self.experiment_key.compare_act(other_act)
+        return self.experiment_key.compare_exp_label(other_act)
 
     def compare_temperature(self, other_temperature: float) -> bool:
         return self.experiment_key.compare_temperature(other_temperature)
@@ -363,7 +369,7 @@ class FourierResult:
         return zip(n_syms, n_ratios)
 
     def compare_act(self, other_act: str) -> bool:
-        return self.key.compare_act(other_act)
+        return self.key.compare_exp_label(other_act)
 
     def compare_temperature(self, other_temperature: float) -> bool:
         return self.key.compare_temperature(other_temperature)
@@ -402,7 +408,7 @@ class AMROscillation:
         return f"Experiment_Object_{self.key}"
 
     def compare_act(self, other_act: str) -> bool:
-        return self.key.compare_act(other_act)
+        return self.key.compare_exp_label(other_act)
 
     def compare_temperature(self, other_temperature: float) -> bool:
         return self.key.compare_temperature(other_temperature)
@@ -465,11 +471,13 @@ class Experiment:
     experiment_label: str  # i.e. ACTRot11
     geometry: str  # i.e. para/perp
 
-    length: float
+    wire_sep: float
     width: float
     height: float
+    cross_section: float = field(init=False)
     oscillations_dict: dict = field(default_factory=dict)
     oscillations_count: float = 0
+    material: str = None
 
     def add_oscillation(self, oscillation: AMROscillation) -> None:
         new_key = oscillation.key
@@ -536,8 +544,20 @@ class ProjectData:
         self.pickle_fp = FINAL_DATA_PATH / (self.project_name + ".pkl")
 
     def add_experiment(self, exp: Experiment) -> None:
-        self.experiments_dict[exp.experiment_label] = exp
-        self.experiments_count += 1
+
+        if exp.experiment_label not in self.experiments_dict.keys():
+            self.experiments_dict[exp.experiment_label] = exp
+            self.experiments_count += 1
+        else:
+            print("Cannot add experiment twice.")
+            print(exp.experiment_label)
+
+    def replace_experiment(self, exp: Experiment) -> None:
+        if exp.experiment_label in self.experiments_dict.keys():
+            self.experiments_dict[exp.experiment_label] = exp
+        else:
+            print("Experiment not found. Cannot replace non-existent experiment.")
+            print(exp.experiment_label)
 
     def get_experiment(self, act_label: str) -> Experiment:
         return self.experiments_dict[act_label]
@@ -564,10 +584,14 @@ class ProjectData:
         osc_list = u.flatten_list(osc_list)
         return osc_list
 
+    def check_for_saved_data(self):
+        """Checks (and loads, if it exists) for existing data that may exist under the project_name"""
+        return
+
     def read_amro_data_from_dataframe(self, df: pd.DataFrame) -> None:
         """Temporary stop-gap. Want to remove pandas entirely, eventually."""
 
-        for act in df[HEADER_ACT].unique():
+        for act in df[HEADER_EXP_LABEL].unique():
             sub_df = u.query_dataframe(df, act=act)
             geom = sub_df[HEADER_GEO].unique()[0]
 
@@ -604,7 +628,7 @@ class ProjectData:
         lmfit_results_dict: lmfit_results_objs
         """
 
-        for act in df[HEADER_ACT].unique():
+        for act in df[HEADER_EXP_LABEL].unique():
             sub_df = u.query_dataframe(df, act=act)
             try:
                 exper = self.get_experiment(act)
@@ -632,7 +656,7 @@ class ProjectData:
 
     def read_fourier_results_from_dataframe(self, df: pd.DataFrame) -> None:
         """Temporary stop-gap. Want to remove pandas entirely, eventually."""
-        for act in df[HEADER_ACT].unique():
+        for act in df[HEADER_EXP_LABEL].unique():
             sub_df = u.query_dataframe(df, act=act)
 
             try:
@@ -685,7 +709,7 @@ class ProjectData:
                     print(f"No fit result found for {osc_key}")
                     continue
                 row = {
-                    HEADER_ACT: osc_key.experiment_label,
+                    HEADER_EXP_LABEL: osc_key.experiment_label,
                     HEADER_TEMP: osc_key.temperature,
                     HEADER_MAGNET: osc_key.magnetic_field,
                     HEADER_GEO: experiment.geometry,
@@ -739,7 +763,7 @@ class ProjectData:
                 for freq in fourier_dict:
                     ft = fourier_dict[freq]
                     row = {
-                        HEADER_ACT: osc_key.experiment_label,
+                        HEADER_EXP_LABEL: osc_key.experiment_label,
                         HEADER_TEMP: osc_key.temperature,
                         HEADER_MAGNET: osc_key.magnetic_field,
                         HEADER_GEO: experiment.geometry,

@@ -2,18 +2,20 @@
 # import os
 import numpy as np
 import pandas as pd
+
+from ..config import PROCESSED_DATA_PATH
 from ..config.settings import (
     RAW_DATA_PATH,
     HEADER_ANGLE_DEG,
     HEADER_ANGLE_RAD,
     HEADER_RES_OHM,
     LOADER_DESIRED_COLS,
-    LOADER_COL_RENAME_DICT,
+    CLEANER_COL_RENAME_DICT,
     HEADER_TEMP,
     HEADER_MAGNET,
-    HEADER_ACT,
+    HEADER_EXP_LABEL,
     HEADER_GEO,
-    HEADER_LENGTH,
+    HEADER_WIRE_SEP,
     HEADER_WIDTH,
     HEADER_HEIGHT,
     HEADER_0DEG,
@@ -27,7 +29,7 @@ from ..config.settings import (
     KEY_TEMP_LABELS,
     KEY_MAGNET_LABELS,
     HEADER_TEMP_RAW,
-    HEADER_MAGNET_RAW_OE,
+    HEADER_MAGNET_RAW_OE_ABS,
 )
 from ..plotting.loader import _quick_plot_amro
 from ..utils import utils as u
@@ -62,14 +64,20 @@ class AMROLoader:
 
     TODO: Add the cleaning and symmetrization functionality into the ETL pipeline.
     TODO: Add verbose functionality
+    todo: Move saving/loading functionality involving X_DATA_PATH to data_structures and loader.py
     """
 
     def __init__(self, project_name: str, verbose: bool = False):
         self.project_name = project_name
         self.project_data = ProjectData(project_name=project_name)
-        self.save_folder = RAW_DATA_PATH
+
+        # TODO: Move any code that uses these paths to ProjectData
+        self.load_folder = RAW_DATA_PATH
+        self.save_folder = PROCESSED_DATA_PATH
+
         self.pickle_fp = self.project_data.pickle_fp
         self.verbose = verbose
+        self.project_data.check_for_saved_data()
 
     def load_amro(self) -> ProjectData:
         """ """
@@ -97,7 +105,6 @@ class AMROLoader:
         filenames = list(self.save_folder.glob("*.csv"))
         # TODO: add some flexibility to naming schemes. Maybe just check whether
         # filename has been loaded already, and whether the H and T data are new
-
         for filename in filenames:
             # Ensure we are selecting only AMRO data
             if self._is_valid_amro_filename(filename):
@@ -131,7 +138,7 @@ class AMROLoader:
                     exp = Experiment(
                         experiment_label=act_label,
                         geometry=geometry,
-                        length=length,
+                        wire_sep=length,
                         height=height,
                         width=width,
                     )
@@ -154,7 +161,7 @@ class AMROLoader:
 
         file_path = self.save_folder / filename
         experiment_df = pd.read_csv(file_path, sep=",")
-        experiment_df = experiment_df.rename(columns=LOADER_COL_RENAME_DICT)
+        experiment_df = experiment_df.rename(columns=CLEANER_COL_RENAME_DICT)
         (act_label, T_label, H_label, geometry, length, height, width) = (
             self._parse_experiment_metadata(experiment_df, filename)
         )
@@ -178,12 +185,12 @@ class AMROLoader:
             if "ACTRot" in item:
                 act_label = item
 
-        length = temp_df[HEADER_LENGTH].unique()[0]
+        length = temp_df[HEADER_WIRE_SEP].unique()[0]
         height = temp_df[HEADER_HEIGHT].unique()[0]
         width = temp_df[HEADER_WIDTH].unique()[0]
 
         # TODO: These will need to be adjusted when the AMRO cleaning code is added
-        H_vals = c.convert_oe_to_teslas(temp_df[HEADER_MAGNET_RAW_OE]).round(1)
+        H_vals = c.convert_oe_to_teslas(temp_df[HEADER_MAGNET_RAW_OE_ABS]).round(1)
         H_label = H_vals.unique()[0]
         geometry = GEO_DICT[act_label]
         T_vals = temp_df[HEADER_TEMP_RAW].round(1)

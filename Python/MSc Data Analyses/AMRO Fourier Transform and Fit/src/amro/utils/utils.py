@@ -3,7 +3,7 @@ import numpy as np
 import lmfit as lm
 
 from amro.config.settings import (
-    HEADER_ACT,
+    HEADER_EXP_LABEL,
     HEADER_TEMP,
     HEADER_MAGNET,
     HEADER_PARAM_FREQ_PREFIX,
@@ -46,9 +46,9 @@ def build_query_string(
 ):
     query = []
     if type(act) is str:
-        query.append(HEADER_ACT + f' == "{act}"')
+        query.append(HEADER_EXP_LABEL + f' == "{act}"')
     elif type(act) is list:
-        query.append(HEADER_ACT + f"== {act}")
+        query.append(HEADER_EXP_LABEL + f"== {act}")
     if h is not None:
         query.append(HEADER_MAGNET + f"== {h}")
     if t is not None:

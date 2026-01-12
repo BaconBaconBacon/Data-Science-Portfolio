@@ -8,17 +8,17 @@ from unittest.mock import patch, MagicMock
 
 from amro.config.settings import (
     HEADER_EXPERIMENT_PREFIX,
-    HEADER_ACT,
+    HEADER_EXP_LABEL,
     HEADER_TEMP,
     HEADER_MAGNET,
     HEADER_GEO,
     HEADER_ANGLE_DEG,
     HEADER_RES_OHM,
-    HEADER_LENGTH,
+    HEADER_WIRE_SEP,
     HEADER_WIDTH,
     HEADER_HEIGHT,
     HEADER_TEMP_RAW,
-    HEADER_MAGNET_RAW_OE,
+    HEADER_MAGNET_RAW_OE_ABS,
 )
 from amro.data.loader import AMROLoader
 from amro.data.data_structures import ProjectData
@@ -40,17 +40,15 @@ def sample_csv_data():
     """Create sample data that mimics a raw AMRO CSV file."""
     n_points = 361
     angles = np.linspace(0, 360, n_points)
-    res = np.full(n_points, 1e-5) * (
-        1 + 0.1 * np.sin(4 * np.deg2rad(angles))
-    )
+    res = np.full(n_points, 1e-5) * (1 + 0.1 * np.sin(4 * np.deg2rad(angles)))
 
     return pd.DataFrame(
         {
             HEADER_ANGLE_DEG: angles,
             HEADER_RES_OHM: res,
             HEADER_TEMP_RAW: [2.0] * n_points,
-            HEADER_MAGNET_RAW_OE: [30000] * n_points,  # 3T
-            HEADER_LENGTH: [1.0] * n_points,
+            HEADER_MAGNET_RAW_OE_ABS: [30000] * n_points,  # 3T
+            HEADER_WIRE_SEP: [1.0] * n_points,
             HEADER_WIDTH: [0.5] * n_points,
             HEADER_HEIGHT: [0.1] * n_points,
         }
@@ -146,9 +144,7 @@ class TestMicroohmCalculation:
         )
         result = loader._calculate_uohm_cols(df)
         assert "Res (uohm)" in result.columns
-        np.testing.assert_array_almost_equal(
-            result["Res (uohm)"].values, [10, 20, 30]
-        )
+        np.testing.assert_array_almost_equal(result["Res (uohm)"].values, [10, 20, 30])
 
     def test_calculate_uohm_preserves_other_cols(self, loader):
         df = pd.DataFrame(
@@ -182,9 +178,7 @@ class TestGetAmroData:
 class TestLoadAmroIntegration:
     @patch.object(Path, "is_file")
     @patch.object(ProjectData, "load_project_from_pickle")
-    def test_load_from_pickle_when_exists(
-        self, mock_load, mock_is_file, loader
-    ):
+    def test_load_from_pickle_when_exists(self, mock_load, mock_is_file, loader):
         """Test that existing pickle file is loaded."""
         mock_is_file.return_value = True
 
@@ -194,9 +188,7 @@ class TestLoadAmroIntegration:
 
     @patch.object(Path, "is_file")
     @patch.object(AMROLoader, "_run_amro_etl")
-    def test_run_etl_when_no_pickle(
-        self, mock_etl, mock_is_file, loader
-    ):
+    def test_run_etl_when_no_pickle(self, mock_etl, mock_is_file, loader):
         """Test that ETL runs when no pickle exists."""
         mock_is_file.return_value = False
 
