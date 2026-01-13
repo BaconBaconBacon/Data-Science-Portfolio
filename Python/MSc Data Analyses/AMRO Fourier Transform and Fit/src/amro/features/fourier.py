@@ -2,8 +2,8 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from ..config import FINAL_DATA_PATH
-from ..config.settings import (
+from ..config import (
+    FINAL_DATA_PATH,
     PROCESSED_DATA_PATH,
     HEADER_ANGLE_DEG,
     HEADER_ANGLE_RAD,
@@ -20,7 +20,7 @@ from ..config.settings import (
     HEADER_GEO,
     HEADER_RES_DEL_MEAN_OHM,
 )
-from ..data.data_structures import (
+from ..data import (
     ProjectData,
     FourierResult,
     OscillationKey,

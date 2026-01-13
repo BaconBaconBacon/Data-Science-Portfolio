@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import lmfit as lm
 
-from amro.config.settings import (
+from ..config import (
     HEADER_EXP_LABEL,
     HEADER_TEMP,
     HEADER_MAGNET,

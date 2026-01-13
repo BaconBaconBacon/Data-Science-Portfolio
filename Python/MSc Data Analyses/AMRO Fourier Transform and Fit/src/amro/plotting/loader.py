@@ -5,7 +5,7 @@
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from ..config.settings import (
+from ..config import (
     H_PALETTE,
     HEADER_MAGNET,
     HEADER_TEMP,

@@ -1,27 +1,16 @@
-from pathlib import Path
-
-
-BASE_PATH = Path(__file__).parent.parent.parent.parent
-
-CONFIG_PATH = BASE_PATH / "config"
-TESTS_PATH = BASE_PATH / "tests"
-UTILS_PATH = BASE_PATH / "utils"
-DATA_PATH = BASE_PATH / "data"
-FIGURES_PATH = BASE_PATH / "figures"
-NOTEBOOKS_PATH = BASE_PATH / "notebooks"
-
-RAW_DATA_PATH = DATA_PATH / "raw"
-PROCESSED_DATA_PATH = DATA_PATH / "processed"
-FINAL_DATA_PATH = DATA_PATH / "final"
-
-RAW_FIGURES_PATH = FIGURES_PATH / "raw"
-PROCESSED_FIGURES_PATH = FIGURES_PATH / "processed"
-FINAL_FIGURES_PATH = FIGURES_PATH / "final"
-
 H_PALETTE = {0.5: "tab:red", 3: "tab:green", 7: "tab:orange", 9: "tab:blue"}
+
+HEADER_EXPERIMENT_PREFIX = "ACTRot"
+
+CLEANER_ANG_CHANGE_THRESH = 0.001  # deg
+CLEANER_TEMP_STABLE_THRESH = 0.05  # K
+CLEANER_MAG_FIELD_STABLE_THRESH = 0.01  # T
+CLEANER_OUTLIER_RES_STD = 5  # many standard deviations
+CLEANER_SAVE_FN_SUFFIX = "_antisymmetrized.csv"
 
 
 # The loader functionality reads only these from the cleaned AMRO data
+# TODO: Replace this in the code with the respective HEADER_X_ stuff
 LOADER_DESIRED_COLS = [
     "Temperature (K)",
     "Sample Position (deg)",
@@ -31,150 +20,3 @@ LOADER_DESIRED_COLS = [
     "H",
     "geo",
 ]
-
-
-HEADER_ANGLE_DEG = "Sample Position (deg)"
-HEADER_ANGLE_RAD = "Sample Position (rads)"
-HEADER_RES_OHM = "Res. (ohm-cm)"
-HEADER_RES_UOHM = "Res. (uohm-cm)"
-
-HEADER_EXPERIMENT_PREFIX = "ACTRot"
-
-
-# AMRO DataFrame header labels
-HEADER_TEMP = "T"
-HEADER_MAGNET = "H"
-HEADER_EXP_LABEL = "ACT_str"
-HEADER_GEO = "geo"
-HEADER_WIRE_SEP = "L (cm)"
-
-# TODO: Sort out the cross section vs width/height stuff.
-HEADER_WIDTH = "W (cm)"
-HEADER_HEIGHT = "H (cm)"
-HEADER_CROSS_SECTION = "cross (cm^2)"
-
-HEADER_TEMP_RAW = "Temperature (K)"
-HEADER_MAGNET_RAW_OE = "Magnetic Field (Oe)"
-HEADER_MAGNET_RAW_OE_ABS = "Abs. Magnetic Field (Oe)"
-
-# Fourier DataFrame header labels
-HEADER_MAG = "mag (ohm-cm)"
-HEADER_MAG_RATIO = "amp_ratio"
-HEADER_FREQ = "freqs (cycles/rot)"
-HEADER_FREQ_LIST = "f_list"
-HEADER_PHASE = "phase"
-HEADER_PHASE_RAW = "phase_raw"
-
-#  Fitter DF header Labels
-HEADER_FIT_CHISQ = "chi_squared"
-HEADER_FIT_RED_CHISQ = "red_chi_squared"
-HEADER_PARAM_AMP_PREFIX = "amp"
-HEADER_PARAM_FREQ_PREFIX = "freq"
-HEADER_PARAM_PHASE_PREFIX = "phase"
-HEADER_PARAM_MEAN_PREFIX = "mean"
-
-
-# Loader DF Header Labels
-HEADER_MEAN = "Mean (ohm-cm)"
-HEADER_0DEG = "0deg (ohm-cm)"
-
-# TODO: Once the data classes replace the META_DATA dict, these can be removed
-KEY_RES_CONSTANTS = "res_constants"
-KEY_TEMP_LABELS = "T_labels"
-KEY_MAGNET_LABELS = "H_labels"
-
-### Alternative resistivity units (used mostly in loader and plotting functions)
-# value = (res-res_{constant})
-HEADER_RES_DEL_MEAN_OHM = f"Delta Res. {HEADER_MEAN}"
-HEADER_RES_DEL_MEAN_UOHM = HEADER_RES_DEL_MEAN_OHM.replace("ohm", "uohm")
-
-HEADER_RES_DEL_0DEG_OHM = HEADER_RES_DEL_MEAN_OHM.replace(HEADER_MEAN, HEADER_0DEG)
-HEADER_RES_DEL_0DEG_UOHM = HEADER_RES_DEL_0DEG_OHM.replace("ohm", "uohm")
-
-# value = (res-res_{constant})/res_{constant} (unitless)
-HEADER_RES_DEF_MEAN_NORM = f"Delta Res./R0 {HEADER_MEAN}".replace("(ohm-cm)", "")
-HEADER_RES_DEL_0DEG_NORM = f"Delta Res./R0 {HEADER_0DEG}".replace("(ohm-cm)", "")
-
-# value = (res-res_{constant})/res_{constant}*100
-HEADER_RES_DEL_MEAN_NORM_PCT = HEADER_RES_DEF_MEAN_NORM + " (%)"
-HEADER_RES_DEL_0DEG_NORM_PCT = HEADER_RES_DEL_0DEG_NORM + " (%)"
-
-
-# For use in cleaner.py
-CLEANER_HEADER_LENGTH = 25
-# (row, col), zero indexed
-CLEANER_WIRE_SEP_COORD = (13, 1)
-CLEANER_CROSS_SEC_COORD = (14, 1)
-CLEANER_LABEL_COORD = (11, 1)
-CLEANER_GEOM_COORD = (12, 1)
-
-CLEANER_OPTION_COORD = (5, 1)
-CLEANER_OPTION_LABEL = "ACTRANSPORT"
-
-CLEANER_T_MIN_RESOLUTION = 1  # round digit places
-
-CLEANER_COL_RENAME_DICT = {"Res. ch2 (ohm-cm)": "Res. (ohm-cm)"}
-CLEANER_SAVE_FN_SUFFIX = "_antisymmetrized.csv"
-CLEANER_DROP_COLS = [
-    "Comment",
-    "Time Stamp (sec)",
-    "Status (code)",
-    "Volts ch1",
-    "V Std.Dev. ch1",
-    "Res. ch1 (ohm-cm)",
-    "Res. Std.Dev. ch1",
-    "Hall ch1 (cm^3/coul)",
-    "Hall ch2 (cm^3/coul)",
-    "Hall Std.Dev. ch1",
-    "Hall Std.Dev. ch2",
-    "Crit.Cur. ch1 (mA)",
-    "Crit.Cur. ch2 (mA)",
-    "C.Cur. Std.Dev. ch1",
-    "C.Cur. Std.Dev. ch2",
-    "2nd Harm. ch1 (dB)",
-    "3rd Harm. ch1 (dB)",
-    "Quad.Error ch1 (ohm-cm-rad)",
-    "Quad.Error ch2 (ohm-cm-rad)",
-    "Drive Signal ch1 (V)",
-    "Bridge 1 Resistance (ohms)",
-    "Bridge 1 Excitation (uA)",
-    "Bridge 2 Resistance (ohms)",
-    "Bridge 2 Excitation (uA)",
-    "Bridge 3 Resistance (ohms)",
-    "Bridge 3 Excitation (uA)",
-    "Bridge 4 Resistance (ohms)",
-    "Bridge 4 Excitation (uA)",
-    "Signal 1 Vin (V)",
-    "Signal 2 Vin (V)",
-    "Digital Inputs (code)",
-    "Drive 1 Iout (mA)",
-    "Drive 1 Ipower (watts)",
-    "Drive 2 Iout (mA)",
-    "Drive 2 Ipower (watts)",
-    "Pressure ()",
-    "Map 20 ()",
-    "Map 21 ()",
-    "Map 22 ()",
-    "Map 23 ()",
-    "Map 24 ()",
-    "Map 25 ()",
-    "Map 26 ()",
-    "Map 27 ()",
-    "Map 28 ()",
-    "Map 29 ()",
-    "Excitation (mA)",
-    "Frequency (Hz)",
-    "Volts ch2",
-    "V Std.Dev. ch2",
-    "Res. Std.Dev. ch2",
-    "ACT Status (code)",
-    "ACT Gain",
-    "2nd Harm. ch2 (dB)",
-    "3rd Harm. ch2 (dB)",
-    "Drive Signal ch2 (V)",
-]
-
-CLEANER_ANG_CHANGE_THRESH = 0.001  # deg
-CLEANER_TEMP_STABLE_THRESH = 0.05  # K
-CLEANER_MAG_FIELD_STABLE_THRESH = 0.01  # T
-CLEANER_OUTLIER_RES_STD = 5  # many standard deviations

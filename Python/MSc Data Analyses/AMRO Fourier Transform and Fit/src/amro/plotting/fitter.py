@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from ..config.settings import (
+from ..config import (
     PROCESSED_DATA_PATH,
     FINAL_DATA_PATH,
     H_PALETTE,
@@ -20,7 +20,7 @@ from ..config.settings import (
 )
 from matplotlib.patches import Patch
 
-from ..data.data_structures import ProjectData, Experiment
+from ..data import ProjectData, Experiment
 from ..utils import utils as u
 from pathlib import Path
 

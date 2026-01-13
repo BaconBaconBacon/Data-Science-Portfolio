@@ -2,7 +2,7 @@
     Plotting functionality for the utils_fourier.py file.
 """
 
-from ..config.settings import (
+from ..config import (
     HEADER_FREQ,
     HEADER_MAG_RATIO,
     HEADER_TEMP,

@@ -25,8 +25,8 @@ Experimental Assumptions:
 from io import TextIOWrapper
 
 from .data_structures import OscillationKey
-from ..config import PROCESSED_DATA_PATH
-from ..config.settings import (
+from ..config import (
+    PROCESSED_DATA_PATH,
     RAW_DATA_PATH,
     CLEANER_HEADER_LENGTH,
     CLEANER_COL_RENAME_DICT,

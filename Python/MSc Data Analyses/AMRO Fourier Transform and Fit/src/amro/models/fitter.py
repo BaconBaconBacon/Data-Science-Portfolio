@@ -15,7 +15,7 @@ from ..plotting.fitter import (
     _save_plot,
 )
 
-from ..config.settings import (
+from ..config import (
     PROCESSED_DATA_PATH,
     FINAL_DATA_PATH,
     PROCESSED_FIGURES_PATH,
@@ -36,7 +36,7 @@ from ..config.settings import (
     HEADER_PHASE,
     HEADER_MAG,
 )
-from ..data.data_structures import (
+from ..data import (
     FitResult,
     OscillationKey,
     FourierResult,

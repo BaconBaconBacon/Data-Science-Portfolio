@@ -4,8 +4,8 @@ import pandas as pd
 import lmfit as lm
 import pickle
 from pathlib import Path
-from ..config import FINAL_DATA_PATH
-from ..config.settings import (
+from ..config import (
+    FINAL_DATA_PATH,
     HEADER_EXP_LABEL,
     HEADER_TEMP,
     HEADER_MAGNET,

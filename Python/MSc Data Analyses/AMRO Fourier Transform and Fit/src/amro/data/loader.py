@@ -1,11 +1,9 @@
-# TODO: Switch it over to using pathlib instead of os
-# import os
 import numpy as np
 import pandas as pd
 
-from ..config import PROCESSED_DATA_PATH
-from ..config.settings import (
+from ..config import (
     RAW_DATA_PATH,
+    PROCESSED_DATA_PATH,
     HEADER_ANGLE_DEG,
     HEADER_ANGLE_RAD,
     HEADER_RES_OHM,
@@ -16,8 +14,8 @@ from ..config.settings import (
     HEADER_EXP_LABEL,
     HEADER_GEO,
     HEADER_WIRE_SEP,
-    HEADER_WIDTH,
-    HEADER_HEIGHT,
+    # HEADER_WIDTH,
+    # HEADER_HEIGHT,
     HEADER_0DEG,
     HEADER_MEAN,
     HEADER_RES_DEL_MEAN_OHM,
@@ -25,9 +23,9 @@ from ..config.settings import (
     HEADER_RES_DEL_0DEG_NORM_PCT,
     HEADER_RES_DEL_0DEG_OHM,
     HEADER_RES_DEL_MEAN_NORM_PCT,
-    KEY_RES_CONSTANTS,
-    KEY_TEMP_LABELS,
-    KEY_MAGNET_LABELS,
+    # KEY_RES_CONSTANTS,
+    # KEY_TEMP_LABELS,
+    # KEY_MAGNET_LABELS,
     HEADER_TEMP_RAW,
     HEADER_MAGNET_RAW_OE_ABS,
     CLEANER_SAVE_FN_SUFFIX,
