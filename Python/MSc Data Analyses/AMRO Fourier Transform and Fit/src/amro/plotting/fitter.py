@@ -33,13 +33,14 @@ context_font_scale = 1
 
 def _plot_fits_with_residuals(
     fitter,
-    act_choice: str,
+    exp_chocie: str,
     h_choices: list | None | np.ndarray = None,
     t_choices: list | None | np.ndarray = None,
     figsize: tuple | None = None,
     y_scale: float = 1,
     y_label: str = HEADER_RES_OHM,
     x_label: str = HEADER_ANGLE_DEG,
+    save_fig=False,
 ):
     """
     Plotter to display finished fits over AMRO data, with the option
@@ -53,10 +54,10 @@ def _plot_fits_with_residuals(
     # Set seaborn style
     project_data = fitter.project_data
 
-    if act_choice not in project_data.experiments_dict.keys():
-        print(f"{act_choice} is not a valid experiment choice.")
+    if exp_chocie not in project_data.experiments_dict.keys():
+        print(f"{exp_chocie} is not a valid experiment choice.")
         return None, None
-    experiment = project_data.get_experiment(act_choice)
+    experiment = project_data.get_experiment(exp_chocie)
 
     exp_keys = experiment.oscillations_dict.keys()
     t_vals, h_vals = _get_plot_labels(exp_keys)
@@ -100,25 +101,29 @@ def _plot_fits_with_residuals(
 
     # Generate legend
     _generate_legend(fig)
-
+    if save_fig:
+        filename = f"{exp_chocie}_figure_amro_fits_{fitter.filter_str}.pdf"
+        _save_plot(fig, filename)
     return fig, axes
 
 
 def _plot_fits_with_residuals_uohm(
     fitter,
-    act_choice: str,
+    exp_chocie: str,
     h_choices=None,
     t_choices=None,
     figsize=None,
+    save_fig=False,
 ):
     fig, axes = _plot_fits_with_residuals(
         fitter=fitter,
-        act_choice=act_choice,
+        exp_chocie=exp_chocie,
         h_choices=h_choices,
         t_choices=t_choices,
         figsize=figsize,
         y_scale=10**6,
         y_label=HEADER_RES_UOHM,
+        save_fig=save_fig,
     )
     return fig, axes
 
@@ -179,7 +184,7 @@ def _plot_fit_over_data(x_plot, y, y_fit, ax, color) -> None:
     return
 
 
-def _plot_bad_fits(fitter, act_choice: str) -> tuple:
+def _plot_bad_fits(fitter, exp_chocie: str) -> tuple:
 
     if len(fitter.failed_fits) == 0:
         print("No fits failed.")
@@ -188,19 +193,19 @@ def _plot_bad_fits(fitter, act_choice: str) -> tuple:
     t_labels = []
     h_labels = []
     for osc_key in fitter.failed_fits:
-        if osc_key.experiment_label == act_choice:
+        if osc_key.experiment_label == exp_chocie:
             t_labels.append(osc_key.temperature)
             h_labels.append(osc_key.magnetic_field)
 
     if len(t_labels) > 0 and len(h_labels) > 0:
         fig, axes = _plot_fits_with_residuals(
-            fitter=fitter, act_choice=act_choice, t_choices=t_labels, h_choices=h_labels
+            fitter=fitter, exp_chocie=exp_chocie, t_choices=t_labels, h_choices=h_labels
         )
 
         plt.show()
         return fig, axes
     else:
-        print(f"No fits failed for {act_choice}.")
+        print(f"No fits failed for {exp_chocie}.")
         return None, None
 
 

@@ -103,10 +103,10 @@ class AMROFitter:
             i += 1
             osc = experiment.get_oscillation_from_key(osc_key)
 
-            if hasattr(osc, "fit_result"):
+            if osc.fit_result is not None and not self.overwrite:
                 print(f"Already fitted {osc_key}. Skipping...")
                 continue
-            if not hasattr(osc, "fourier_result"):
+            elif osc.fourier_result is None:
                 print(f"No Fourier for {osc_key}. Skipping...")
                 continue
             print(f"Fitting {osc_key}.")
@@ -121,6 +121,10 @@ class AMROFitter:
             if not lmfit_result.success:
                 self.failed_fits.append(osc.key)
         print(f"Total fitted: {i}")
+        print("Saving to CSV.")
+        self.project_data.save_fit_results_to_csv()
+        print(f"Pickling project data.")
+        self.project_data.save_project_to_pickle()
         return
 
     def _fit_oscillation(
@@ -182,10 +186,6 @@ class AMROFitter:
         fourier_result: FourierResult,
         mean_res: float,
     ) -> tuple[lm.Parameters, list]:
-        """Note that the value of the 'mean' value should have been normalized
-        TODO: Need to implement a way to filter the guesses for a minimum ratio and max freq
-        TODO: Critical, need to implement code for force_four_and_two_sym
-        """
 
         # Generate a Parameters ordered dictionary, to which we add Parameter objects
         initial_p_guesses = lm.Parameters()
@@ -256,26 +256,28 @@ class AMROFitter:
         # The average absolute residual is not greater than 1% of the mean?
         return
 
-    def plot_fits_with_residuals(self, act_choice, **kwargs):
-        return _plot_fits_with_residuals(self, act_choice, **kwargs)
+    def plot_fits_with_residuals(self, exp_choice, save_fig=False, **kwargs):
+        return _plot_fits_with_residuals(self, exp_choice, save_fig=save_fig, **kwargs)
 
-    def plot_fits_with_residuals_uohm(self, act_choice, **kwargs):
-        return _plot_fits_with_residuals_uohm(self, act_choice, **kwargs)
+    def plot_fits_with_residuals_uohm(self, exp_choice, save_fig=False, **kwargs):
+        return _plot_fits_with_residuals_uohm(
+            self, exp_choice, save_fig=save_fig, **kwargs
+        )
 
-    def plot_bad_fits(self, act: str):
-        return _plot_bad_fits(self, act)
+    def plot_bad_fits(self, exp_choice: str):
+        return _plot_bad_fits(self, exp_choice)
 
-    def save_plot(self, fig, filename, dpi=300):
-        _save_plot(fig, filename, dpi=dpi)
-
-    def _save_to_disk(self):
-        """ """
-        with open(self.lmfit_results_fp, "wb") as f:
-            pickle.dump(self.lmfit_results_objs, f)
-
-        self.fit_params_df.to_csv(self.fit_params_fp, sep=",")
-        self.fit_amps_df.to_csv(self.fit_amps_fp, sep=",")
-        return
+    # def save_plot(self, fig, filename, dpi=300):
+    #     _save_plot(fig, filename, dpi=dpi)
+    #
+    # def _save_to_disk(self):
+    #     """ """
+    #     with open(self.lmfit_results_fp, "wb") as f:
+    #         pickle.dump(self.lmfit_results_objs, f)
+    #
+    #     self.fit_params_df.to_csv(self.fit_params_fp, sep=",")
+    #     self.fit_amps_df.to_csv(self.fit_amps_fp, sep=",")
+    #     return
 
     def _fast_convert_params_to_ndarrays(
         self, params_obj: lm.Parameters, f_list: list

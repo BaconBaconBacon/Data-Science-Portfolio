@@ -45,9 +45,6 @@ from .data_structures import (
     OscillationKey,
 )
 
-# TODO : Hacky solution since .csv files don't have the geometries. Will need to fix when you add the code to AS the AMRO
-GEO_DICT = {"ACTRot11": "perp", "ACTRot12": "para"}
-
 
 class AMROLoader:
     """
@@ -64,14 +61,12 @@ class AMROLoader:
     orthogonal to the magnetic field for the entire rotation of the sample.
 
     TODO: Add verbose functionality
-    todo: Move saving/loading functionality involving X_DATA_PATH to data_structures and loader.py
     """
 
     def __init__(self, project_name: str, verbose: bool = False):
         self.project_name = project_name
         self.project_data = ProjectData(project_name=project_name)
 
-        # TODO: Move any code that uses these paths to ProjectData
         self.load_folder = RAW_DATA_PATH
         self.save_folder = PROCESSED_DATA_PATH
 
@@ -83,7 +78,7 @@ class AMROLoader:
         """ """
         if self.pickle_fp.is_file():
             print("Loading : {}".format(self.project_name))
-            self.project_data.load_project_from_pickle()
+            self.project_data = ProjectData.load_project_from_pickle(self.pickle_fp)
         else:
             print("Running AMRO ETL.")
             self._run_amro_etl()

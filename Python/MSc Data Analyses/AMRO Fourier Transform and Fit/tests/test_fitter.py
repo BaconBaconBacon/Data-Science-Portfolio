@@ -297,7 +297,7 @@ class TestFitActExperiment:
             HEADER_EXPERIMENT_PREFIX + "11"
         )
         for osc in exp.oscillations_dict.values():
-            assert hasattr(osc, "fit_result")
+            assert osc.fit_result is not None
             assert isinstance(osc.fit_result, FitResult)
 
     def test_fit_updates_summary_statistics(

@@ -44,10 +44,11 @@ def build_query_string(
     h: float | int | list | None = None,
     t: float | int | list | None = None,
 ):
+    """To query DataFrame representations of the AMRO data."""
     query = []
-    if type(act) is str:
+    if isinstance(act, str):
         query.append(HEADER_EXP_LABEL + f' == "{act}"')
-    elif type(act) is list:
+    elif isinstance(act, list):
         query.append(HEADER_EXP_LABEL + f"== {act}")
     if h is not None:
         query.append(HEADER_MAGNET + f"== {h}")

@@ -4,6 +4,7 @@ import pytest
 import numpy as np
 import pandas as pd
 import lmfit as lm
+from pathlib import Path
 
 from amro.config import (
     HEADER_EXPERIMENT_PREFIX,
@@ -26,6 +27,34 @@ from amro.data import (
     Experiment,
     ProjectData,
 )
+
+
+# =============================================================================
+# Test Isolation Fixtures
+# =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def isolate_test_paths(tmp_path, monkeypatch):
+    """Redirect all data paths to temp directory to prevent test pollution.
+
+    This fixture runs automatically for all tests, ensuring that:
+    - Tests don't write to real data directories
+    - Tests don't interfere with each other
+    - Test artifacts are automatically cleaned up
+    """
+    # Patch the paths in all modules that import them
+    monkeypatch.setattr("amro.data.data_structures.FINAL_DATA_PATH", tmp_path)
+    monkeypatch.setattr("amro.features.fourier.FINAL_DATA_PATH", tmp_path)
+    monkeypatch.setattr("amro.features.fourier.PROCESSED_DATA_PATH", tmp_path)
+    monkeypatch.setattr("amro.models.fitter.FINAL_DATA_PATH", tmp_path)
+    monkeypatch.setattr("amro.models.fitter.PROCESSED_DATA_PATH", tmp_path)
+    monkeypatch.setattr("amro.models.fitter.PROCESSED_FIGURES_PATH", tmp_path)
+    monkeypatch.setattr("amro.plotting.fitter.FINAL_DATA_PATH", tmp_path)
+    monkeypatch.setattr("amro.plotting.fitter.PROCESSED_DATA_PATH", tmp_path)
+    monkeypatch.setattr("amro.plotting.fitter.PROCESSED_FIGURES_PATH", tmp_path)
+
+    return tmp_path
 
 
 # =============================================================================

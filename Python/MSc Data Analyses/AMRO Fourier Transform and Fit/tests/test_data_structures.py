@@ -404,11 +404,11 @@ class TestAMROscillation:
 
     def test_hasattr_fit_result_false_before_adding(self, sample_amro_oscillation):
         """Critical test: fit_result should not exist until explicitly added."""
-        assert hasattr(sample_amro_oscillation, "fit_result") is False
+        assert (sample_amro_oscillation.fit_result is not None) is False
 
     def test_hasattr_fourier_result_false_before_adding(self, sample_amro_oscillation):
         """Critical test: fourier_result should not exist until explicitly added."""
-        assert hasattr(sample_amro_oscillation, "fourier_result") is False
+        assert (sample_amro_oscillation.fourier_result is not None) is False
 
     def test_add_fourier_result(
         self, sample_amro_oscillation, sample_fourier_xf, sample_fourier_yf

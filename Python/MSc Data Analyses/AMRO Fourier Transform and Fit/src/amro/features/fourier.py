@@ -33,13 +33,15 @@ from pathlib import Path
 
 
 class Fourier:
-    """
+    """ """
 
-    todo: Move saving/loading functionality involving X_DATA_PATH to data_structures and loader.py
-
-    """
-
-    def __init__(self, amro_data: ProjectData, save_name: str, verbose: bool = False):
+    def __init__(
+        self,
+        amro_data: ProjectData,
+        save_name: str,
+        overwrite_result=False,
+        verbose: bool = False,
+    ):
         self.project_data = amro_data
 
         self.all_results_df = pd.DataFrame()
@@ -47,18 +49,8 @@ class Fourier:
         self.save_dir = FINAL_DATA_PATH
         self.save_fp = self.save_dir / save_name
         self.verbose = verbose
-        if self.save_fp.is_file():
-            # TODO: Need to check and make sure it's loading the same data as the AMRO
-            print("Loading {}".format(save_name))
+        self.overwrite = overwrite_result
 
-        return
-
-    def _check_results_against_amro(self):
-        """Ensures that the loaded Fourier transform results has the same
-        experiment labels as the AMRO data.
-        """
-
-        # todo: implement, maybe with a recursive function?
         return
 
     def fourier_transform_experiments(self):
@@ -67,15 +59,28 @@ class Fourier:
 
             experiment = self.project_data.get_experiment(exp_label)
 
-            # TODO: Encapsulate for loop
             for key in experiment.oscillations_dict.keys():
                 osc = experiment.get_oscillation_from_key(key)
-                print(
-                    f"Fourier Transforming {key.experiment_label}, T={key.temperature}K, H={key.magnetic_field}T"
-                )
+
+                if osc.fourier_result is not None:
+                    if not self.overwrite:
+                        print(f"{osc} already has a Fourier result. Skipping...")
+                        continue
+                    elif self.overwrite:
+                        osc.clear_fourier_result()
+                if self.verbose:
+                    print(
+                        f"Fourier Transforming {key.experiment_label}, T={key.temperature}K, H={key.magnetic_field}T"
+                    )
 
                 xf, yf = self._perform_fourier_transform(osc.osc_data)
                 osc.add_fourier_result(xf, yf)
+
+        print("Saving Fourier results.")
+        self.project_data.save_fourier_results_to_csv()
+        print("Pickling project data.")
+        self.project_data.save_project_to_pickle()
+
         return
 
     def get_n_strongest_results(

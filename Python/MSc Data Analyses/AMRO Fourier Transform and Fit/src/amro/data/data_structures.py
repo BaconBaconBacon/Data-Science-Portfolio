@@ -395,9 +395,9 @@ class FourierResult:
     def get_magnetic_field(self) -> float:
         return self.key.get_magnetic_field()
 
-    def get_init_params(self):
-        """returns fourier component symmetries, their amplitudes and phases, and the mean"""
-        return
+    # def get_init_params(self):
+    #     """returns fourier component symmetries, their amplitudes and phases, and the mean"""
+    #     return
 
 
 @dataclass
@@ -410,8 +410,8 @@ class AMROscillation:
     key: OscillationKey
     osc_data: ExperimentalData
 
-    fit_result: FitResult = field(init=False)
-    fourier_result: FourierResult = field(init=False)
+    fit_result: FitResult | None = None
+    fourier_result: FourierResult | None = None
 
     def __str__(self):
         return f"Experiment_Object_{self.key}"
@@ -469,11 +469,19 @@ class AMROscillation:
             print("Fourier result not present.")
             return None
 
-    def get_fourier_init_params(self):
-        return self.fit_result.get_init_params()
+    # def get_fourier_init_params(self):
+    #     return self.fit_result.get_init_params()
 
     def get_oscillation_as_dataframe(self) -> pd.DataFrame:
+        # TODO: Implement this
+        return
 
+    def clear_fourier_result(self) -> None:
+        self.fourier_result = None
+        return
+
+    def clear_fit_result(self):
+        self.fit_result = None
         return
 
 
@@ -481,8 +489,8 @@ class AMROscillation:
 class Experiment:
     """Handles dataclasses for all oscillations for a given experimental set up."""
 
-    experiment_label: str  # i.e. ACTRot11
-    geometry: str  # i.e. para/perp
+    experiment_label: str
+    geometry: str
 
     wire_sep: float
     cross_section: float
@@ -737,13 +745,13 @@ class ProjectData:
         if fp is None:
             fp = self.pickle_fp
         with open(fp, "wb") as f:
-            pickle.dump(self.experiments_dict, f)
+            pickle.dump(self, f)
         return
 
-    def load_project_from_pickle(self) -> None:
-        with open(self.pickle_fp, "rb") as f:
-            self.experiments_dict = pickle.load(f)
-        return
+    @classmethod
+    def load_project_from_pickle(cls, fp: Path):
+        with open(fp, "rb") as f:
+            return pickle.load(f)
 
     def get_fit_results_as_df(self, filepath: Path | str | None = None) -> pd.DataFrame:
         """One fit result per row"""
@@ -753,11 +761,12 @@ class ProjectData:
             experiment = self.experiments_dict[act_label]
             for osc_key in experiment.oscillations_dict.keys():
                 osc = experiment.oscillations_dict[osc_key]
-                try:
-                    fit_result = osc.fit_result
-                except AttributeError as e:
+
+                fit_result = osc.fit_result
+                if fit_result is None:
                     print(f"No fit result found for {osc_key}")
                     continue
+
                 row = {
                     HEADER_EXP_LABEL: osc_key.experiment_label,
                     HEADER_TEMP: osc_key.temperature,
@@ -770,7 +779,8 @@ class ProjectData:
                     "fit_succeeded": fit_result.fit_succeeded,
                     "required_refit": fit_result.required_refit,
                 }
-                for freq in fit_result.fitted_params_dict.keys():
+                # for freq in fit_result.fitted_params_dict.keys():
+                for freq in fit_result.symmetries:
                     params = fit_result.fitted_params_dict[freq]
                     row[HEADER_PARAM_FREQ_PREFIX + str(freq)] = freq
                     row[HEADER_PARAM_AMP_PREFIX] = params[0][0]
@@ -783,10 +793,8 @@ class ProjectData:
 
     def save_fit_results_to_csv(self, filepath: Path | str | None = None) -> None:
         if filepath is None:
-            filepath = (
-                FINAL_DATA_PATH / f"{self.project_name}_"
-                + self.fit_filter_str
-                + "_fit_results.csv"
+            filepath = FINAL_DATA_PATH / (
+                f"{self.project_name}_" + self.fit_filter_str + "_fit_results.csv"
             )
 
         df = self.get_fit_results_as_df(filepath=filepath)
@@ -795,8 +803,10 @@ class ProjectData:
 
     def load_fit_results_from_csv(self, filepath: Path | str | None = None) -> None:
         if filepath is None:
-            filepath = FINAL_DATA_PATH / f"{self.project_name}_fit_results.csv"
-        df = pd.read_csv(filepath, index_col=0)
+            filepath = FINAL_DATA_PATH / (
+                f"{self.project_name}_" + self.fit_filter_str + "_fit_results.csv"
+            )
+        df = pd.read_csv(filepath)
         self.read_fit_results_from_dataframe(df=df)
         return
 
@@ -836,7 +846,7 @@ class ProjectData:
     def load_fourier_results_from_csv(self, filepath: Path | str | None = None):
         if filepath is None:
             filepath = FINAL_DATA_PATH / f"{self.project_name}_fourier_results.csv"
-        df = pd.read_csv(filepath, index_col=0)
+        df = pd.read_csv(filepath)
         self.read_fourier_results_from_dataframe(df=df)
         return
 
@@ -852,13 +862,13 @@ class ProjectData:
             1
             for exp in self.experiments_dict.values()
             for osc in exp.oscillations_dict.values()
-            if hasattr(osc, "fourier_result")
+            if osc.fourier_result is not None
         )
         n_fits = sum(
             1
             for exp in self.experiments_dict.values()
             for osc in exp.oscillations_dict.values()
-            if hasattr(osc, "fit_result")
+            if osc.fit_result is not None
         )
 
         return {
@@ -872,12 +882,14 @@ class ProjectData:
         self,
         experiment_label: str,
         wire_sep: float,
-        width=None,
-        height=None,
-        cross_section=None,
-        force_rescale=False,
+        width: float = None,
+        height: float = None,
+        cross_section: float = None,
+        force_rescale: bool = False,
     ) -> None:
-        """To be used if the wire separation and cross-section were not changed when setting up the measurements."""
+        """To be used if the wire separation and cross-section were not changed when setting up the measurements.
+        rho = R * (A / L), where cross-section A has units of cm^2 and wire separation L has units of cm.
+        """
         old_exp = self.experiments_dict[experiment_label]
 
         if (old_exp.cross_section != 1 or old_exp.wire_sep != 1) and not force_rescale:
@@ -886,9 +898,16 @@ class ProjectData:
             )
             print("Set force_rescale to True to force rescaling.")
             return
+        elif cross_section is None and (height is None or width is None):
+            raise ValueError("Invalid cross-section inputs for re-scaling.")
+
+        elif wire_sep < 0 or width < 0 or height < 0 or cross_section < 0:
+            raise ValueError("Negative values not allowed for re-scaling.")
+
         else:
             if cross_section is None:
                 cross_section = width * height
+
             scale_factor = cross_section / wire_sep
             new_exp = Experiment(
                 experiment_label=old_exp.experiment_label,
@@ -909,4 +928,5 @@ class ProjectData:
                 )
                 new_exp.add_oscillation(new_osc)
             self.replace_experiment(new_exp)
+            self.save_project_to_pickle()
         return
