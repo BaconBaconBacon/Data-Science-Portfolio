@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import lmfit as lm
 
-from amro.config.settings import (
+from amro.config import (
     HEADER_EXPERIMENT_PREFIX,
     HEADER_PARAM_MEAN_PREFIX,
     HEADER_PARAM_PHASE_PREFIX,
@@ -18,7 +18,7 @@ from amro.config.settings import (
     HEADER_ANGLE_DEG,
     HEADER_RES_OHM,
 )
-from amro.data.data_structures import (
+from amro.data import (
     OscillationKey,
     ExperimentalData,
     FourierResult,

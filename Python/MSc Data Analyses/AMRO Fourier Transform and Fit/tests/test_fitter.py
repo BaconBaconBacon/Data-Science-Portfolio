@@ -4,14 +4,14 @@ import pytest
 import numpy as np
 import lmfit as lm
 
-from amro.config.settings import (
+from amro.config import (
     HEADER_EXPERIMENT_PREFIX,
     HEADER_PARAM_MEAN_PREFIX,
     HEADER_PARAM_PHASE_PREFIX,
     HEADER_PARAM_AMP_PREFIX,
     HEADER_PARAM_FREQ_PREFIX,
 )
-from amro.data.data_structures import (
+from amro.data import (
     OscillationKey,
     ExperimentalData,
     FourierResult,

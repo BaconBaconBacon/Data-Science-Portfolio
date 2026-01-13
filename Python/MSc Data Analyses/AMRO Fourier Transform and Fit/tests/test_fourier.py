@@ -3,8 +3,8 @@
 import pytest
 import numpy as np
 
-from amro.config.settings import HEADER_EXPERIMENT_PREFIX
-from amro.data.data_structures import (
+from amro.config import HEADER_EXPERIMENT_PREFIX
+from amro.data import (
     OscillationKey,
     ExperimentalData,
     AMROscillation,
@@ -12,7 +12,7 @@ from amro.data.data_structures import (
     ProjectData,
     FourierResult,
 )
-from amro.features.fourier import Fourier
+from amro.features import Fourier
 
 
 # =============================================================================

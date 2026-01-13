@@ -6,7 +6,7 @@ import pandas as pd
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from amro.config.settings import (
+from amro.config import (
     HEADER_EXPERIMENT_PREFIX,
     HEADER_EXP_LABEL,
     HEADER_TEMP,
@@ -15,10 +15,9 @@ from amro.config.settings import (
     HEADER_ANGLE_DEG,
     HEADER_RES_OHM,
     HEADER_WIRE_SEP,
-    HEADER_WIDTH,
-    HEADER_HEIGHT,
     HEADER_TEMP_RAW,
     HEADER_MAGNET_RAW_OE_ABS,
+    HEADER_CROSS_SECTION,
 )
 from amro.data.loader import AMROLoader
 from amro.data.data_structures import ProjectData
@@ -49,8 +48,7 @@ def sample_csv_data():
             HEADER_TEMP_RAW: [2.0] * n_points,
             HEADER_MAGNET_RAW_OE_ABS: [30000] * n_points,  # 3T
             HEADER_WIRE_SEP: [1.0] * n_points,
-            HEADER_WIDTH: [0.5] * n_points,
-            HEADER_HEIGHT: [0.1] * n_points,
+            HEADER_CROSS_SECTION: [0.5] * n_points,
         }
     )
 

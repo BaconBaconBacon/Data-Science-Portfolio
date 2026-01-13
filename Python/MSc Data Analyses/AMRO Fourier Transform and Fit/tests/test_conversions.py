@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from amro.utils.conversions import (
+from amro.utils import (
     convert_degs_to_rads,
     convert_rads_to_degs,
     convert_ohms_to_uohms,
