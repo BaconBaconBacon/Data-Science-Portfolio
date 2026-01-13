@@ -90,6 +90,10 @@ class AMROFitter:
 
     def fit_act_experiment(self, act_label: str) -> None:
         """"""
+        if act_label not in self.project_data.experiments_dict.keys():
+            print(f"{act_label} is not a valid experiment label.")
+            return
+
         if self.project_data.fit_filter_str is None:
             self.project_data.fit_filter_str = self.filter_str
 

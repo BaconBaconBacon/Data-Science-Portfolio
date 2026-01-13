@@ -17,16 +17,20 @@ from ..config.settings import (
 
 def _quick_plot_amro(loader) -> None:
     """ """
-    _ = sns.relplot(
-        x=HEADER_ANGLE_DEG,
-        y=HEADER_RES_DEL_MEAN_UOHM,
-        hue=HEADER_MAGNET,
-        col=HEADER_TEMP,
-        row=HEADER_EXP_LABEL,
-        palette=H_PALETTE,
-        linewidth=0,
-        facet_kws={"sharey": False},
-        data=loader.AMRO_df,
-    )
-    plt.show()
+    data = loader.project_data
+    for key, exp in data.experiments_dict.items():
+
+        data = exp.get_experiment_as_dataframe()
+        _ = sns.relplot(
+            x=HEADER_ANGLE_DEG,
+            y=HEADER_RES_DEL_MEAN_UOHM,
+            hue=HEADER_MAGNET,
+            col=HEADER_TEMP,
+            row=HEADER_EXP_LABEL,
+            palette=H_PALETTE,
+            linewidth=0,
+            facet_kws={"sharey": False},
+            data=data,
+        )
+        plt.show()
     return

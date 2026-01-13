@@ -30,6 +30,9 @@ from ..config.settings import (
     KEY_MAGNET_LABELS,
     HEADER_TEMP_RAW,
     HEADER_MAGNET_RAW_OE_ABS,
+    CLEANER_SAVE_FN_SUFFIX,
+    HEADER_EXPERIMENT_PREFIX,
+    HEADER_CROSS_SECTION,
 )
 from ..plotting.loader import _quick_plot_amro
 from ..utils import utils as u
@@ -102,101 +105,85 @@ class AMROLoader:
         """
 
         filenames = list(self.save_folder.glob("*.csv"))
-        # TODO: add some flexibility to naming schemes. Maybe just check whether
-        # filename has been loaded already, and whether the H and T data are new
+
+        valid_data_found = False
         for filename in filenames:
             # Ensure we are selecting only AMRO data
             if self._is_valid_amro_filename(filename):
-                # EXTRACT
+                print(f"Reading {filename}")
+                valid_data_found = True
+                # Read experiment
+                experiment_df = pd.read_csv(self.save_folder / filename, sep=",")
                 (
-                    act_label,
-                    T_label,
-                    H_label,
+                    exp_label,
+                    osc_keys,
                     geometry,
-                    length,
-                    height,
-                    width,
-                    angles,
-                    resistivities,
-                ) = self._extract_experiment_data(filename)
-
-                # TRANSFORM
-                exp_key = OscillationKey(
-                    experiment_label=act_label,
-                    temperature=T_label,
-                    magnetic_field=H_label,
-                )
-                exp_data = ExperimentalData(
-                    experiment_key=exp_key,
-                    angles_degs=angles,
-                    res_ohms=resistivities,
-                )
-                osc = AMROscillation(key=exp_key, osc_data=exp_data)
-                # LOAD
-                if act_label not in self.project_data.experiments_dict:
+                    wire_sep,
+                    cross_section,
+                ) = self._parse_experiment_metadata(experiment_df)
+                if exp_label not in self.project_data.experiments_dict:
                     exp = Experiment(
-                        experiment_label=act_label,
+                        experiment_label=exp_label,
                         geometry=geometry,
-                        wire_sep=length,
-                        height=height,
-                        width=width,
+                        wire_sep=wire_sep,
+                        cross_section=cross_section,
                     )
                     self.project_data.add_experiment(exp)
                 else:
-                    exp = self.project_data.get_experiment(act_label)
-                exp.add_oscillation(osc)
-            else:
-                print("Invalid file name found:\t" + str(filename))
+                    exp = self.project_data.get_experiment(exp_label)
+
+                for osc_key in osc_keys:
+                    T_label = osc_key.temperature
+                    H_label = osc_key.magnetic_field
+                    # Parse oscillation
+                    osc = experiment_df.query(
+                        f"{HEADER_MAGNET}=={H_label} & {HEADER_TEMP}=={T_label}"
+                    )
+                    # EXTRACT
+                    angles = osc[HEADER_ANGLE_DEG].values
+                    resistivities = osc[HEADER_RES_OHM].values
+
+                    # TRANSFORM
+                    exp_data = ExperimentalData(
+                        experiment_key=osc_key,
+                        angles_degs=angles,
+                        res_ohms=resistivities,
+                    )
+                    osc = AMROscillation(key=osc_key, osc_data=exp_data)
+
+                    # LOAD
+                    exp.add_oscillation(osc)
+
+        if not valid_data_found:
+            print("Could not find valid data!")
+        else:
+            print("AMRO loading complete")
         return None
 
     def _is_valid_amro_filename(self, filename: Path) -> bool:
-        # TODO: Needs to generalize this with the filename handling code
-        valid_act_label = "ACTRot" in filename.name
-        valid_amro_label = "AMRO" in filename.name
-        return valid_amro_label and valid_act_label
+        valid_act_label = HEADER_EXPERIMENT_PREFIX in filename.name
+        valid_cleaned_label = CLEANER_SAVE_FN_SUFFIX in filename.name
+        return valid_cleaned_label and valid_act_label
 
-    def _extract_experiment_data(self, filename: Path) -> tuple:
-        """ """
+    def _parse_experiment_metadata(self, temp_df: pd.DataFrame) -> tuple:
 
-        file_path = self.save_folder / filename
-        experiment_df = pd.read_csv(file_path, sep=",")
-        experiment_df = experiment_df.rename(columns=CLEANER_COL_RENAME_DICT)
-        (act_label, T_label, H_label, geometry, length, height, width) = (
-            self._parse_experiment_metadata(experiment_df, filename)
-        )
+        wire_sep = temp_df[HEADER_WIRE_SEP].unique()[0]
+        cross_section = temp_df[HEADER_CROSS_SECTION].unique()[0]
+        experiment_label = temp_df[HEADER_EXP_LABEL].unique()[0]
+        geometry = temp_df[HEADER_GEO].unique()[0]
 
-        angles = experiment_df[HEADER_ANGLE_DEG].values
-        resistivities = experiment_df[HEADER_RES_OHM].values
-        return (
-            act_label,
-            T_label,
-            H_label,
-            geometry,
-            length,
-            height,
-            width,
-            angles,
-            resistivities,
-        )
+        temp_df = temp_df[[HEADER_TEMP, HEADER_MAGNET]].drop_duplicates()
 
-    def _parse_experiment_metadata(self, temp_df: pd.DataFrame, filename: str) -> tuple:
-        for item in filename.name.split("_"):
-            if "ACTRot" in item:
-                act_label = item
+        osc_keys = []
+        for _, row in temp_df.iterrows():
+            osc_key = OscillationKey(
+                experiment_label=experiment_label,
+                temperature=row[HEADER_TEMP],
+                magnetic_field=row[HEADER_MAGNET],
+            )
+            osc_keys.append(osc_key)
 
-        length = temp_df[HEADER_WIRE_SEP].unique()[0]
-        height = temp_df[HEADER_HEIGHT].unique()[0]
-        width = temp_df[HEADER_WIDTH].unique()[0]
-
-        # TODO: These will need to be adjusted when the AMRO cleaning code is added
-        H_vals = c.convert_oe_to_teslas(temp_df[HEADER_MAGNET_RAW_OE_ABS]).round(1)
-        H_label = H_vals.unique()[0]
-        geometry = GEO_DICT[act_label]
-        T_vals = temp_df[HEADER_TEMP_RAW].round(1)
-        T_label = T_vals.unique()[0]
-
-        tup = (act_label, T_label, H_label, geometry, length, height, width)
-        return tup
+        return experiment_label, osc_keys, geometry, wire_sep, cross_section
 
     def _convert_degs_to_rads(
         self, degs: np.ndarray | pd.Series

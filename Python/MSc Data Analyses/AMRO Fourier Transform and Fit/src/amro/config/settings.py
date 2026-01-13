@@ -114,7 +114,7 @@ CLEANER_OPTION_LABEL = "ACTRANSPORT"
 CLEANER_T_MIN_RESOLUTION = 1  # round digit places
 
 CLEANER_COL_RENAME_DICT = {"Res. ch2 (ohm-cm)": "Res. (ohm-cm)"}
-
+CLEANER_SAVE_FN_SUFFIX = "_antisymmetrized.csv"
 CLEANER_DROP_COLS = [
     "Comment",
     "Time Stamp (sec)",
@@ -173,3 +173,8 @@ CLEANER_DROP_COLS = [
     "3rd Harm. ch2 (dB)",
     "Drive Signal ch2 (V)",
 ]
+
+CLEANER_ANG_CHANGE_THRESH = 0.001  # deg
+CLEANER_TEMP_STABLE_THRESH = 0.05  # K
+CLEANER_MAG_FIELD_STABLE_THRESH = 0.01  # T
+CLEANER_OUTLIER_RES_STD = 5  # many standard deviations

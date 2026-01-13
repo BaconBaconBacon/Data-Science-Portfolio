@@ -51,6 +51,11 @@ from ..config.settings import (
     HEADER_RES_OHM,
     CLEANER_DROP_COLS,
     HEADER_WIRE_SEP,
+    CLEANER_SAVE_FN_SUFFIX,
+    CLEANER_ANG_CHANGE_THRESH,
+    CLEANER_TEMP_STABLE_THRESH,
+    CLEANER_MAG_FIELD_STABLE_THRESH,
+    CLEANER_OUTLIER_RES_STD,
 )
 import pandas as pd
 from pathlib import Path
@@ -62,7 +67,7 @@ from warnings import warn
 class AMROCleaner:
 
     def __init__(
-        self, project_name: str, datafile_type: str = ".csv", verbose: bool = False
+        self, project_name: str, datafile_type: str = ".dat", verbose: bool = False
     ):
 
         self.load_path = RAW_DATA_PATH
@@ -95,17 +100,29 @@ class AMROCleaner:
                 # then reads the data into one large df
                 data = self._load_file(fp)
                 data = self._get_columns_for_calcs(data)
+                data = self._filter_for_oscillation_data(data)
+                data = self._clean_outliers(data)
 
                 # Identifies the unique H and T pairings
-                osc_labels = self._get_oscillation_labels(data)
+                osc_labels = self._get_oscillation_labels(data, exp_label)
 
                 # for each unique H and T pairing, it anti-symmetrizes
                 cleaned_oscs = []
                 for osc_key in osc_labels:
                     q = f"{HEADER_MAGNET}=={osc_key.magnetic_field} & {HEADER_TEMP}=={osc_key.temperature}"
                     subset_df = data.query(q)
-                    clean_osc = self._anti_symmetrize_oscillation(subset_df)
-                    cleaned_oscs.append(clean_osc)
+                    if subset_df.shape[0] > 1:
+                        if self.verbose:
+                            print(f"Reading in {osc_key}...")
+                        clean_osc = self._anti_symmetrize_oscillation(subset_df)
+                        if clean_osc is not None:
+                            cleaned_oscs.append(clean_osc)
+                        else:
+                            print(f"Could not clean {osc_key}, skipping...")
+                            continue
+                    else:
+                        print(f"Subset too small: {osc_key}")
+                        continue
                 cleaned_df = pd.concat(cleaned_oscs)
 
                 cleaned_df[HEADER_EXP_LABEL] = exp_label
@@ -116,7 +133,7 @@ class AMROCleaner:
                 cleaned_df = cleaned_df.drop(
                     columns=[HEADER_MAGNET_RAW_OE, HEADER_MAGNET_RAW_OE_ABS]
                 )
-                fn = f"{exp_label}_antisymmetrized.csv"
+                fn = exp_label + CLEANER_SAVE_FN_SUFFIX
                 if self.verbose:
                     print(f"Saving as {fn}")
                 cleaned_df.to_csv(PROCESSED_DATA_PATH / fn, sep=",", index=False)
@@ -126,6 +143,23 @@ class AMROCleaner:
                 )
 
         return
+
+    def _clean_outliers(self, df: pd.DataFrame) -> pd.DataFrame:
+        grouped = df.groupby([HEADER_TEMP, HEADER_MAGNET])[HEADER_RES_OHM]
+        group_mean = grouped.transform("mean")
+        group_std = grouped.transform("std")
+
+        upper_bounds = group_mean + CLEANER_OUTLIER_RES_STD * group_std
+        lower_bounds = group_mean - CLEANER_OUTLIER_RES_STD * group_std
+        mask = (df[HEADER_RES_OHM] >= lower_bounds) & (
+            df[HEADER_RES_OHM] <= upper_bounds
+        )
+
+        num_removed = (~mask).sum()
+        if num_removed > 0 and self.verbose:
+            print(f"Removed {num_removed} resistivity outliers.")
+
+        return df[mask].copy()
 
     def _extract_header(self, file: TextIOWrapper) -> list[list]:
         header = []
@@ -172,14 +206,16 @@ class AMROCleaner:
         element = header[row][col]
         return element
 
-    def _get_oscillation_labels(self, data: pd.DataFrame) -> list[OscillationKey]:
+    def _get_oscillation_labels(
+        self, data: pd.DataFrame, exp_label: str
+    ) -> list[OscillationKey]:
         # The data structures will not work if two oscillations have the same keys
         df = data[[HEADER_TEMP, HEADER_MAGNET]].drop_duplicates()
         osc_labels = []
         for _, row in df.iterrows():
             osc_labels.append(
                 OscillationKey(
-                    experiment_label="cleaner",
+                    experiment_label=exp_label,
                     temperature=row[HEADER_TEMP],
                     magnetic_field=row[HEADER_MAGNET],
                 )
@@ -188,24 +224,36 @@ class AMROCleaner:
         return osc_labels
 
     def _anti_symmetrize_oscillation(self, raw_df: pd.DataFrame) -> pd.DataFrame:
-        # If greater than 25% of the pairs are missing one member, logs the result and skips
 
         # For each angle, verify there are two resistivities and the +/- mag field values match
         grouped_df = raw_df.groupby(
             [HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG], as_index=False
         )
 
+        # TODO Encapsulate this code properly
         # There should be only 2 measurements per angle, per T, per H
         counted_df = grouped_df.count()
         avg_count = np.mean(counted_df[HEADER_RES_OHM].values)
         if avg_count < 2:
             raw_df = self._handle_missing_measurements(raw_df, counted_df)
+
         elif avg_count > 2:
             raw_df = self._handle_extra_measurements(raw_df, counted_df)
+            # Re-count after handling extras
+            grouped_df = raw_df.groupby(
+                [HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG], as_index=False
+            )
+            counted_df = grouped_df.count()
+            avg_count = np.mean(counted_df[HEADER_RES_OHM].values)
+            if avg_count < 2:
+                raw_df = self._handle_missing_measurements(raw_df, counted_df)
 
+        grouped_df = raw_df.groupby(
+            [HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG], as_index=False
+        )
         averaged_df = grouped_df.mean()
 
-        self._verify_averaged_df(averaged_df, raw_df)
+        averaged_df = self._verify_averaged_df(averaged_df, raw_df)
 
         return averaged_df
 
@@ -222,7 +270,7 @@ class AMROCleaner:
         print(f"Angles with missing measurements: {missing_angles}")
 
         # Remove those rows
-        df = df.query(f"`{HEADER_ANGLE_DEG}` not in {missing_angles}")
+        df = df[~df[HEADER_ANGLE_DEG].isin(missing_angles)]
         return df
 
     def _handle_extra_measurements(
@@ -237,13 +285,15 @@ class AMROCleaner:
         ].values
 
         print(f"Angles with extra measurements: {extra_angles}")
-        # extra_angles_df = df.query(f"`{HEADER_ANGLE_DEG}` in {extra_angles}")
-
         # Could implement more adaptive code, but for now the user should be inputting
         # better data
+        df["Field Polarity"] = np.sign(df[HEADER_MAGNET_RAW_OE])
+
         df = df.drop_duplicates(
-            subset=[HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG], keep="first"
+            subset=[HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG, "Field Polarity"],
+            keep="first",
         )
+        df = df.drop(columns=["Field Polarity"])
         return df
 
     def _load_file(self, fp: Path) -> pd.DataFrame:
@@ -268,28 +318,30 @@ class AMROCleaner:
 
     def _verify_averaged_df(
         self, averaged_df: pd.DataFrame, raw_df: pd.DataFrame
-    ) -> None:
-        # averaged_df has half the number of rows of raw_df
-        assert averaged_df.shape[0] == raw_df.shape[0] / 2.0
+    ) -> pd.DataFrame | None:
+        try:
+            # averaged_df has half the number of rows of raw_df
+            assert averaged_df.shape[0] * 2 == raw_df.shape[0]
 
-        # average H matches up to 0.1 Oe
-        assert np.round(averaged_df[HEADER_MAGNET_RAW_OE].mean(), 1) == (
-            np.round(raw_df[HEADER_MAGNET_RAW_OE].mean(), 1)
-        )
+            # average H matches up to 0.1 Oe
+            assert np.round(averaged_df[HEADER_MAGNET_RAW_OE].mean(), 1) == (
+                np.round(raw_df[HEADER_MAGNET_RAW_OE].mean(), 1)
+            )
 
-        assert averaged_df[HEADER_TEMP].mean() == raw_df[HEADER_TEMP].mean()
-        assert averaged_df[HEADER_MAGNET].mean() == raw_df[HEADER_MAGNET].mean()
+            assert averaged_df[HEADER_TEMP].mean() == raw_df[HEADER_TEMP].mean()
+            assert averaged_df[HEADER_MAGNET].mean() == raw_df[HEADER_MAGNET].mean()
 
-        # Min and max angles match
-        assert averaged_df[HEADER_ANGLE_DEG].max() == raw_df[HEADER_ANGLE_DEG].max()
-        assert averaged_df[HEADER_ANGLE_DEG].min() == raw_df[HEADER_ANGLE_DEG].min()
+            # Min and max angles match
+            assert averaged_df[HEADER_ANGLE_DEG].max() == raw_df[HEADER_ANGLE_DEG].max()
+            assert averaged_df[HEADER_ANGLE_DEG].min() == raw_df[HEADER_ANGLE_DEG].min()
 
-        # Mean resistivities match up to nohm-cm
-        assert np.round(averaged_df[HEADER_RES_OHM].mean(), 9) == np.round(
-            raw_df[HEADER_RES_OHM].mean(), 9
-        )
-
-        return
+            # Mean resistivities match up to nohm-cm
+            assert np.round(averaged_df[HEADER_RES_OHM].mean(), 9) == np.round(
+                raw_df[HEADER_RES_OHM].mean(), 9
+            )
+        except AssertionError:
+            averaged_df = None
+        return averaged_df
 
     def _get_experiment_label_from_fn(self, filename) -> None | str:
         items = filename.split("_")
@@ -314,3 +366,40 @@ class AMROCleaner:
             )
             print(f"Defaulting to the one extracted from the filename: {label_fn}")
             return label_fn
+
+    def _filter_for_oscillation_data(self, raw_df: pd.DataFrame) -> pd.DataFrame:
+        """Removes measurements which may be present in the file that are not AMR oscillations.
+
+        Identifies and removes constant angle sweeps of T and H.
+        Keeps all partial oscillations, which will be filtered out just before anti-symmetrization.
+
+        Assumes angle step size is constant for a given oscillation.
+        """
+        df = raw_df.copy()
+        grouped_df = df.groupby([HEADER_TEMP, HEADER_MAGNET])
+
+        df["angle_diff"] = grouped_df[HEADER_ANGLE_DEG].diff().abs()
+        df["temp_diff"] = grouped_df[HEADER_TEMP].diff().abs()
+        df["field_diff"] = grouped_df[HEADER_MAGNET].diff().abs()
+
+        is_oscillation = (
+            ((df["angle_diff"] > CLEANER_ANG_CHANGE_THRESH) | (df["angle_diff"].isna()))
+            & (
+                (df["temp_diff"] < CLEANER_TEMP_STABLE_THRESH)
+                | (df["temp_diff"].isna())
+            )
+            & (
+                (df["field_diff"] < CLEANER_MAG_FIELD_STABLE_THRESH)
+                | (df["field_diff"].isna())
+            )
+        )
+
+        oscillation_df = df[is_oscillation].copy()
+        oscillation_df = oscillation_df.drop(
+            columns=["angle_diff", "temp_diff", "field_diff"]
+        )
+
+        if self.verbose:
+            n_removed = len(df) - len(oscillation_df)
+            print(f"Filtered out {n_removed} constant-angle sweep rows")
+        return oscillation_df

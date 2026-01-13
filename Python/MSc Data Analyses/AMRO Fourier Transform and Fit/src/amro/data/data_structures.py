@@ -24,6 +24,15 @@ from ..config.settings import (
     HEADER_FIT_RED_CHISQ,
     HEADER_FIT_CHISQ,
     HEADER_PHASE_RAW,
+    HEADER_RES_DEL_0DEG_NORM_PCT,
+    HEADER_RES_UOHM,
+    HEADER_RES_DEL_MEAN_OHM,
+    HEADER_RES_DEL_MEAN_UOHM,
+    HEADER_RES_DEF_MEAN_NORM,
+    HEADER_RES_DEL_MEAN_NORM_PCT,
+    HEADER_RES_DEL_0DEG_OHM,
+    HEADER_RES_DEL_0DEG_UOHM,
+    HEADER_RES_DEL_0DEG_NORM,
 )
 from ..utils import conversions as c
 from ..utils import utils as u
@@ -463,6 +472,10 @@ class AMROscillation:
     def get_fourier_init_params(self):
         return self.fit_result.get_init_params()
 
+    def get_oscillation_as_dataframe(self) -> pd.DataFrame:
+
+        return
+
 
 @dataclass
 class Experiment:
@@ -472,9 +485,7 @@ class Experiment:
     geometry: str  # i.e. para/perp
 
     wire_sep: float
-    width: float
-    height: float
-    cross_section: float = field(init=False)
+    cross_section: float
     oscillations_dict: dict = field(default_factory=dict)
     oscillations_count: float = 0
     material: str = None
@@ -495,6 +506,7 @@ class Experiment:
 
     def get_oscillation(self, t: float, h: float) -> AMROscillation:
         request_key = OscillationKey(self.experiment_label, t, h)
+
         return self.oscillations_dict[request_key]
 
     def get_oscillation_from_key(self, request_key: OscillationKey) -> AMROscillation:
@@ -527,6 +539,33 @@ class Experiment:
             if t_matches and h_matches:
                 oscillations.append(osc)
         return oscillations
+
+    def get_experiment_as_dataframe(self) -> pd.DataFrame:
+        rows = []
+        for osc_key, osc in self.oscillations_dict.items():
+            data = osc.osc_data
+            # Each oscillation has arrays of angles and resistivities with derived values   │
+            for i in range(len(data.angles_degs)):
+                row = {
+                    HEADER_EXP_LABEL: self.experiment_label,
+                    HEADER_TEMP: osc_key.temperature,
+                    HEADER_MAGNET: osc_key.magnetic_field,
+                    HEADER_GEO: self.geometry,
+                    HEADER_ANGLE_DEG: data.angles_degs[i],
+                    HEADER_ANGLE_RAD: data.angles_rads[i],
+                    HEADER_RES_OHM: data.res_ohms[i],
+                    HEADER_RES_UOHM: c.convert_ohms_to_uohms(data.res_ohms[i]),
+                    HEADER_RES_DEL_MEAN_OHM: data.delta_res_mean_ohms[i],
+                    HEADER_RES_DEL_MEAN_UOHM: data.delta_res_mean_uohms[i],
+                    HEADER_RES_DEF_MEAN_NORM: data.delta_res_mean_norm[i],
+                    HEADER_RES_DEL_MEAN_NORM_PCT: data.delta_res_mean_norm_pct[i],
+                    HEADER_RES_DEL_0DEG_OHM: data.delta_res_0deg_ohms[i],
+                    HEADER_RES_DEL_0DEG_UOHM: data.delta_res_0deg_uohms[i],
+                    HEADER_RES_DEL_0DEG_NORM: data.delta_res_0deg_norm[i],
+                    HEADER_RES_DEL_0DEG_NORM_PCT: data.delta_res_0deg_norm_pct[i],
+                }
+                rows.append(row)
+        return pd.DataFrame(rows)
 
 
 @dataclass

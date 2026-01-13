@@ -53,6 +53,9 @@ def _plot_fits_with_residuals(
     # Set seaborn style
     project_data = fitter.project_data
 
+    if act_choice not in project_data.experiments_dict.keys():
+        print(f"{act_choice} is not a valid experiment choice.")
+        return None, None
     experiment = project_data.get_experiment(act_choice)
 
     exp_keys = experiment.oscillations_dict.keys()
@@ -132,9 +135,10 @@ def _plot_grid(
             ax_fit = fig.add_subplot(gs[i * 2, j])
             ax_resid = fig.add_subplot(gs[i * 2 + 1, j], sharex=ax_fit)
             axes[i, j] = (ax_fit, ax_resid)
-
-            osc = experiment.get_oscillation(t=T, h=H)
-
+            try:
+                osc = experiment.get_oscillation(t=T, h=H)
+            except KeyError:
+                continue
             y_data = osc.osc_data.res_ohms
             x_plot = osc.osc_data.angles_degs
 
@@ -163,7 +167,7 @@ def _plot_residuals(x_plot, residuals, ax_resid):
     return
 
 
-def _plot_fit_over_data(x_plot, y, y_fit, ax, color):
+def _plot_fit_over_data(x_plot, y, y_fit, ax, color) -> None:
     sns.scatterplot(
         x=x_plot,
         y=y,
@@ -172,13 +176,14 @@ def _plot_fit_over_data(x_plot, y, y_fit, ax, color):
         linewidth=0,
     )
     sns.lineplot(x=x_plot, y=y_fit, color="black", ax=ax)
+    return
 
 
-def _plot_bad_fits(fitter, act_choice: str):
+def _plot_bad_fits(fitter, act_choice: str) -> tuple:
 
     if len(fitter.failed_fits) == 0:
         print("No fits failed.")
-        return
+        return None, None
 
     t_labels = []
     h_labels = []
