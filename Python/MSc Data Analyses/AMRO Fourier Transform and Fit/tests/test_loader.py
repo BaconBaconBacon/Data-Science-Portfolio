@@ -18,6 +18,7 @@ from amro.config import (
     HEADER_TEMP_RAW,
     HEADER_MAGNET_RAW_OE_ABS,
     HEADER_CROSS_SECTION,
+    CLEANER_SAVE_FN_SUFFIX,
 )
 from amro.data.loader import AMROLoader
 from amro.data.data_structures import ProjectData
@@ -78,19 +79,19 @@ class TestAMROLoaderInit:
 
 class TestFilenameValidation:
     def test_valid_amro_filename(self, loader):
-        valid_path = Path("ACTRot11_2K_3T_AMRO.csv")
+        valid_path = Path(f"{HEADER_EXPERIMENT_PREFIX}11_2K_3T{CLEANER_SAVE_FN_SUFFIX}")
         assert loader._is_valid_amro_filename(valid_path) is True
 
     def test_valid_amro_filename_variant(self, loader):
-        valid_path = Path("ACTRot12_Dres2_10K_3.0T_AMRO.csv")
+        valid_path = Path(f"{HEADER_EXPERIMENT_PREFIX}12_Dres2_10K_3.0T{CLEANER_SAVE_FN_SUFFIX}")
         assert loader._is_valid_amro_filename(valid_path) is True
 
-    def test_invalid_missing_act(self, loader):
-        invalid_path = Path("Rotation11_2K_3T_AMRO.csv")
+    def test_invalid_missing_prefix(self, loader):
+        invalid_path = Path(f"Rotation11_2K_3T{CLEANER_SAVE_FN_SUFFIX}")
         assert loader._is_valid_amro_filename(invalid_path) is False
 
-    def test_invalid_missing_amro(self, loader):
-        invalid_path = Path("ACTRot11_2K_3T.csv")
+    def test_invalid_missing_suffix(self, loader):
+        invalid_path = Path(f"{HEADER_EXPERIMENT_PREFIX}11_2K_3T.csv")
         assert loader._is_valid_amro_filename(invalid_path) is False
 
     def test_invalid_both_missing(self, loader):

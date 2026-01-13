@@ -132,8 +132,7 @@ def sample_experiment():
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
         wire_sep=1.0,
-        width=0.5,
-        height=0.1,
+        cross_section=0.5,
     )
 
 
@@ -581,7 +580,7 @@ class TestProjectData:
 
     def test_get_summary_statistics_with_data(self, sample_project_data):
         """Test that summary statistics correctly count oscillations."""
-        exp = Experiment(HEADER_EXPERIMENT_PREFIX + "11", "perp", 1.0, 0.5, 0.1)
+        exp = Experiment(HEADER_EXPERIMENT_PREFIX + "11", "perp", 1.0, 0.5)
 
         # Add 4 oscillations
         for t in [2.0, 5.0]:
@@ -603,7 +602,7 @@ class TestProjectData:
 
     def test_summary_counts_fourier_correctly(self, sample_project_data):
         """Test that fourier results are counted correctly."""
-        exp = Experiment(HEADER_EXPERIMENT_PREFIX + "11", "perp", 1.0, 0.5, 0.1)
+        exp = Experiment(HEADER_EXPERIMENT_PREFIX + "11", "perp", 1.0, 0.5)
 
         xf = np.array([1, 2, 3, 4])
         yf = np.array([0.1, 0.2, 0.3, 0.4]) * np.exp(
@@ -629,7 +628,7 @@ class TestProjectData:
 
     def test_filter_oscillations_all(self, sample_project_data):
         """Test filtering returns all oscillations when no filter specified."""
-        exp = Experiment(HEADER_EXPERIMENT_PREFIX + "11", "perp", 1.0, 0.5, 0.1)
+        exp = Experiment(HEADER_EXPERIMENT_PREFIX + "11", "perp", 1.0, 0.5)
         for t in [2.0, 5.0]:
             key = OscillationKey(HEADER_EXPERIMENT_PREFIX + "11", t, 3.0)
             angles = np.linspace(0, 360, 361)
@@ -645,8 +644,8 @@ class TestProjectData:
 
     def test_filter_oscillations_by_experiment(self, sample_project_data):
         """Test filtering by experiment label."""
-        exp1 = Experiment(HEADER_EXPERIMENT_PREFIX + "11", "perp", 1.0, 0.5, 0.1)
-        exp2 = Experiment(HEADER_EXPERIMENT_PREFIX + "12", "para", 1.0, 0.5, 0.1)
+        exp1 = Experiment(HEADER_EXPERIMENT_PREFIX + "11", "perp", 1.0, 0.5)
+        exp2 = Experiment(HEADER_EXPERIMENT_PREFIX + "12", "para", 1.0, 0.5)
 
         for exp in [exp1, exp2]:
             key = OscillationKey(exp.experiment_label, 2.0, 3.0)

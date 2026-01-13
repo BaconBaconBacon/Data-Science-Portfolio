@@ -28,8 +28,7 @@ def sample_project_data_with_oscillations():
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
         wire_sep=1.0,
-        width=0.5,
-        height=0.1,
+        cross_section=0.5,
     )
 
     # Create oscillation with known frequency content
@@ -221,8 +220,7 @@ class TestKnownSignalRecovery:
             experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
             geometry="perp",
             wire_sep=1.0,
-            width=0.5,
-            height=0.1,
+            cross_section=0.5,
         )
 
         key = OscillationKey(HEADER_EXPERIMENT_PREFIX + "11", 2.0, 3.0)
@@ -251,8 +249,7 @@ class TestKnownSignalRecovery:
             experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
             geometry="perp",
             wire_sep=1.0,
-            width=0.5,
-            height=0.1,
+            cross_section=0.5,
         )
 
         key = OscillationKey(HEADER_EXPERIMENT_PREFIX + "11", 2.0, 3.0)

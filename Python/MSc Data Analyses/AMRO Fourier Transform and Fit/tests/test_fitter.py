@@ -37,8 +37,7 @@ def sample_project_data_with_fourier():
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
         wire_sep=1.0,
-        width=0.5,
-        height=0.1,
+        cross_section=0.5,
     )
 
     for t in [2.0, 5.0]:
@@ -331,8 +330,7 @@ class TestFitActExperiment:
             experiment_label=HEADER_EXPERIMENT_PREFIX + "12",
             geometry="para",
             wire_sep=1.0,
-            width=0.5,
-            height=0.1,
+            cross_section=0.5,
         )
         key = OscillationKey(HEADER_EXPERIMENT_PREFIX + "12", 2.0, 3.0)
         angles = np.linspace(0, 360, 361)
@@ -419,8 +417,7 @@ class TestFitterIntegration:
             experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
             geometry="perp",
             wire_sep=1.0,
-            width=0.5,
-            height=0.1,
+            cross_section=0.5,
         )
 
         key = OscillationKey(HEADER_EXPERIMENT_PREFIX + "11", 2.0, 3.0)
