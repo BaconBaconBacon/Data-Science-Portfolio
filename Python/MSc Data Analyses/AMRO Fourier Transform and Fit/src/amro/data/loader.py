@@ -63,12 +63,14 @@ class AMROLoader:
     TODO: Add verbose functionality
     """
 
-    def __init__(self, project_name: str, verbose: bool = False):
+    def __init__(
+        self,
+        project_name: str,
+        verbose: bool = False,
+    ):
+
         self.project_name = project_name
         self.project_data = ProjectData(project_name=project_name)
-
-        self.load_folder = RAW_DATA_PATH
-        self.save_folder = PROCESSED_DATA_PATH
 
         self.pickle_fp = self.project_data.pickle_fp
         self.verbose = verbose
@@ -98,7 +100,7 @@ class AMROLoader:
 
         """
 
-        filenames = list(self.save_folder.glob("*.csv"))
+        filenames = list(PROCESSED_DATA_PATH.glob("*.csv"))
 
         valid_data_found = False
         for filename in filenames:
@@ -107,7 +109,7 @@ class AMROLoader:
                 print(f"Reading {filename}")
                 valid_data_found = True
                 # Read experiment
-                experiment_df = pd.read_csv(self.save_folder / filename, sep=",")
+                experiment_df = pd.read_csv(PROCESSED_DATA_PATH / filename, sep=",")
                 (
                     exp_label,
                     osc_keys,

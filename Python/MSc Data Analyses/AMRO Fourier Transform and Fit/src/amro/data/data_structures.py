@@ -794,7 +794,7 @@ class ProjectData:
     def save_fit_results_to_csv(self, filepath: Path | str | None = None) -> None:
         if filepath is None:
             filepath = FINAL_DATA_PATH / (
-                f"{self.project_name}_" + self.fit_filter_str + "_fit_results.csv"
+                f"{self.project_name}_fit_results_" + self.fit_filter_str + ".csv"
             )
 
         df = self.get_fit_results_as_df(filepath=filepath)
@@ -804,7 +804,7 @@ class ProjectData:
     def load_fit_results_from_csv(self, filepath: Path | str | None = None) -> None:
         if filepath is None:
             filepath = FINAL_DATA_PATH / (
-                f"{self.project_name}_" + self.fit_filter_str + "_fit_results.csv"
+                f"{self.project_name}_fit_results_" + self.fit_filter_str + ".csv"
             )
         df = pd.read_csv(filepath)
         self.read_fit_results_from_dataframe(df=df)
@@ -898,13 +898,12 @@ class ProjectData:
             )
             print("Set force_rescale to True to force rescaling.")
             return
-        elif cross_section is None and (height is None or width is None):
-            raise ValueError("Invalid cross-section inputs for re-scaling.")
-
-        elif wire_sep < 0 or width < 0 or height < 0 or cross_section < 0:
-            raise ValueError("Negative values not allowed for re-scaling.")
-
-        else:
+        elif self._is_valid_scaling_input(
+            wire_sep,
+            width,
+            height,
+            cross_section,
+        ):
             if cross_section is None:
                 cross_section = width * height
 
@@ -930,3 +929,26 @@ class ProjectData:
             self.replace_experiment(new_exp)
             self.save_project_to_pickle()
         return
+
+    def _is_valid_scaling_input(
+        self,
+        wire_sep: float,
+        width: float | None,
+        height: float | None,
+        cross_section: float | None,
+    ) -> bool:
+
+        if cross_section is None:
+            if height is None or width is None:
+                raise ValueError("Invalid dimension inputs for re-scaling.")
+            elif height <= 0 or width <= 0:
+                raise ValueError("Negative values not allowed for re-scaling.")
+        elif cross_section <= 0:
+            raise ValueError("Negative cross-section not allowed for re-scaling.")
+
+        if wire_sep is None:
+            raise ValueError("Wire separation must be inputted for re-scaling.")
+        elif wire_sep <= 0:
+            raise ValueError("Wire separation must be positive.")
+
+        return True
