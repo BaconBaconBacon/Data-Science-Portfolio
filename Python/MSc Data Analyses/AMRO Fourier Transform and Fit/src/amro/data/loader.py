@@ -85,8 +85,9 @@ class AMROLoader:
             print("Loading : {}".format(self.project_name))
             self.project_data.load_project_from_pickle()
         else:
-            print("Running AMRO ETL. Save name: {}".format(self.project_name))
+            print("Running AMRO ETL.")
             self._run_amro_etl()
+
         return self.project_data
 
     def get_amro_data(self):
@@ -156,6 +157,8 @@ class AMROLoader:
             print("Could not find valid data!")
         else:
             print("AMRO loading complete")
+            self.project_data.save_project_to_pickle()
+            print("Project saved as: {}".format(self.project_data.pickle_fp.name))
         return None
 
     def _is_valid_amro_filename(self, filename: Path) -> bool:

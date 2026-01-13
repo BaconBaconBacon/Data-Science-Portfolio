@@ -567,6 +567,17 @@ class Experiment:
                 rows.append(row)
         return pd.DataFrame(rows)
 
+    def apply_geometry_correction(
+        self, wire_sep, width=None, height=None, cross_section=None
+    ):
+        """Scales resistance to resitivity in the case where measurements were
+        taken with cross-section and wire sep set to 1"""
+        if cross_section is None:
+            cross_section = width * height
+
+        scale_factor = cross_section / wire_sep
+        return
+
 
 @dataclass
 class ProjectData:
@@ -856,3 +867,46 @@ class ProjectData:
             "n_fourier_completed": n_fourier,
             "n_fits_completed": n_fits,
         }
+
+    def correct_geometry_scaling(
+        self,
+        experiment_label: str,
+        wire_sep: float,
+        width=None,
+        height=None,
+        cross_section=None,
+        force_rescale=False,
+    ) -> None:
+        """To be used if the wire separation and cross-section were not changed when setting up the measurements."""
+        old_exp = self.experiments_dict[experiment_label]
+
+        if (old_exp.cross_section != 1 or old_exp.wire_sep != 1) and not force_rescale:
+            print(
+                f"Experiment cross-section ({old_exp.cross_section}) and wire sep ({old_exp.wire_sep}) do not appear to require scaling."
+            )
+            print("Set force_rescale to True to force rescaling.")
+            return
+        else:
+            if cross_section is None:
+                cross_section = width * height
+            scale_factor = cross_section / wire_sep
+            new_exp = Experiment(
+                experiment_label=old_exp.experiment_label,
+                geometry=old_exp.geometry,
+                wire_sep=wire_sep,
+                cross_section=cross_section,
+            )
+            for osc_key, oscillation in old_exp.oscillations_dict.items():
+                new_res = oscillation.osc_data.res_ohms * scale_factor
+                data = ExperimentalData(
+                    experiment_key=osc_key,
+                    angles_degs=oscillation.osc_data.angles_degs,
+                    res_ohms=new_res,
+                )
+                new_osc = AMROscillation(
+                    key=osc_key,
+                    osc_data=data,
+                )
+                new_exp.add_oscillation(new_osc)
+            self.replace_experiment(new_exp)
+        return

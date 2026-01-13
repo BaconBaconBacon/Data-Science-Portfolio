@@ -1,6 +1,5 @@
 """
-Code to take raw QDUSA PPMS ACT measurements, clean, separate, and anti-symmetrize each oscillation.
-
+Code to clean, separate, and anti-symmetrize AMR oscillations measured using Quantum Design USA's PPMS ACT Option
 
 Should be used before AMROLoader to prep the AMRO well before it's read into project_data
 
@@ -63,19 +62,26 @@ import numpy as np
 from ..utils import conversions as c
 from warnings import warn
 
+# Suppresses annoying warning when np.sign() is called
+pd.options.mode.chained_assignment = None
+
 
 class AMROCleaner:
 
     def __init__(
-        self, project_name: str, datafile_type: str = ".dat", verbose: bool = False
+        self, datafile_type: str = ".dat", verbose: bool = False  # project_name: str,
     ):
 
         self.load_path = RAW_DATA_PATH
         self.save_path = PROCESSED_DATA_PATH
-        self.project_name = project_name
+        # self.project_name = project_name
         self.verbose = verbose
         self.datafile_type = datafile_type
+        self.experiment_labels = []
         return
+
+    def get_experiment_labels(self) -> list:
+        return self.experiment_labels
 
     def load_data_folder(self):
 
@@ -83,9 +89,9 @@ class AMROCleaner:
         filepaths = list(self.load_path.glob("*" + self.datafile_type))
         for filepath in filepaths:
             if HEADER_EXPERIMENT_PREFIX in filepath.name:
+                osc_count = 0
 
-                if self.verbose:
-                    print(f"Reading {filepath.name}")
+                print(f"Reading {filepath.name}")
                 exp_label_fn = self._get_experiment_label_from_fn(filepath.name)
 
                 # For each file, reads and parses the header info
@@ -96,7 +102,7 @@ class AMROCleaner:
                     self._parse_and_verify_header(header)
                 )
                 exp_label = self._compare_labels(exp_label_fn, exp_label_head)
-
+                self.experiment_labels.append(exp_label)
                 # then reads the data into one large df
                 data = self._load_file(fp)
                 data = self._get_columns_for_calcs(data)
@@ -117,26 +123,32 @@ class AMROCleaner:
                         clean_osc = self._anti_symmetrize_oscillation(subset_df)
                         if clean_osc is not None:
                             cleaned_oscs.append(clean_osc)
+                            osc_count += 1
                         else:
-                            print(f"Could not clean {osc_key}, skipping...")
+                            if self.verbose:
+                                print(f"Could not clean {osc_key}, skipping...")
                             continue
                     else:
                         print(f"Subset too small: {osc_key}")
                         continue
-                cleaned_df = pd.concat(cleaned_oscs)
+                if len(cleaned_oscs) == 0:
+                    print("Could not find any oscillations!")
+                    return
+                else:
+                    cleaned_df = pd.concat(cleaned_oscs)
 
-                cleaned_df[HEADER_EXP_LABEL] = exp_label
-                cleaned_df[HEADER_GEO] = geom
-                cleaned_df[HEADER_CROSS_SECTION] = cross_section
-                cleaned_df[HEADER_WIRE_SEP] = wire_sep
+                    cleaned_df[HEADER_EXP_LABEL] = exp_label
+                    cleaned_df[HEADER_GEO] = geom
+                    cleaned_df[HEADER_CROSS_SECTION] = cross_section
+                    cleaned_df[HEADER_WIRE_SEP] = wire_sep
 
-                cleaned_df = cleaned_df.drop(
-                    columns=[HEADER_MAGNET_RAW_OE, HEADER_MAGNET_RAW_OE_ABS]
-                )
-                fn = exp_label + CLEANER_SAVE_FN_SUFFIX
-                if self.verbose:
-                    print(f"Saving as {fn}")
-                cleaned_df.to_csv(PROCESSED_DATA_PATH / fn, sep=",", index=False)
+                    cleaned_df = cleaned_df.drop(
+                        columns=[HEADER_MAGNET_RAW_OE, HEADER_MAGNET_RAW_OE_ABS]
+                    )
+                    fn = exp_label + CLEANER_SAVE_FN_SUFFIX
+                    cleaned_df.to_csv(PROCESSED_DATA_PATH / fn, sep=",", index=False)
+                    print(f"Found {osc_count} oscillations. Saved as {fn}")
+
             else:
                 print(
                     f"HEADER_EXPERIMENT_PREFIX not found in filename, skipping: {filepath.name}"
@@ -267,7 +279,8 @@ class AMROCleaner:
             HEADER_ANGLE_DEG
         ].values
 
-        print(f"Angles with missing measurements: {missing_angles}")
+        if self.verbose:
+            print(f"Angles with missing measurements: {missing_angles}")
 
         # Remove those rows
         df = df[~df[HEADER_ANGLE_DEG].isin(missing_angles)]
@@ -284,10 +297,11 @@ class AMROCleaner:
             HEADER_ANGLE_DEG
         ].values
 
-        print(f"Angles with extra measurements: {extra_angles}")
+        if self.verbose:
+            print(f"Angles with extra measurements: {extra_angles}")
         # Could implement more adaptive code, but for now the user should be inputting
         # better data
-        df["Field Polarity"] = np.sign(df[HEADER_MAGNET_RAW_OE])
+        df["Field Polarity"] = np.sign(df[HEADER_MAGNET_RAW_OE].values)
 
         df = df.drop_duplicates(
             subset=[HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG, "Field Polarity"],
