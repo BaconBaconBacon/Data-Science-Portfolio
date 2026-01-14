@@ -81,10 +81,10 @@ class AMROCleaner:
         self.experiment_labels = []
         return
 
-    def get_experiment_labels(self) -> list:
+    def get_experiment_labels(self) -> list[str]:
         return self.experiment_labels
 
-    def clean_data_from_folder(self):
+    def clean_data_from_folder(self) -> None:
 
         # Checks RAW_DATA_PATH for .csv and .dat files
         filepaths = list(self.load_path.glob("*" + self.datafile_type))

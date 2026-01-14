@@ -53,7 +53,7 @@ class Fourier:
 
         return
 
-    def fourier_transform_experiments(self):
+    def fourier_transform_experiments(self) -> None:
         results_list = []
         for exp_label in self.project_data.get_experiment_labels():
 

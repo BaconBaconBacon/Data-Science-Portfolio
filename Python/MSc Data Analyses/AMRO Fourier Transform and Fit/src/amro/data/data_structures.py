@@ -63,12 +63,12 @@ class OscillationKey:
     temperature: float
     magnetic_field: float
 
-    def __str__(self):
+    def __str__(self) -> str:
         return u.format_oscillation_key(
             self.experiment_label, self.temperature, self.magnetic_field
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self)
 
     def compare_exp_label(self, other_act: str) -> bool:
@@ -80,7 +80,7 @@ class OscillationKey:
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
         return self.magnetic_field == other_magnetic_field
 
-    def compare_keys(self, other_key):
+    def compare_keys(self, other_key: "OscillationKey") -> bool:
         same_act = self.compare_exp_label(other_key.experiment_label)
         same_temp = self.compare_temperature(other_key.temperature)
         same_field = self.compare_magnetic_field(other_key.magnetic_field)
@@ -130,16 +130,16 @@ class FitResult:
 
     fitted_params_dict: dict = field(default_factory=dict)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Fit_Result_Object_{self.experiment_key}"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
 
         # Get the relevant info from lmfit_result
         self.chi_squared = self.lmfit_result.chisqr
         self.red_chi_squared = self.lmfit_result.redchi
         self.covar_matrix = self.lmfit_result.covar
-        self.fit_succeeded = self.lmfit_result.success  # self._check_fit_success()
+        self.fit_succeeded = self.lmfit_result.success
 
         self._parse_params(self.lmfit_result.params)
         self._build_params_dict()
@@ -152,7 +152,7 @@ class FitResult:
     def compare_act(self, other_act: str) -> bool:
         return self.experiment_key.compare_exp_label(other_act)
 
-    def _build_params_dict(self):
+    def _build_params_dict(self) -> None:
         self.fitted_params_dict[HEADER_MEAN] = (self.mean, self.mean_err)
         for i, freq in enumerate(self.symmetries):
             self.fitted_params_dict[freq] = (
@@ -167,10 +167,10 @@ class FitResult:
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
         return self.experiment_key.compare_magnetic_field(other_magnetic_field)
 
-    def get_fitted_params(self):
+    def get_fitted_params(self) -> tuple:
         return u.convert_params_to_ndarrays(self.lmfit_params, include_errs=False)
 
-    def get_fitted_params_with_errs(self):
+    def get_fitted_params_with_errs(self) -> tuple:
         return u.convert_params_to_ndarrays(self.lmfit_params, include_errs=True)
 
     def _parse_params(self, params: lm.Parameters) -> None:
@@ -246,7 +246,7 @@ class ExperimentalData:
     delta_res_mean_norm_pct: np.ndarray = field(init=False)
     delta_res_0deg_norm_pct: np.ndarray = field(init=False)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"AMRO_Data_Object_{self.experiment_key}"
 
     def __post_init__(self) -> None:
@@ -287,7 +287,7 @@ class ExperimentalData:
         self.delta_res_0deg_ohms = self.res_ohms - self.deg0_res_ohms
         return
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         if min(self.angles_degs) < 0:
             raise ValueError("Angles must be non-negative")
         elif min(self.res_ohms) < 0:
@@ -364,14 +364,14 @@ class FourierResult:
             else:
                 raise ValueError(f"Invalid symmetry! {f} in {self.key}")
 
-    def get_fit_guess(self, freq):
+    def get_fit_guess(self, freq: int) -> tuple[float, float]:
         item = self.fourier_results_dict[freq]
         return item[1], item[2]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Fourier_Result_Object_{self.key}"
 
-    def get_n_strongest_components(self, n=0):
+    def get_n_strongest_components(self, n: int = 0) -> zip:
         idx_largest = np.argpartition(self.amplitudes_ratio, -n)[-n:]
         n_syms = self.xf[idx_largest]
         n_ratios = self.amplitudes_ratio[idx_largest]
@@ -413,7 +413,7 @@ class AMROscillation:
     fit_result: FitResult | None = None
     fourier_result: FourierResult | None = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Experiment_Object_{self.key}"
 
     def compare_act(self, other_act: str) -> bool:
@@ -457,20 +457,17 @@ class AMROscillation:
     def get_magnetic_field(self) -> float:
         return self.key.get_magnetic_field()
 
-    def _calc_model_resistivities(self, params: lm.parameter.Parameters):
+    def _calc_model_resistivities(self, params: lm.parameter.Parameters) -> np.ndarray:
         params = u.convert_params_to_ndarrays(params)
         model_res = u.calculate_model_resistivities(self.osc_data.angles_rads, params)
         return model_res
 
-    def get_n_strongest_fourier(self, n=0):
+    def get_n_strongest_fourier(self, n: int = 0) -> zip | None:
         if self.fourier_result is not None:
             return self.fourier_result.get_n_strongest_components(n)
         else:
             print("Fourier result not present.")
             return None
-
-    # def get_fourier_init_params(self):
-    #     return self.fit_result.get_init_params()
 
     def get_oscillation_as_dataframe(self) -> pd.DataFrame:
         # TODO: Implement this
@@ -480,7 +477,7 @@ class AMROscillation:
         self.fourier_result = None
         return
 
-    def clear_fit_result(self):
+    def clear_fit_result(self) -> None:
         self.fit_result = None
         return
 
@@ -597,7 +594,7 @@ class ProjectData:
 
     fit_filter_str: str | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
 
         self.pickle_fp = FINAL_DATA_PATH / (self.project_name + ".pkl")
 
@@ -620,8 +617,8 @@ class ProjectData:
     def get_experiment(self, act_label: str) -> Experiment:
         return self.experiments_dict[act_label]
 
-    def get_experiment_labels(self):
-        return self.experiments_dict.keys()
+    def get_experiment_labels(self) -> list[str]:
+        return list(self.experiments_dict.keys())
 
     def filter_oscillations(
         self,
@@ -642,8 +639,9 @@ class ProjectData:
         osc_list = u.flatten_list(osc_list)
         return osc_list
 
-    def check_for_saved_data(self):
+    def check_for_saved_data(self) -> bool:
         """Checks (and loads, if it exists) for existing data that may exist under the project_name"""
+        # TODO: Implement this
         return
 
     def read_amro_data_from_dataframe(self, df: pd.DataFrame) -> None:
@@ -749,13 +747,12 @@ class ProjectData:
         return
 
     @classmethod
-    def load_project_from_pickle(cls, fp: Path):
+    def load_project_from_pickle(cls, fp: Path) -> "ProjectData":
         with open(fp, "rb") as f:
             return pickle.load(f)
 
     def get_fit_results_as_df(self, filepath: Path | str | None = None) -> pd.DataFrame:
         """One fit result per row"""
-        # TODO: This code isn't storing the amplitudes properly. Should be ampx
         rows = []
         for act_label in self.experiments_dict.keys():
             experiment = self.experiments_dict[act_label]
@@ -836,14 +833,14 @@ class ProjectData:
 
         return pd.DataFrame(rows)
 
-    def save_fourier_results_to_csv(self, filepath: Path | str | None = None):
+    def save_fourier_results_to_csv(self, filepath: Path | str | None = None) -> None:
         if filepath is None:
             filepath = FINAL_DATA_PATH / f"{self.project_name}_fourier_results.csv"
         df = self.get_fourier_results_as_df(filepath=filepath)
         df.to_csv(filepath, index=False)
         return
 
-    def load_fourier_results_from_csv(self, filepath: Path | str | None = None):
+    def load_fourier_results_from_csv(self, filepath: Path | str | None = None) -> None:
         if filepath is None:
             filepath = FINAL_DATA_PATH / f"{self.project_name}_fourier_results.csv"
         df = pd.read_csv(filepath)

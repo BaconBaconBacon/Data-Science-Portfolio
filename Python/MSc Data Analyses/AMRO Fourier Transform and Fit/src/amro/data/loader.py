@@ -87,7 +87,7 @@ class AMROLoader:
 
         return self.project_data
 
-    def get_amro_data(self):
+    def get_amro_data(self) -> ProjectData:
         return self.project_data
 
     def _run_amro_etl(self) -> None:
@@ -197,5 +197,5 @@ class AMROLoader:
 
         return df
 
-    def quick_plot_amro(self):
+    def quick_plot_amro(self) -> None:
         return _quick_plot_amro(self)

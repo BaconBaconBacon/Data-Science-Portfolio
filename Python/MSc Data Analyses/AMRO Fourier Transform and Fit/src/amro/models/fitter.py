@@ -75,7 +75,7 @@ class AMROFitter:
         self.failed_fits = []
         return
 
-    def _obj_func(self, params: lm.Parameters, angle, res_data):
+    def _obj_func(self, params: lm.Parameters, angle: np.ndarray, res_data: np.ndarray) -> np.ndarray:
         """
         The sinebuilder is fitted by minimizing this least squares objective function.
         """
@@ -167,13 +167,13 @@ class AMROFitter:
         del self.current_f_list
         return results, was_refitted
 
-    def _normalize_data(self, y):
+    def _normalize_data(self, y: np.ndarray) -> tuple[np.ndarray, float]:
         y_scale = np.abs(y).max()
         if y_scale < 1e-10:
             y_scale = 1.0
         return y / y_scale, y_scale
 
-    def _denormalize_parameters(self, params, y_scale):
+    def _denormalize_parameters(self, params: lm.Parameters, y_scale: float) -> lm.Parameters:
         params[HEADER_PARAM_MEAN_PREFIX].value *= y_scale
 
         if params[HEADER_PARAM_MEAN_PREFIX].stderr is not None:
@@ -307,7 +307,7 @@ class AMROFitter:
             params_dict[HEADER_PARAM_MEAN_PREFIX],
         )
 
-    def _refit(self, params, x, y_norm):
+    def _refit(self, params: lm.Parameters, x: np.ndarray, y_norm: np.ndarray) -> lm.minimizer.MinimizerResult:
 
         for name, param in params.items():
             if HEADER_PARAM_PHASE_PREFIX in name:
