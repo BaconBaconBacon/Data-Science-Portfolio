@@ -755,7 +755,7 @@ class ProjectData:
 
     def get_fit_results_as_df(self, filepath: Path | str | None = None) -> pd.DataFrame:
         """One fit result per row"""
-
+        # TODO: This code isn't storing the amplitudes properly. Should be ampx
         rows = []
         for act_label in self.experiments_dict.keys():
             experiment = self.experiments_dict[act_label]
@@ -783,10 +783,10 @@ class ProjectData:
                 for freq in fit_result.symmetries:
                     params = fit_result.fitted_params_dict[freq]
                     row[HEADER_PARAM_FREQ_PREFIX + str(freq)] = freq
-                    row[HEADER_PARAM_AMP_PREFIX] = params[0][0]
-                    row[HEADER_PARAM_AMP_PREFIX + "_err"] = params[0][1]
-                    row[HEADER_PARAM_PHASE_PREFIX] = params[1][0]
-                    row[HEADER_PARAM_PHASE_PREFIX + "_err"] = params[1][1]
+                    row[HEADER_PARAM_AMP_PREFIX + str(freq)] = params[0][0]
+                    row[HEADER_PARAM_AMP_PREFIX + str(freq) + "_err"] = params[0][1]
+                    row[HEADER_PARAM_PHASE_PREFIX + str(freq)] = params[1][0]
+                    row[HEADER_PARAM_PHASE_PREFIX + str(freq) + "_err"] = params[1][1]
                 rows.append(row)
 
         return pd.DataFrame(rows)

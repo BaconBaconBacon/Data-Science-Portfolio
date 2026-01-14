@@ -1,5 +1,6 @@
 """
-Code to clean, separate, and anti-symmetrize AMR oscillations measured using Quantum Design USA's PPMS ACT Option
+Preprocessing code to clean, separate, and anti-symmetrize AMR oscillations measured using Quantum
+Design USA's PPMS ACT Option.
 
 Should be used before AMROLoader to prep the AMRO well before it's read into project_data
 
@@ -83,7 +84,7 @@ class AMROCleaner:
     def get_experiment_labels(self) -> list:
         return self.experiment_labels
 
-    def load_data_folder(self):
+    def clean_data_from_folder(self):
 
         # Checks RAW_DATA_PATH for .csv and .dat files
         filepaths = list(self.load_path.glob("*" + self.datafile_type))
@@ -206,7 +207,7 @@ class AMROCleaner:
         # Raises a warning if the cross-section and length are both the default of 1
         if wire_sep == 1 or cross_section == 1:
             warn(
-                f"Default values detected for wire separation ({wire_sep}) or cross section ({cross_section}). Note that this package expects measurements of resistivity, not resistance."
+                f"Default value(s) detected for {exp_label}. Wire separation = {wire_sep}; cross section = {cross_section}. Note that this package expects measurements of resistivity, not resistance."
             )
         if not ("para" in geom.lower() or "perp" in geom.lower()):
             warn(f"Unexpected geometry found in header: {geom}")

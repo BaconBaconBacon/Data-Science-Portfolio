@@ -36,6 +36,10 @@ HEADER_PARAM_FREQ_PREFIX = "freq"
 HEADER_PARAM_PHASE_PREFIX = "phase"
 HEADER_PARAM_MEAN_PREFIX = "mean"
 
+# Amplitude ratio column naming
+HEADER_AMP_RATIO_PREFIX = "ratio_"
+HEADER_AMP_RATIO_ERR_SUFFIX = "_err"
+
 
 # Loader DF Header Labels
 HEADER_MEAN = "Mean (ohm-cm)"

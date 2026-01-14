@@ -17,11 +17,32 @@ def parse_args():
     return parser.parse_args()
 
 
+def check_geometry_defaults(project_data, verbose=True):
+    """Warn if any experiment has default geometry values."""
+    warnings_issued = []
+    for exp_label in project_data.get_experiment_labels():
+        exp = project_data.experiments_dict[exp_label]
+        if exp.wire_sep == 1 or exp.cross_section == 1:
+            msg = (
+                f"WARNING: Experiment '{exp_label}' has default geometry values "
+                f"(wire_sep={exp.wire_sep}, cross_section={exp.cross_section}). "
+                f"Consider using project_data.correct_geometry_scaling() to rescale"
+                f"the AMRO data, then re-run this script."
+            )
+            warnings_issued.append(msg)
+            if verbose:
+                print(msg)
+    return warnings_issued
+
+
 def main():
     args = parse_args()
 
     loader = AMROLoader(args.data_name, verbose=args.verbose)
     project_data = loader.load_amro()
+
+    check_geometry_defaults(project_data, verbose=True)
+
     if args.verbose:
         print(project_data.get_summary_statistics())
     if not args.fit_only:
@@ -42,7 +63,6 @@ def main():
         experiments = list(project_data.get_experiment_labels())
         for exp_label in experiments:
             fitter.fit_act_experiment(exp_label)
-    print(len(fitter.failed_fits))
     print(project_data.get_summary_statistics())
 
 

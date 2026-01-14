@@ -10,10 +10,12 @@ from .data_structures import (
     FourierResult,
     Experiment,
 )
+from .cleaner import AMROCleaner
 
 __all__ = [
     "AMROscillation",
     "AMROLoader",
+    "AMROCleaner",
     "ProjectData",
     "Experiment",
     "ExperimentalData",
