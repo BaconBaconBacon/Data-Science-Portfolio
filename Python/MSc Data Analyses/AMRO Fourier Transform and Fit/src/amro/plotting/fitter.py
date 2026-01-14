@@ -42,14 +42,25 @@ def _plot_fits_with_residuals(
     x_label: str = HEADER_ANGLE_DEG,
     save_fig=False,
 ):
-    """
-    Plotter to display finished fits over AMRO data, with the option
-    to show the residuals. Not intended to be for a polished final
-    version.
+    """Plot fitted curves overlaid on AMRO data with residual subplots.
 
-    Assumes each experiment at a given T has the same H values as all the others in the experiment
+    Creates a grid of subplots where each cell shows the fit over experimental
+    data with a residual plot below. Grid is organized by magnetic field (rows)
+    and temperature (columns).
 
-    TODO: Runs too slow, switch from sns.scatterplot-> ax.scatter and sns.lineplot -> ax.plot
+    Args:
+        fitter: AMROFitter instance containing fit results.
+        exp_chocie: Experiment label to plot.
+        h_choices: Magnetic field values to include. If None, includes all.
+        t_choices: Temperature values to include. If None, includes all.
+        figsize: Figure size tuple (width, height). Auto-calculated if None.
+        y_scale: Scale factor for y-axis values.
+        y_label: Label for y-axis.
+        x_label: Label for x-axis.
+        save_fig: If True, save figure to disk.
+
+    Returns:
+        Tuple of (figure, axes) matplotlib objects, or (None, None) if invalid experiment.
     """
     # Set seaborn style
     project_data = fitter.project_data
@@ -115,6 +126,21 @@ def _plot_fits_with_residuals_uohm(
     figsize=None,
     save_fig=False,
 ):
+    """Plot fitted curves with residuals using micro-ohm-cm units.
+
+    Wrapper around _plot_fits_with_residuals that sets appropriate scale and labels.
+
+    Args:
+        fitter: AMROFitter instance containing fit results.
+        exp_chocie: Experiment label to plot.
+        h_choices: Magnetic field values to include.
+        t_choices: Temperature values to include.
+        figsize: Figure size tuple.
+        save_fig: If True, save figure to disk.
+
+    Returns:
+        Tuple of (figure, axes) matplotlib objects.
+    """
     fig, axes = _plot_fits_with_residuals(
         fitter=fitter,
         exp_chocie=exp_chocie,
@@ -131,6 +157,19 @@ def _plot_fits_with_residuals_uohm(
 def _plot_grid(
     experiment: Experiment, h_vals, t_vals, fig, gs, axes, y_scale, x_label, y_label
 ):
+    """Populate the subplot grid with fit and residual plots.
+
+    Args:
+        experiment: Experiment object containing oscillation data and fits.
+        h_vals: List of magnetic field values for rows.
+        t_vals: List of temperature values for columns.
+        fig: Matplotlib figure object.
+        gs: GridSpec object defining subplot layout.
+        axes: 2D array to store axis pairs.
+        y_scale: Scale factor for y-axis values.
+        x_label: Label for x-axis.
+        y_label: Label for y-axis.
+    """
     n_rows = len(h_vals)
 
     # Iterate over grid
@@ -162,6 +201,13 @@ def _plot_grid(
 
 
 def _plot_residuals(x_plot, residuals, ax_resid) -> None:
+    """Plot fit residuals as a scatter plot.
+
+    Args:
+        x_plot: Array of x-axis values (angles).
+        residuals: Array of residual values (data - fit).
+        ax_resid: Matplotlib axes object to plot on.
+    """
     sns.scatterplot(
         x=x_plot,
         y=residuals,
@@ -173,6 +219,15 @@ def _plot_residuals(x_plot, residuals, ax_resid) -> None:
 
 
 def _plot_fit_over_data(x_plot, y, y_fit, ax, color) -> None:
+    """Plot experimental data points with fitted curve overlaid.
+
+    Args:
+        x_plot: Array of x-axis values (angles).
+        y: Array of experimental data values.
+        y_fit: Array of fitted model values.
+        ax: Matplotlib axes object to plot on.
+        color: Color for the data points.
+    """
     sns.scatterplot(
         x=x_plot,
         y=y,
@@ -185,7 +240,15 @@ def _plot_fit_over_data(x_plot, y, y_fit, ax, color) -> None:
 
 
 def _plot_bad_fits(fitter, exp_chocie: str) -> tuple:
+    """Plot only oscillations where fitting failed.
 
+    Args:
+        fitter: AMROFitter instance containing failed fit information.
+        exp_chocie: Experiment label to check for failures.
+
+    Returns:
+        Tuple of (figure, axes) or (None, None) if no failures found.
+    """
     if len(fitter.failed_fits) == 0:
         print("No fits failed.")
         return None, None
@@ -210,6 +273,17 @@ def _plot_bad_fits(fitter, exp_chocie: str) -> tuple:
 
 
 def _format_data_axis(ax_fit, n_rows, i, j, subplot_title, x_label, y_label) -> None:
+    """Format the data subplot axis with title, ticks, and labels.
+
+    Args:
+        ax_fit: Matplotlib axes object for the data plot.
+        n_rows: Total number of rows in the grid.
+        i: Current row index.
+        j: Current column index.
+        subplot_title: Title string for the subplot.
+        x_label: Label for x-axis.
+        y_label: Label for y-axis.
+    """
     ax_fit.set_title(subplot_title, fontsize=10)
     ax_fit.set_xticks([0, 90, 180, 270, 360])
     if i == (n_rows - 1):
@@ -219,6 +293,15 @@ def _format_data_axis(ax_fit, n_rows, i, j, subplot_title, x_label, y_label) -> 
 
 
 def _format_residuals_axis(ax_resid, n_rows, i, j, x_label):
+    """Format the residuals subplot axis with appropriate labels.
+
+    Args:
+        ax_resid: Matplotlib axes object for the residuals plot.
+        n_rows: Total number of rows in the grid.
+        i: Current row index.
+        j: Current column index.
+        x_label: Label for x-axis.
+    """
     if i == (n_rows - 1):
         ax_resid.set(xlabel=x_label)
     else:
@@ -229,6 +312,11 @@ def _format_residuals_axis(ax_resid, n_rows, i, j, x_label):
 
 
 def _generate_legend(figure):
+    """Add a legend showing magnetic field color mapping.
+
+    Args:
+        figure: Matplotlib figure object to add legend to.
+    """
     legend_elements = [
         Patch(facecolor=color, label=str(label)) for label, color in H_PALETTE.items()
     ]
@@ -243,7 +331,14 @@ def _generate_legend(figure):
 
 
 def _get_plot_labels(exp_keys: list):
+    """Extract unique temperature and magnetic field values from oscillation keys.
 
+    Args:
+        exp_keys: List of OscillationKey objects.
+
+    Returns:
+        Tuple of (temperature_list, magnetic_field_list) with unique values.
+    """
     t_vals = []
     h_vals = []
     for key in exp_keys:
@@ -268,12 +363,35 @@ def _get_plot_labels(exp_keys: list):
 
 
 def _calculate_fig_size(n_cols, n_rows):
+    """Calculate figure size based on grid dimensions.
+
+    Args:
+        n_cols: Number of columns in the grid.
+        n_rows: Number of rows in the grid.
+
+    Returns:
+        Tuple of (width, height) in inches.
+    """
     width = 6 * n_cols
     height = 6 * n_rows
     return width, height
 
 
 def _create_subplots(fig_size, n_rows, n_cols, hspace, wspace):
+    """Create figure and gridspec for fit plots with residuals.
+
+    Each grid position gets two rows: one for the fit plot and one for residuals.
+
+    Args:
+        fig_size: Tuple of (width, height) for the figure.
+        n_rows: Number of data rows (magnetic field values).
+        n_cols: Number of columns (temperature values).
+        hspace: Vertical spacing between subplots.
+        wspace: Horizontal spacing between subplots.
+
+    Returns:
+        Tuple of (figure, gridspec, axes_array).
+    """
     # Each position gets 2 rows: one for fit, one for residuals
     fig = plt.figure(figsize=fig_size)
     gs = fig.add_gridspec(
@@ -289,10 +407,13 @@ def _create_subplots(fig_size, n_rows, n_cols, hspace, wspace):
 
 
 def _save_plot(fig, filename, dpi=300):
-    """
-    Save the plot
-    """
+    """Save figure to the processed figures directory.
 
+    Args:
+        fig: Matplotlib figure object to save.
+        filename: Filename for the saved figure.
+        dpi: Resolution in dots per inch.
+    """
     filepath = PROCESSED_FIGURES_PATH / filename
     fig.savefig(
         filepath,

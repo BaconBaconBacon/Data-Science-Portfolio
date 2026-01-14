@@ -68,11 +68,17 @@ pd.options.mode.chained_assignment = None
 
 
 class AMROCleaner:
+    """Cleans and preprocesses raw AMRO data from QD USA PPMS ACT Option files."""
 
     def __init__(
         self, datafile_type: str = ".dat", verbose: bool = False  # project_name: str,
     ):
+        """Initialize the AMROCleaner.
 
+        Args:
+            datafile_type: File extension of raw data files ('.dat' or '.csv').
+            verbose: If True, print detailed processing information.
+        """
         self.load_path = RAW_DATA_PATH
         self.save_path = PROCESSED_DATA_PATH
         # self.project_name = project_name
@@ -82,10 +88,20 @@ class AMROCleaner:
         return
 
     def get_experiment_labels(self) -> list[str]:
+        """Return list of experiment labels that were processed.
+
+        Returns:
+            List of experiment label strings.
+        """
         return self.experiment_labels
 
     def clean_data_from_folder(self) -> None:
+        """Process all raw data files in the RAW_DATA_PATH folder.
 
+        Reads each valid AMRO data file, extracts metadata from headers,
+        filters for oscillation data, removes outliers, anti-symmetrizes
+        measurements, and saves cleaned data to PROCESSED_DATA_PATH.
+        """
         # Checks RAW_DATA_PATH for .csv and .dat files
         filepaths = list(self.load_path.glob("*" + self.datafile_type))
         for filepath in filepaths:
@@ -158,6 +174,17 @@ class AMROCleaner:
         return
 
     def _clean_outliers(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Remove resistivity outliers from the data.
+
+        Identifies and removes data points whose resistivity falls outside
+        a specified number of standard deviations from the group mean.
+
+        Args:
+            df: DataFrame containing resistivity measurements.
+
+        Returns:
+            DataFrame with outliers removed.
+        """
         grouped = df.groupby([HEADER_TEMP, HEADER_MAGNET])[HEADER_RES_OHM]
         group_mean = grouped.transform("mean")
         group_std = grouped.transform("std")
@@ -175,6 +202,14 @@ class AMROCleaner:
         return df[mask].copy()
 
     def _extract_header(self, file: TextIOWrapper) -> list[list]:
+        """Extract header lines from a raw data file.
+
+        Args:
+            file: Open file handle to read header from.
+
+        Returns:
+            List of lists, where each inner list contains comma-separated header values.
+        """
         header = []
         for _ in range(CLEANER_HEADER_LENGTH):
             line = next(file)
@@ -184,6 +219,20 @@ class AMROCleaner:
         return header
 
     def _parse_and_verify_header(self, header: list) -> tuple:
+        """Parse and validate header information from a raw data file.
+
+        Verifies the file is from a QD USA AC Transport system and extracts
+        experiment metadata including label, geometry, wire separation, and cross-section.
+
+        Args:
+            header: List of header lines from _extract_header().
+
+        Returns:
+            Tuple of (experiment_label, geometry, wire_sep, cross_section).
+
+        Raises:
+            FileNotFoundError: If the file is not a valid ACT Option data file.
+        """
         # Verifies the header is for a QD USA AC Transport data file
         if (
             self._get_header_element(header, CLEANER_OPTION_COORD)
@@ -214,6 +263,15 @@ class AMROCleaner:
         return exp_label, geom, wire_sep, cross_section
 
     def _get_header_element(self, header: list[list], coord: tuple[int, int]) -> str:
+        """Extract a specific element from the header by row and column index.
+
+        Args:
+            header: List of header lines.
+            coord: Tuple of (row, column) indices (zero-indexed).
+
+        Returns:
+            String value at the specified header location.
+        """
         row = coord[0]
         col = coord[1]
         element = header[row][col]
@@ -222,6 +280,15 @@ class AMROCleaner:
     def _get_oscillation_labels(
         self, data: pd.DataFrame, exp_label: str
     ) -> list[OscillationKey]:
+        """Generate unique OscillationKey objects for each T/H combination in the data.
+
+        Args:
+            data: DataFrame containing temperature and magnetic field columns.
+            exp_label: Experiment label string.
+
+        Returns:
+            List of OscillationKey objects identifying each unique oscillation.
+        """
         # The data structures will not work if two oscillations have the same keys
         df = data[[HEADER_TEMP, HEADER_MAGNET]].drop_duplicates()
         osc_labels = []
@@ -237,7 +304,18 @@ class AMROCleaner:
         return osc_labels
 
     def _anti_symmetrize_oscillation(self, raw_df: pd.DataFrame) -> pd.DataFrame:
+        """Anti-symmetrize an oscillation by averaging +H and -H measurements.
 
+        For each sample angle, averages the resistivity measured at positive
+        and negative magnetic field to remove contributions from the ordinary
+        Hall effect.
+
+        Args:
+            raw_df: DataFrame containing raw oscillation data with +/- field measurements.
+
+        Returns:
+            DataFrame with anti-symmetrized resistivity values, or None if verification fails.
+        """
         # For each angle, verify there are two resistivities and the +/- mag field values match
         grouped_df = raw_df.groupby(
             [HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG], as_index=False
@@ -273,6 +351,15 @@ class AMROCleaner:
     def _handle_missing_measurements(
         self, df: pd.DataFrame, counted_df: pd.DataFrame
     ) -> pd.DataFrame:
+        """Remove angles that have fewer than 2 measurements per angle.
+
+        Args:
+            df: DataFrame containing oscillation measurements.
+            counted_df: DataFrame with count of measurements per angle.
+
+        Returns:
+            DataFrame with incomplete measurement angles removed.
+        """
         if self.verbose:
             print("Handling missing measurements...")
 
@@ -290,6 +377,18 @@ class AMROCleaner:
     def _handle_extra_measurements(
         self, df: pd.DataFrame, counted_df: pd.DataFrame
     ) -> pd.DataFrame:
+        """Remove duplicate measurements at angles with more than 2 data points.
+
+        Keeps only the first measurement for each unique combination of
+        temperature, magnetic field, angle, and field polarity.
+
+        Args:
+            df: DataFrame containing oscillation measurements.
+            counted_df: DataFrame with count of measurements per angle.
+
+        Returns:
+            DataFrame with extra measurements removed.
+        """
         if self.verbose:
             print("Handling extra measurements...")
 
@@ -312,12 +411,29 @@ class AMROCleaner:
         return df
 
     def _load_file(self, fp: Path) -> pd.DataFrame:
+        """Load raw data file into a DataFrame, skipping header rows.
+
+        Args:
+            fp: Path to the raw data file.
+
+        Returns:
+            DataFrame containing the raw measurement data.
+        """
         data = pd.read_table(fp, skiprows=CLEANER_HEADER_LENGTH, delimiter=",")
         return data
 
     def _get_columns_for_calcs(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Creates columns to perform anti-symmetrization"""
+        """Prepare DataFrame columns for anti-symmetrization calculations.
 
+        Renames columns, drops unused columns, and creates derived columns
+        for temperature and magnetic field values.
+
+        Args:
+            df: Raw DataFrame from _load_file().
+
+        Returns:
+            DataFrame with standardized column names and derived columns.
+        """
         df = df.rename(columns=CLEANER_COL_RENAME_DICT)
         df = df.drop(columns=CLEANER_DROP_COLS)
 
@@ -334,6 +450,18 @@ class AMROCleaner:
     def _verify_averaged_df(
         self, averaged_df: pd.DataFrame, raw_df: pd.DataFrame
     ) -> pd.DataFrame | None:
+        """Verify that anti-symmetrization was performed correctly.
+
+        Checks that row counts, mean values, and angle ranges match expected
+        values after averaging.
+
+        Args:
+            averaged_df: DataFrame after anti-symmetrization.
+            raw_df: Original DataFrame before anti-symmetrization.
+
+        Returns:
+            The averaged_df if verification passes, None otherwise.
+        """
         try:
             # averaged_df has half the number of rows of raw_df
             assert averaged_df.shape[0] * 2 == raw_df.shape[0]
@@ -359,6 +487,14 @@ class AMROCleaner:
         return averaged_df
 
     def _get_experiment_label_from_fn(self, filename) -> None | str:
+        """Extract experiment label from a filename.
+
+        Args:
+            filename: Filename string to parse.
+
+        Returns:
+            Experiment label string if found, None otherwise.
+        """
         items = filename.split("_")
         label = None
         for item in items:
@@ -367,6 +503,18 @@ class AMROCleaner:
         return label
 
     def _compare_labels(self, label_fn: str | None, label_head: str | None) -> str:
+        """Compare and reconcile experiment labels from filename and header.
+
+        Args:
+            label_fn: Label extracted from filename.
+            label_head: Label extracted from file header.
+
+        Returns:
+            The reconciled experiment label string.
+
+        Raises:
+            ValueError: If both labels are None.
+        """
         if label_fn is None and label_head is None:
             raise ValueError("Could not extract experiment name!")
         elif label_fn is None:

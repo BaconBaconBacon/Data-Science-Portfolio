@@ -46,6 +46,7 @@ from ..data import (
 
 
 class AMROFitter:
+    """Fits AMRO oscillations using Fourier-based initial guesses and least squares optimization."""
 
     def __init__(
         self,
@@ -57,9 +58,16 @@ class AMROFitter:
         verbose=False,
         if_save_file_exists_overwrite=False,
     ) -> None:
-        """
-        min_amp_ratio : Amplitude must be at this fraction or more of the strongest FT guess
-        max_freq : Use to avoid fitting noise
+        """Initialize the AMROFitter.
+
+        Args:
+            amro_data: ProjectData object containing AMRO experiments with Fourier results.
+            save_name: Name for saving results files.
+            min_amp_ratio: Minimum amplitude ratio threshold relative to strongest component.
+            max_freq: Maximum frequency to include in fitting (filters noise).
+            force_four_and_two_sym: If True, always include 2-fold and 4-fold symmetry terms.
+            verbose: If True, print detailed processing information.
+            if_save_file_exists_overwrite: If True, overwrite existing fit results.
         """
 
         # Fit Param filter values
@@ -76,8 +84,15 @@ class AMROFitter:
         return
 
     def _obj_func(self, params: lm.Parameters, angle: np.ndarray, res_data: np.ndarray) -> np.ndarray:
-        """
-        The sinebuilder is fitted by minimizing this least squares objective function.
+        """Compute residuals for least squares minimization.
+
+        Args:
+            params: lmfit Parameters object containing amplitude, frequency, and phase values.
+            angle: Array of angle values in radians.
+            res_data: Array of measured resistivity values (normalized).
+
+        Returns:
+            Array of residuals (model - data) for least squares fitting.
         """
 
         amps_list, freqs_list, phase_list, offset = (
@@ -89,7 +104,11 @@ class AMROFitter:
         return res_model - res_data
 
     def fit_act_experiment(self, act_label: str) -> None:
-        """"""
+        """Fit all oscillations in a specified experiment.
+
+        Args:
+            act_label: Experiment label identifying which experiment to fit.
+        """
         if act_label not in self.project_data.experiments_dict.keys():
             print(f"{act_label} is not a valid experiment label.")
             return
@@ -130,12 +149,18 @@ class AMROFitter:
     def _fit_oscillation(
         self, osc: AMROscillation
     ) -> tuple[lm.minimizer.MinimizerResult, bool]:
-        """
-        This function prepares the data of the AMR oscillation for fitting,
-         then fits it. To improve the fitting, the data and parameters are
-         scaled by the maximum resistivity of the AMRO oscillation. After
-         fitting, they are scaled back up. This is to avoid the minimzer
-         forgoing an error estimation for any given fit parameter.
+        """Fit a single AMRO oscillation using least squares optimization.
+
+        Prepares data by normalizing, initializes parameters from Fourier results,
+        performs the fit, and denormalizes the results. Attempts refit with
+        relaxed phase bounds if initial fit fails to produce covariance matrix.
+
+        Args:
+            osc: AMROscillation object containing experimental data and Fourier results.
+
+        Returns:
+            Tuple of (MinimizerResult, was_refitted) indicating fit results and
+            whether a refit with relaxed bounds was necessary.
         """
 
         x = osc.osc_data.angles_rads
@@ -168,12 +193,29 @@ class AMROFitter:
         return results, was_refitted
 
     def _normalize_data(self, y: np.ndarray) -> tuple[np.ndarray, float]:
+        """Normalize resistivity data by its maximum absolute value.
+
+        Args:
+            y: Array of resistivity values to normalize.
+
+        Returns:
+            Tuple of (normalized_data, scale_factor) for later denormalization.
+        """
         y_scale = np.abs(y).max()
         if y_scale < 1e-10:
             y_scale = 1.0
         return y / y_scale, y_scale
 
     def _denormalize_parameters(self, params: lm.Parameters, y_scale: float) -> lm.Parameters:
+        """Scale mean parameter back to original units after fitting.
+
+        Args:
+            params: lmfit Parameters object with normalized mean value.
+            y_scale: Scale factor used during normalization.
+
+        Returns:
+            Parameters object with denormalized mean value and error.
+        """
         params[HEADER_PARAM_MEAN_PREFIX].value *= y_scale
 
         if params[HEADER_PARAM_MEAN_PREFIX].stderr is not None:
@@ -186,7 +228,15 @@ class AMROFitter:
         fourier_result: FourierResult,
         mean_res: float,
     ) -> tuple[lm.Parameters, list]:
+        """Create initial parameter guesses from Fourier transform results.
 
+        Args:
+            fourier_result: FourierResult object containing frequency components.
+            mean_res: Mean resistivity value for the oscillation.
+
+        Returns:
+            Tuple of (Parameters object, list of frequencies) for fitting.
+        """
         # Generate a Parameters ordered dictionary, to which we add Parameter objects
         initial_p_guesses = lm.Parameters()
         initial_p_guesses.add(HEADER_PARAM_MEAN_PREFIX, value=mean_res, min=0)
@@ -221,13 +271,16 @@ class AMROFitter:
         amp_ratio_guess: float,
         phase_guess: float,
     ) -> None:
-        """
-        Forcing all amplitudes to be positive, negative values show up as
-        a pi-sized phase offset.
+        """Add frequency, amplitude, and phase parameters for a single symmetry component.
 
-        The y_scale scaling is to improve the error estimation of the fitter.
+        Amplitudes are constrained to be positive (negative values appear as phase offsets).
+        Phase values are bounded to [-2*pi, 2*pi].
 
-        We divide the magnitude by the mean in order to align with the way
+        Args:
+            frequency: Rotational symmetry frequency (cycles per rotation).
+            params: lmfit Parameters object to add parameters to.
+            amp_ratio_guess: Initial amplitude ratio guess from Fourier transform.
+            phase_guess: Initial phase guess from Fourier transform.
         """
 
         params.add(
@@ -252,19 +305,55 @@ class AMROFitter:
         return
 
     def _are_residuals_acceptable(self, residuals) -> bool:
+        """Check if fit residuals are within acceptable bounds.
+
+        Args:
+            residuals: Array of fit residuals.
+
+        Returns:
+            True if residuals are acceptable, False otherwise.
+        """
         # TODO: Check the mean absolute residual against some value. This lets us better track poor fits.
         # The average absolute residual is not greater than 1% of the mean?
         return
 
     def plot_fits_with_residuals(self, exp_choice, save_fig=False, **kwargs):
+        """Plot fitted curves overlaid on experimental data with residuals.
+
+        Args:
+            exp_choice: Experiment label to plot.
+            save_fig: If True, save the figure to disk.
+            **kwargs: Additional keyword arguments passed to plotting function.
+
+        Returns:
+            Tuple of (figure, axes) matplotlib objects.
+        """
         return _plot_fits_with_residuals(self, exp_choice, save_fig=save_fig, **kwargs)
 
     def plot_fits_with_residuals_uohm(self, exp_choice, save_fig=False, **kwargs):
+        """Plot fitted curves with residuals using micro-ohm-cm units.
+
+        Args:
+            exp_choice: Experiment label to plot.
+            save_fig: If True, save the figure to disk.
+            **kwargs: Additional keyword arguments passed to plotting function.
+
+        Returns:
+            Tuple of (figure, axes) matplotlib objects.
+        """
         return _plot_fits_with_residuals_uohm(
             self, exp_choice, save_fig=save_fig, **kwargs
         )
 
     def plot_bad_fits(self, exp_choice: str):
+        """Plot only the oscillations that failed to fit properly.
+
+        Args:
+            exp_choice: Experiment label to check for failed fits.
+
+        Returns:
+            Tuple of (figure, axes) matplotlib objects, or (None, None) if no failures.
+        """
         return _plot_bad_fits(self, exp_choice)
 
     # def save_plot(self, fig, filename, dpi=300):
@@ -282,14 +371,17 @@ class AMROFitter:
     def _fast_convert_params_to_ndarrays(
         self, params_obj: lm.Parameters, f_list: list
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Ensures the parameters are correctly ordered for sine_builder.
-        Aside from the 'mean' parameter, each 'phase' and 'freq' are
-        paired based on the 'freq' value.
+        """Convert lmfit Parameters to numpy arrays for sine_builder.
 
-        A faster version of u.convert_params_to_ndarrays() meant for use
-        in the fitter's objective function.
+        Optimized version for use in the objective function during fitting.
+        Extracts amplitude, frequency, phase arrays and mean value in correct order.
 
+        Args:
+            params_obj: lmfit Parameters object containing fit parameters.
+            f_list: List of frequencies to extract parameters for.
+
+        Returns:
+            Tuple of (amplitudes, frequencies, phases, mean) as numpy arrays.
         """
         params_dict = params_obj.valuesdict()
         amps_phase = [
@@ -308,7 +400,19 @@ class AMROFitter:
         )
 
     def _refit(self, params: lm.Parameters, x: np.ndarray, y_norm: np.ndarray) -> lm.minimizer.MinimizerResult:
+        """Attempt refit with relaxed phase parameter bounds.
 
+        Called when initial fit fails to produce a covariance matrix.
+        Removes bounds on phase parameters to allow broader exploration.
+
+        Args:
+            params: lmfit Parameters object from initial fit attempt.
+            x: Array of angle values in radians.
+            y_norm: Array of normalized resistivity values.
+
+        Returns:
+            MinimizerResult from the refit attempt.
+        """
         for name, param in params.items():
             if HEADER_PARAM_PHASE_PREFIX in name:
                 param.set(min=-np.inf, max=np.inf)

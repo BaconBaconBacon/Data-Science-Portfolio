@@ -19,18 +19,16 @@ def query_dataframe(
     h: float | int | list | None = None,
     t: float | int | list | None = None,
 ) -> pd.DataFrame:
-    """
-    Utility function to build strings to query Pandas DataFrames.
+    """Filter a DataFrame by experiment label, magnetic field, and/or temperature.
 
     Args:
         df: Pandas DataFrame to be queried.
-        act: The ACT label(s)
-        h: The magnetic field strength(s)
-        t: The temperature(s)
+        act: Experiment label(s) to filter by.
+        h: Magnetic field strength(s) to filter by.
+        t: Temperature(s) to filter by.
 
     Returns:
-        q: A string used to query a Pandas DataFrame.
-
+        Filtered DataFrame matching the specified criteria.
     """
     q = build_query_string(act, h, t)
     if len(q) > 0:
@@ -44,7 +42,16 @@ def build_query_string(
     h: float | int | list | None = None,
     t: float | int | list | None = None,
 ) -> str:
-    """To query DataFrame representations of the AMRO data."""
+    """Build a query string for filtering AMRO DataFrames.
+
+    Args:
+        act: Experiment label(s) to include in query.
+        h: Magnetic field value(s) to include in query.
+        t: Temperature value(s) to include in query.
+
+    Returns:
+        Query string formatted for pandas DataFrame.query().
+    """
     query = []
     if isinstance(act, str):
         query.append(HEADER_EXP_LABEL + f' == "{act}"')
@@ -60,7 +67,20 @@ def build_query_string(
 def sine_builder(
     rads, amps: np.ndarray, freqs: np.ndarray, phases: np.ndarray, mean: float | int
 ) -> np.ndarray:
-    """Returns a Fourier series consisting of sine terms and an offset."""
+    """Construct a Fourier series model from sine components.
+
+    Computes: mean * (1 + sum(amp_i * sin(freq_i * rads + phase_i)))
+
+    Args:
+        rads: Array of angle values in radians.
+        amps: Array of amplitude ratios for each frequency component.
+        freqs: Array of frequencies (cycles per rotation).
+        phases: Array of phase offsets in radians.
+        mean: Mean resistivity value (offset).
+
+    Returns:
+        Array of model resistivity values.
+    """
     summation = np.sum(
         amps[:, None] * np.sin(freqs[:, None] * rads + phases[:, None]), axis=0
     )
@@ -69,13 +89,27 @@ def sine_builder(
 
 
 def flatten_list(lst: list) -> list:
-    """Flatten a nested list."""
+    """Flatten a nested list into a single-level list.
+
+    Args:
+        lst: Nested list to flatten.
+
+    Returns:
+        Flattened list containing all elements.
+    """
     return [item for sublist in lst for item in sublist]
 
 
 def calculate_model_resistivities(x, params: tuple) -> np.ndarray:
-    """To be used with the output of convert_params_to_ndarrays(). Assumes x the x variable is in units of rads.
-    The units of y_fit will depend on those of the 'mean' parameter."""
+    """Calculate model resistivity values using fitted parameters.
+
+    Args:
+        x: Array of angle values in radians.
+        params: Tuple of (amplitudes, frequencies, phases, mean) from convert_params_to_ndarrays().
+
+    Returns:
+        Array of model resistivity values in the same units as the mean parameter.
+    """
     (
         amps_list,
         freqs_list,
@@ -97,12 +131,19 @@ def calculate_model_resistivities(x, params: tuple) -> np.ndarray:
 def convert_params_to_ndarrays(
     params: lm.parameter.Parameters, include_errs: bool = False
 ) -> tuple:
-    """
-    Ensures the parameters are correctly ordered for sine_builder. Aside from the
-    'mean' parameter, each 'phase' and 'freq' are paired based on the 'freq' value.
-    This function ensures the amps and phases are in the correct order relative to
-    the frequencies.
+    """Convert lmfit Parameters object to numpy arrays for model calculation.
 
+    Extracts amplitude, frequency, and phase values, ensuring correct ordering
+    for use with sine_builder().
+
+    Args:
+        params: lmfit Parameters object containing fitted values.
+        include_errs: If True, also return error estimates for each parameter.
+
+    Returns:
+        If include_errs is False: (amplitudes, frequencies, phases, mean).
+        If include_errs is True: (amplitudes, amp_errors, frequencies, phases,
+            phase_errors, mean, mean_error).
     """
     params_dict = params.create_uvars()
 
@@ -151,4 +192,14 @@ def convert_params_to_ndarrays(
 
 
 def format_oscillation_key(act: str, t: float, h: float) -> str:
+    """Format oscillation identifiers into a standardized string key.
+
+    Args:
+        act: Experiment label.
+        t: Temperature in Kelvin.
+        h: Magnetic field in Tesla.
+
+    Returns:
+        Formatted string in the form '{act}_T{t}K_H{h}T'.
+    """
     return f"{act}_T{t}K_H{h}T"

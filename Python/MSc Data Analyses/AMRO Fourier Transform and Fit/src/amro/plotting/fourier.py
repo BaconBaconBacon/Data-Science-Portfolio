@@ -17,10 +17,19 @@ import matplotlib.pyplot as plt
 def _plot_n_strongest(
     fourier, n: int, t: list | float, h: list | float
 ) -> sns.FacetGrid:
-    """
-    Plots the n-strongest.
+    """Plot bar chart of the n strongest Fourier components from AMRO data.
 
-    If n=0, then plots all available contributions.
+    Creates a faceted bar plot showing the amplitude ratios of the strongest
+    Fourier components, organized by temperature and magnetic field.
+
+    Args:
+        fourier: Fourier instance containing transformed AMRO data.
+        n: Number of strongest components to plot. If n=0, plots all components.
+        t: Temperature value(s) to filter the data.
+        h: Magnetic field value(s) to filter the data.
+
+    Returns:
+        Seaborn FacetGrid object containing the generated plot.
     """
     # TODO: Config file?
     sns.set_context("poster")

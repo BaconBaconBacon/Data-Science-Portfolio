@@ -64,35 +64,44 @@ class OscillationKey:
     magnetic_field: float
 
     def __str__(self) -> str:
+        """Return formatted string representation of the key."""
         return u.format_oscillation_key(
             self.experiment_label, self.temperature, self.magnetic_field
         )
 
     def __repr__(self) -> str:
+        """Return string representation for debugging."""
         return str(self)
 
     def compare_exp_label(self, other_act: str) -> bool:
+        """Check if experiment label matches the given value."""
         return self.experiment_label == other_act
 
     def compare_temperature(self, other_temperature: float) -> bool:
+        """Check if temperature matches the given value."""
         return self.temperature == other_temperature
 
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
+        """Check if magnetic field matches the given value."""
         return self.magnetic_field == other_magnetic_field
 
     def compare_keys(self, other_key: "OscillationKey") -> bool:
+        """Check if all key components match another OscillationKey."""
         same_act = self.compare_exp_label(other_key.experiment_label)
         same_temp = self.compare_temperature(other_key.temperature)
         same_field = self.compare_magnetic_field(other_key.magnetic_field)
         return same_act and same_temp and same_field and same_field
 
     def get_experiment_label(self) -> str:
+        """Return the experiment label."""
         return self.experiment_label
 
     def get_temperature(self) -> float:
+        """Return the temperature in Kelvin."""
         return self.temperature
 
     def get_magnetic_field(self) -> float:
+        """Return the magnetic field in Tesla."""
         return self.magnetic_field
 
 
@@ -131,9 +140,11 @@ class FitResult:
     fitted_params_dict: dict = field(default_factory=dict)
 
     def __str__(self) -> str:
+        """Return string representation of the fit result."""
         return f"Fit_Result_Object_{self.experiment_key}"
 
     def __post_init__(self) -> None:
+        """Initialize derived attributes from lmfit result."""
 
         # Get the relevant info from lmfit_result
         self.chi_squared = self.lmfit_result.chisqr
@@ -150,9 +161,11 @@ class FitResult:
         return
 
     def compare_act(self, other_act: str) -> bool:
+        """Check if experiment label matches the given value."""
         return self.experiment_key.compare_exp_label(other_act)
 
     def _build_params_dict(self) -> None:
+        """Build dictionary of fitted parameters with their errors."""
         self.fitted_params_dict[HEADER_MEAN] = (self.mean, self.mean_err)
         for i, freq in enumerate(self.symmetries):
             self.fitted_params_dict[freq] = (
@@ -162,19 +175,23 @@ class FitResult:
         return
 
     def compare_temperature(self, other_temperature: float) -> bool:
+        """Check if temperature matches the given value."""
         return self.experiment_key.compare_temperature(other_temperature)
 
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
+        """Check if magnetic field matches the given value."""
         return self.experiment_key.compare_magnetic_field(other_magnetic_field)
 
     def get_fitted_params(self) -> tuple:
+        """Return fitted parameters as numpy arrays without errors."""
         return u.convert_params_to_ndarrays(self.lmfit_params, include_errs=False)
 
     def get_fitted_params_with_errs(self) -> tuple:
+        """Return fitted parameters as numpy arrays with error estimates."""
         return u.convert_params_to_ndarrays(self.lmfit_params, include_errs=True)
 
     def _parse_params(self, params: lm.Parameters) -> None:
-        """Must parse the keys and values of the Parameters objects"""
+        """Extract parameter values and errors from lmfit Parameters object."""
         self.lmfit_params = params
         self.fit_report = lm.fit_report(params)
 
@@ -201,12 +218,15 @@ class FitResult:
         return
 
     def get_experiment_label(self) -> str:
+        """Return the experiment label from the key."""
         return self.experiment_key.get_experiment_label()
 
     def get_temperature(self) -> float:
+        """Return the temperature from the key."""
         return self.experiment_key.get_temperature()
 
     def get_magnetic_field(self) -> float:
+        """Return the magnetic field from the key."""
         return self.experiment_key.get_magnetic_field()
 
 
@@ -247,9 +267,11 @@ class ExperimentalData:
     delta_res_0deg_norm_pct: np.ndarray = field(init=False)
 
     def __str__(self) -> str:
+        """Return string representation of the data object."""
         return f"AMRO_Data_Object_{self.experiment_key}"
 
     def __post_init__(self) -> None:
+        """Initialize derived values and perform unit conversions."""
         self._validate_inputs()
 
         self.angles_degs = np.asarray(self.angles_degs)
@@ -265,15 +287,19 @@ class ExperimentalData:
         self._calc_normed_res()
 
     def compare_act(self, other_act: str) -> bool:
+        """Check if experiment label matches the given value."""
         return self.experiment_key.compare_exp_label(other_act)
 
     def compare_temperature(self, other_temperature: float) -> bool:
+        """Check if temperature matches the given value."""
         return self.experiment_key.compare_temperature(other_temperature)
 
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
+        """Check if magnetic field matches the given value."""
         return self.experiment_key.compare_magnetic_field(other_magnetic_field)
 
     def _calc_normed_res(self) -> None:
+        """Calculate normalized resistivity values as fractions and percentages."""
         self.delta_res_mean_norm = self.delta_res_mean_ohms / self.mean_res_ohms
         self.delta_res_0deg_norm = self.delta_res_0deg_ohms / self.deg0_res_ohms
 
@@ -288,6 +314,7 @@ class ExperimentalData:
         return
 
     def _validate_inputs(self) -> None:
+        """Validate that angle and resistivity values are non-negative."""
         if min(self.angles_degs) < 0:
             raise ValueError("Angles must be non-negative")
         elif min(self.res_ohms) < 0:
@@ -311,12 +338,15 @@ class ExperimentalData:
         return
 
     def get_experiment_label(self) -> str:
+        """Return the experiment label from the key."""
         return self.experiment_key.get_experiment_label()
 
     def get_temperature(self) -> float:
+        """Return the temperature from the key."""
         return self.experiment_key.get_temperature()
 
     def get_magnetic_field(self) -> float:
+        """Return the magnetic field from the key."""
         return self.experiment_key.get_magnetic_field()
 
 
@@ -341,6 +371,7 @@ class FourierResult:
     fourier_results_dict: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        """Process FFT output into amplitudes, phases, and amplitude ratios."""
 
         self.xf = np.asarray(self.xf).astype(int)
         self.yf = np.asarray(self.yf)
@@ -365,34 +396,57 @@ class FourierResult:
                 raise ValueError(f"Invalid symmetry! {f} in {self.key}")
 
     def get_fit_guess(self, freq: int) -> tuple[float, float]:
+        """Get amplitude ratio and phase for a given frequency as fit initial guess.
+
+        Args:
+            freq: Frequency component to retrieve.
+
+        Returns:
+            Tuple of (amplitude_ratio, phase) for the frequency.
+        """
         item = self.fourier_results_dict[freq]
         return item[1], item[2]
 
     def __str__(self) -> str:
+        """Return string representation of the Fourier result."""
         return f"Fourier_Result_Object_{self.key}"
 
     def get_n_strongest_components(self, n: int = 0) -> zip:
+        """Get the n strongest frequency components by amplitude ratio.
+
+        Args:
+            n: Number of components to return. If 0, returns all.
+
+        Returns:
+            Zip iterator of (frequency, amplitude_ratio) pairs.
+        """
         idx_largest = np.argpartition(self.amplitudes_ratio, -n)[-n:]
         n_syms = self.xf[idx_largest]
         n_ratios = self.amplitudes_ratio[idx_largest]
         return zip(n_syms, n_ratios)
 
     def compare_act(self, other_act: str) -> bool:
+        """Check if experiment label matches the given value."""
         return self.key.compare_exp_label(other_act)
 
     def compare_temperature(self, other_temperature: float) -> bool:
+        """Check if temperature matches the given value."""
         return self.key.compare_temperature(other_temperature)
 
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
+        """Check if magnetic field matches the given value."""
         return self.key.compare_magnetic_field(other_magnetic_field)
 
     def get_experiment_label(self) -> str:
+        """Return the experiment label from the key."""
         return self.key.get_experiment_label()
 
     def get_temperature(self) -> float:
+        """Return the temperature from the key."""
         return self.key.get_temperature()
 
     def get_magnetic_field(self) -> float:
+        """Return the magnetic field from the key."""
         return self.key.get_magnetic_field()
 
     # def get_init_params(self):
@@ -414,15 +468,19 @@ class AMROscillation:
     fourier_result: FourierResult | None = None
 
     def __str__(self) -> str:
+        """Return string representation of the oscillation."""
         return f"Experiment_Object_{self.key}"
 
     def compare_act(self, other_act: str) -> bool:
+        """Check if experiment label matches the given value."""
         return self.key.compare_exp_label(other_act)
 
     def compare_temperature(self, other_temperature: float) -> bool:
+        """Check if temperature matches the given value."""
         return self.key.compare_temperature(other_temperature)
 
     def compare_magnetic_field(self, other_magnetic_field: float) -> bool:
+        """Check if magnetic field matches the given value."""
         return self.key.compare_magnetic_field(other_magnetic_field)
 
     def add_fit_result(
@@ -430,6 +488,12 @@ class AMROscillation:
         lmfit_result: lm.minimizer.MinimizerResult,
         refitted: bool,
     ) -> None:
+        """Add fitting results to this oscillation.
+
+        Args:
+            lmfit_result: MinimizerResult from lmfit optimization.
+            refitted: Whether the fit required relaxed bounds.
+        """
         model_vals = self._calc_model_resistivities(lmfit_result.params)
         self.fit_result = FitResult(
             lmfit_result=lmfit_result,
@@ -441,28 +505,49 @@ class AMROscillation:
         return
 
     def add_fourier_result(self, xf: np.ndarray, yf: np.ndarray) -> None:
-        """Input are the results of rfft in fourier.py, runs calculates to read into
-        FourierResult. Copy over the fourier._pack_ft_result() function, act, h, and t will
-        have been determined previously when accessing the AMROscillation object."""
+        """Add Fourier transform results to this oscillation.
 
+        Args:
+            xf: Array of frequency values from rfft.
+            yf: Array of complex amplitudes from rfft.
+        """
         self.fourier_result = FourierResult(key=self.key, xf=xf, yf=yf)
         return
 
     def get_experiment_label(self) -> str:
+        """Return the experiment label from the key."""
         return self.key.get_experiment_label()
 
     def get_temperature(self) -> float:
+        """Return the temperature from the key."""
         return self.key.get_temperature()
 
     def get_magnetic_field(self) -> float:
+        """Return the magnetic field from the key."""
         return self.key.get_magnetic_field()
 
     def _calc_model_resistivities(self, params: lm.parameter.Parameters) -> np.ndarray:
+        """Calculate model resistivity values from fitted parameters.
+
+        Args:
+            params: lmfit Parameters object with fitted values.
+
+        Returns:
+            Array of model resistivity values.
+        """
         params = u.convert_params_to_ndarrays(params)
         model_res = u.calculate_model_resistivities(self.osc_data.angles_rads, params)
         return model_res
 
     def get_n_strongest_fourier(self, n: int = 0) -> zip | None:
+        """Get the n strongest Fourier components for this oscillation.
+
+        Args:
+            n: Number of components to return.
+
+        Returns:
+            Zip iterator of (frequency, amplitude_ratio) pairs, or None if no Fourier result.
+        """
         if self.fourier_result is not None:
             return self.fourier_result.get_n_strongest_components(n)
         else:
@@ -470,14 +555,17 @@ class AMROscillation:
             return None
 
     def get_oscillation_as_dataframe(self) -> pd.DataFrame:
+        """Convert oscillation data to a DataFrame. Not yet implemented."""
         # TODO: Implement this
         return
 
     def clear_fourier_result(self) -> None:
+        """Remove the Fourier result from this oscillation."""
         self.fourier_result = None
         return
 
     def clear_fit_result(self) -> None:
+        """Remove the fit result from this oscillation."""
         self.fit_result = None
         return
 
@@ -496,6 +584,11 @@ class Experiment:
     material: str = None
 
     def add_oscillation(self, oscillation: AMROscillation) -> None:
+        """Add an oscillation to this experiment.
+
+        Args:
+            oscillation: AMROscillation object to add.
+        """
         new_key = oscillation.key
         if new_key not in self.oscillations_dict.keys():
             self.oscillations_dict[new_key] = oscillation
@@ -505,16 +598,38 @@ class Experiment:
         return
 
     def replace_oscillation(self, oscillation: AMROscillation) -> None:
+        """Replace an existing oscillation with a new one.
+
+        Args:
+            oscillation: AMROscillation object to replace with.
+        """
         new_key = oscillation.key
         self.oscillations_dict[new_key] = oscillation
         return
 
     def get_oscillation(self, t: float, h: float) -> AMROscillation:
+        """Retrieve an oscillation by temperature and magnetic field.
+
+        Args:
+            t: Temperature in Kelvin.
+            h: Magnetic field in Tesla.
+
+        Returns:
+            AMROscillation matching the specified conditions.
+        """
         request_key = OscillationKey(self.experiment_label, t, h)
 
         return self.oscillations_dict[request_key]
 
     def get_oscillation_from_key(self, request_key: OscillationKey) -> AMROscillation:
+        """Retrieve an oscillation using an OscillationKey.
+
+        Args:
+            request_key: OscillationKey identifying the oscillation.
+
+        Returns:
+            AMROscillation matching the key.
+        """
         return self.oscillations_dict[request_key]
 
     def get_multiple_oscillations(
@@ -522,11 +637,15 @@ class Experiment:
         t: float | list | None = None,
         h: float | list | None = None,
     ) -> list | None:
-        """If inputs are not None, returns all oscillations whose T and H
-        values exactly match the requested values.  If requested values are
-        None, returns all existing entries for that variable.
+        """Filter oscillations by temperature and/or magnetic field.
 
-        If for whatever reason this ever gets slow, try usings sets() for t and h."""
+        Args:
+            t: Temperature value(s) to filter by. None returns all temperatures.
+            h: Magnetic field value(s) to filter by. None returns all fields.
+
+        Returns:
+            List of AMROscillation objects matching the criteria.
+        """
 
         if t is None and h is None:
             return list(self.oscillations_dict.values())
@@ -546,6 +665,11 @@ class Experiment:
         return oscillations
 
     def get_experiment_as_dataframe(self) -> pd.DataFrame:
+        """Convert all oscillation data in this experiment to a DataFrame.
+
+        Returns:
+            DataFrame with one row per angle measurement, including all derived values.
+        """
         rows = []
         for osc_key, osc in self.oscillations_dict.items():
             data = osc.osc_data
@@ -575,8 +699,16 @@ class Experiment:
     def apply_geometry_correction(
         self, wire_sep, width=None, height=None, cross_section=None
     ):
-        """Scales resistance to resitivity in the case where measurements were
-        taken with cross-section and wire sep set to 1"""
+        """Scale resistance to resistivity using sample geometry.
+
+        Used when measurements were taken with default geometry values.
+
+        Args:
+            wire_sep: Wire separation distance in cm.
+            width: Sample width in cm (optional if cross_section given).
+            height: Sample height in cm (optional if cross_section given).
+            cross_section: Cross-sectional area in cm^2.
+        """
         if cross_section is None:
             cross_section = width * height
 
@@ -595,11 +727,15 @@ class ProjectData:
     fit_filter_str: str | None = None
 
     def __post_init__(self) -> None:
-
+        """Initialize the pickle file path for this project."""
         self.pickle_fp = FINAL_DATA_PATH / (self.project_name + ".pkl")
 
     def add_experiment(self, exp: Experiment) -> None:
+        """Add an experiment to this project.
 
+        Args:
+            exp: Experiment object to add.
+        """
         if exp.experiment_label not in self.experiments_dict.keys():
             self.experiments_dict[exp.experiment_label] = exp
             self.experiments_count += 1
@@ -608,6 +744,11 @@ class ProjectData:
             print(exp.experiment_label)
 
     def replace_experiment(self, exp: Experiment) -> None:
+        """Replace an existing experiment with a new one.
+
+        Args:
+            exp: Experiment object to replace with.
+        """
         if exp.experiment_label in self.experiments_dict.keys():
             self.experiments_dict[exp.experiment_label] = exp
         else:
@@ -615,9 +756,18 @@ class ProjectData:
             print(exp.experiment_label)
 
     def get_experiment(self, act_label: str) -> Experiment:
+        """Retrieve an experiment by its label.
+
+        Args:
+            act_label: Experiment label string.
+
+        Returns:
+            Experiment object matching the label.
+        """
         return self.experiments_dict[act_label]
 
     def get_experiment_labels(self) -> list[str]:
+        """Return list of all experiment labels in this project."""
         return list(self.experiments_dict.keys())
 
     def filter_oscillations(
@@ -626,6 +776,16 @@ class ProjectData:
         t_vals: float | list | None = None,
         h_vals: float | list | None = None,
     ) -> list:
+        """Filter all oscillations across experiments by label, temperature, and/or field.
+
+        Args:
+            experiments: Experiment label(s) to filter by.
+            t_vals: Temperature value(s) to filter by.
+            h_vals: Magnetic field value(s) to filter by.
+
+        Returns:
+            Flattened list of matching AMROscillation objects.
+        """
         if experiments is None:
             experiments = self.experiments_dict.keys()
         elif isinstance(experiments, str):
@@ -640,12 +800,16 @@ class ProjectData:
         return osc_list
 
     def check_for_saved_data(self) -> bool:
-        """Checks (and loads, if it exists) for existing data that may exist under the project_name"""
+        """Check for existing pickled project data. Not yet implemented."""
         # TODO: Implement this
         return
 
     def read_amro_data_from_dataframe(self, df: pd.DataFrame) -> None:
-        """Temporary stop-gap. Want to remove pandas entirely, eventually."""
+        """Load AMRO data from a pandas DataFrame into the project structure.
+
+        Args:
+            df: DataFrame containing AMRO oscillation data.
+        """
 
         for act in df[HEADER_EXP_LABEL].unique():
             sub_df = u.query_dataframe(df, act=act)
@@ -678,10 +842,11 @@ class ProjectData:
     def read_fit_results_from_dataframe(
         self, df: pd.DataFrame, lmfit_results_dict: dict
     ) -> None:
-        """Temporary stop-gap. Want to remove pandas entirely, eventually.
+        """Load fit results from a DataFrame and lmfit objects dictionary.
 
-        df: fit_params_df
-        lmfit_results_dict: lmfit_results_objs
+        Args:
+            df: DataFrame containing fit parameter data.
+            lmfit_results_dict: Nested dictionary of lmfit MinimizerResult objects.
         """
 
         for act in df[HEADER_EXP_LABEL].unique():
@@ -711,7 +876,11 @@ class ProjectData:
         return
 
     def read_fourier_results_from_dataframe(self, df: pd.DataFrame) -> None:
-        """Temporary stop-gap. Want to remove pandas entirely, eventually."""
+        """Load Fourier results from a pandas DataFrame.
+
+        Args:
+            df: DataFrame containing Fourier transform results.
+        """
         for act in df[HEADER_EXP_LABEL].unique():
             sub_df = u.query_dataframe(df, act=act)
 
@@ -740,6 +909,11 @@ class ProjectData:
         return
 
     def save_project_to_pickle(self, fp: Path = None) -> None:
+        """Save this project to a pickle file.
+
+        Args:
+            fp: File path for saving. Uses default if None.
+        """
         if fp is None:
             fp = self.pickle_fp
         with open(fp, "wb") as f:
@@ -748,11 +922,26 @@ class ProjectData:
 
     @classmethod
     def load_project_from_pickle(cls, fp: Path) -> "ProjectData":
+        """Load a ProjectData instance from a pickle file.
+
+        Args:
+            fp: Path to the pickle file.
+
+        Returns:
+            ProjectData instance loaded from file.
+        """
         with open(fp, "rb") as f:
             return pickle.load(f)
 
     def get_fit_results_as_df(self, filepath: Path | str | None = None) -> pd.DataFrame:
-        """One fit result per row"""
+        """Convert all fit results to a DataFrame with one row per oscillation.
+
+        Args:
+            filepath: Optional file path (not currently used).
+
+        Returns:
+            DataFrame containing fit parameters and statistics.
+        """
         rows = []
         for act_label in self.experiments_dict.keys():
             experiment = self.experiments_dict[act_label]
@@ -789,6 +978,11 @@ class ProjectData:
         return pd.DataFrame(rows)
 
     def save_fit_results_to_csv(self, filepath: Path | str | None = None) -> None:
+        """Save fit results to a CSV file.
+
+        Args:
+            filepath: Path for saving. Uses default naming if None.
+        """
         if filepath is None:
             filepath = FINAL_DATA_PATH / (
                 f"{self.project_name}_fit_results_" + self.fit_filter_str + ".csv"
@@ -799,6 +993,11 @@ class ProjectData:
         return
 
     def load_fit_results_from_csv(self, filepath: Path | str | None = None) -> None:
+        """Load fit results from a CSV file into the project.
+
+        Args:
+            filepath: Path to CSV file. Uses default naming if None.
+        """
         if filepath is None:
             filepath = FINAL_DATA_PATH / (
                 f"{self.project_name}_fit_results_" + self.fit_filter_str + ".csv"
@@ -810,7 +1009,14 @@ class ProjectData:
     def get_fourier_results_as_df(
         self, filepath: Path | str | None = None
     ) -> pd.DataFrame:
+        """Convert all Fourier results to a DataFrame with one row per frequency component.
 
+        Args:
+            filepath: Optional file path (not currently used).
+
+        Returns:
+            DataFrame containing frequency, amplitude, and phase data.
+        """
         rows = []
         for act_label in self.experiments_dict.keys():
             experiment = self.experiments_dict[act_label]
@@ -834,6 +1040,11 @@ class ProjectData:
         return pd.DataFrame(rows)
 
     def save_fourier_results_to_csv(self, filepath: Path | str | None = None) -> None:
+        """Save Fourier results to a CSV file.
+
+        Args:
+            filepath: Path for saving. Uses default naming if None.
+        """
         if filepath is None:
             filepath = FINAL_DATA_PATH / f"{self.project_name}_fourier_results.csv"
         df = self.get_fourier_results_as_df(filepath=filepath)
@@ -841,6 +1052,11 @@ class ProjectData:
         return
 
     def load_fourier_results_from_csv(self, filepath: Path | str | None = None) -> None:
+        """Load Fourier results from a CSV file into the project.
+
+        Args:
+            filepath: Path to CSV file. Uses default naming if None.
+        """
         if filepath is None:
             filepath = FINAL_DATA_PATH / f"{self.project_name}_fourier_results.csv"
         df = pd.read_csv(filepath)
@@ -848,10 +1064,20 @@ class ProjectData:
         return
 
     def change_project_name(self, new_name: str) -> None:
+        """Update the project name.
+
+        Args:
+            new_name: New name for the project.
+        """
         self.project_name = new_name
         return
 
     def get_summary_statistics(self) -> dict:
+        """Calculate summary statistics for this project.
+
+        Returns:
+            Dictionary containing counts of experiments, oscillations, and completed analyses.
+        """
         n_oscillations = sum(
             len(exp.oscillations_dict) for exp in self.experiments_dict.values()
         )
@@ -884,8 +1110,18 @@ class ProjectData:
         cross_section: float = None,
         force_rescale: bool = False,
     ) -> None:
-        """To be used if the wire separation and cross-section were not changed when setting up the measurements.
-        rho = R * (A / L), where cross-section A has units of cm^2 and wire separation L has units of cm.
+        """Rescale resistance data to resistivity using correct sample geometry.
+
+        Used when measurements were taken with default geometry values (wire_sep=1, cross_section=1).
+        Applies formula: rho = R * (A / L), where A is cross-section and L is wire separation.
+
+        Args:
+            experiment_label: Label of experiment to rescale.
+            wire_sep: Wire separation distance in cm.
+            width: Sample width in cm (optional if cross_section given).
+            height: Sample height in cm (optional if cross_section given).
+            cross_section: Cross-sectional area in cm^2.
+            force_rescale: If True, rescale even if geometry values aren't default.
         """
         old_exp = self.experiments_dict[experiment_label]
 
@@ -934,7 +1170,20 @@ class ProjectData:
         height: float | None,
         cross_section: float | None,
     ) -> bool:
+        """Validate geometry inputs for rescaling.
 
+        Args:
+            wire_sep: Wire separation distance.
+            width: Sample width.
+            height: Sample height.
+            cross_section: Cross-sectional area.
+
+        Returns:
+            True if inputs are valid.
+
+        Raises:
+            ValueError: If inputs are invalid or negative.
+        """
         if cross_section is None:
             if height is None or width is None:
                 raise ValueError("Invalid dimension inputs for re-scaling.")

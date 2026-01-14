@@ -3,6 +3,11 @@ from amro import AMROFitter, AMROLoader, Fourier
 
 
 def parse_args():
+    """Parse command line arguments for the analysis pipeline.
+
+    Returns:
+        Namespace object containing all pipeline configuration arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-name", required=True, help="Data file name")
     # parser.add_argument("--experiments", nargs="+", help="Experiment labels")
@@ -36,6 +41,11 @@ def check_geometry_defaults(project_data, verbose=True):
 
 
 def main():
+    """Run the AMRO Fourier transform and fitting pipeline.
+
+    Loads cleaned AMRO data, performs Fourier transforms on oscillations,
+    fits the data using sine series, and optionally generates plots.
+    """
     args = parse_args()
 
     loader = AMROLoader(args.data_name, verbose=args.verbose)

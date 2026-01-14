@@ -16,7 +16,14 @@ from ..config import (
 
 
 def _quick_plot_amro(loader) -> None:
-    """ """
+    """Generate quick visualization plots of AMRO data from the loader.
+
+    Creates faceted scatter plots showing resistivity vs sample angle,
+    with data organized by magnetic field strength, temperature, and experiment label.
+
+    Args:
+        loader: AMROLoader instance containing project data to visualize.
+    """
     data = loader.project_data
     for key, exp in data.experiments_dict.items():
 

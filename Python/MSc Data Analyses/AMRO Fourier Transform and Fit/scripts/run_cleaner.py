@@ -11,6 +11,11 @@ from amro.data import AMROCleaner
 
 
 def parse_args():
+    """Parse command line arguments for the cleaner script.
+
+    Returns:
+        Namespace object containing datafile_type and verbose arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Clean and anti-symmetrize raw AMRO data from a QD USA PPMS ACT Option."
     )
@@ -28,6 +33,11 @@ def parse_args():
 
 
 def main():
+    """Run the AMRO data cleaning pipeline.
+
+    Initializes the cleaner with command line arguments, processes all raw
+    data files, and prints a summary of processed experiments.
+    """
     args = parse_args()
 
     cleaner = AMROCleaner(datafile_type=args.datafile_type, verbose=args.verbose)

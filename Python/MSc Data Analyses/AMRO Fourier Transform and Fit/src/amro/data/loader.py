@@ -68,7 +68,12 @@ class AMROLoader:
         project_name: str,
         verbose: bool = False,
     ):
+        """Initialize the AMROLoader.
 
+        Args:
+            project_name: Name identifier for the project, used for file naming.
+            verbose: If True, print detailed processing information.
+        """
         self.project_name = project_name
         self.project_data = ProjectData(project_name=project_name)
 
@@ -77,7 +82,14 @@ class AMROLoader:
         self.project_data.check_for_saved_data()
 
     def load_amro(self) -> ProjectData:
-        """ """
+        """Load AMRO data from pickle cache or run ETL pipeline.
+
+        Checks for existing pickled data first. If found, loads from cache.
+        Otherwise, runs the full ETL pipeline to load and process raw data.
+
+        Returns:
+            ProjectData object containing all loaded experiments and oscillations.
+        """
         if self.pickle_fp.is_file():
             print("Loading : {}".format(self.project_name))
             self.project_data = ProjectData.load_project_from_pickle(self.pickle_fp)
@@ -88,18 +100,20 @@ class AMROLoader:
         return self.project_data
 
     def get_amro_data(self) -> ProjectData:
+        """Return the loaded project data.
+
+        Returns:
+            ProjectData object containing all experiments and oscillations.
+        """
         return self.project_data
 
     def _run_amro_etl(self) -> None:
+        """Execute the ETL pipeline for AMRO data.
+
+        Reads processed CSV files from PROCESSED_DATA_PATH, extracts experiment
+        metadata and oscillation data, transforms into data structures, and loads
+        into the project_data container. Saves the result to a pickle file.
         """
-
-        Args:
-            data_dir:
-
-        Returns:
-
-        """
-
         filenames = list(PROCESSED_DATA_PATH.glob("*.csv"))
 
         valid_data_found = False
@@ -159,12 +173,27 @@ class AMROLoader:
         return None
 
     def _is_valid_amro_filename(self, filename: Path) -> bool:
+        """Check if a filename matches the expected AMRO data file naming pattern.
+
+        Args:
+            filename: Path object of the file to validate.
+
+        Returns:
+            True if the filename contains both the experiment prefix and cleaner suffix.
+        """
         valid_act_label = HEADER_EXPERIMENT_PREFIX in filename.name
         valid_cleaned_label = CLEANER_SAVE_FN_SUFFIX in filename.name
         return valid_cleaned_label and valid_act_label
 
     def _parse_experiment_metadata(self, temp_df: pd.DataFrame) -> tuple:
+        """Extract experiment metadata from a DataFrame.
 
+        Args:
+            temp_df: DataFrame containing experiment data with metadata columns.
+
+        Returns:
+            Tuple of (experiment_label, oscillation_keys, geometry, wire_sep, cross_section).
+        """
         wire_sep = temp_df[HEADER_WIRE_SEP].unique()[0]
         cross_section = temp_df[HEADER_CROSS_SECTION].unique()[0]
         experiment_label = temp_df[HEADER_EXP_LABEL].unique()[0]
@@ -186,10 +215,25 @@ class AMROLoader:
     def _convert_degs_to_rads(
         self, degs: np.ndarray | pd.Series
     ) -> np.ndarray | pd.Series:
+        """Convert angle values from degrees to radians.
 
+        Args:
+            degs: Angle value(s) in degrees.
+
+        Returns:
+            Angle value(s) converted to radians.
+        """
         return degs * 2 * np.pi / 360
 
     def _calculate_uohm_cols(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add micro-ohm-cm versions of resistivity columns to the DataFrame.
+
+        Args:
+            df: DataFrame containing resistivity columns in ohm-cm.
+
+        Returns:
+            DataFrame with additional columns converted to micro-ohm-cm.
+        """
         for col in df.columns:
             if "Res" in col:
                 new_col = col.replace("ohm", "uohm")
@@ -198,4 +242,5 @@ class AMROLoader:
         return df
 
     def quick_plot_amro(self) -> None:
+        """Generate quick visualization plots of the loaded AMRO data."""
         return _quick_plot_amro(self)

@@ -33,7 +33,7 @@ from pathlib import Path
 
 
 class Fourier:
-    """ """
+    """Performs Fourier transforms on AMRO data to extract rotational symmetry components."""
 
     def __init__(
         self,
@@ -42,6 +42,14 @@ class Fourier:
         overwrite_result=False,
         verbose: bool = False,
     ):
+        """Initialize the Fourier transformer.
+
+        Args:
+            amro_data: ProjectData object containing AMRO experiments and oscillations.
+            save_name: Name for saving results files.
+            overwrite_result: If True, overwrite existing Fourier results.
+            verbose: If True, print detailed processing information.
+        """
         self.project_data = amro_data
 
         self.all_results_df = pd.DataFrame()
@@ -54,6 +62,12 @@ class Fourier:
         return
 
     def fourier_transform_experiments(self) -> None:
+        """Perform Fourier transforms on all oscillations in the project data.
+
+        Iterates through all experiments and their oscillations, performing
+        FFT analysis on each. Results are stored in the oscillation objects
+        and saved to CSV and pickle files.
+        """
         results_list = []
         for exp_label in self.project_data.get_experiment_labels():
 
@@ -90,9 +104,16 @@ class Fourier:
         t: float | list = None,
         h: float | list = None,
     ) -> list:
-        """
-        Queries the n strongest contributions for each experiment in the data set.
-        If n=0, then returns all available contributions sorted by magnitude.
+        """Query the n strongest Fourier components for filtered oscillations.
+
+        Args:
+            n: Number of strongest components to retrieve. If 0, returns all components.
+            act: Experiment label(s) to filter by.
+            t: Temperature value(s) to filter by.
+            h: Magnetic field value(s) to filter by.
+
+        Returns:
+            List of tuples containing (OscillationKey, strongest_components) for each oscillation.
         """
         oscillations = self.project_data.filter_oscillations(
             experiments=act, t_vals=t, h_vals=h
@@ -106,6 +127,16 @@ class Fourier:
         return results
 
     def plot_n_strongest(self, n: int, t: list | float, h: list | float):
+        """Plot bar chart of the n strongest Fourier components.
+
+        Args:
+            n: Number of strongest components to plot.
+            t: Temperature value(s) to filter the data.
+            h: Magnetic field value(s) to filter the data.
+
+        Returns:
+            Seaborn FacetGrid object containing the generated plot.
+        """
         return _plot_n_strongest(self, n, t, h)
 
     def _perform_fourier_transform(
