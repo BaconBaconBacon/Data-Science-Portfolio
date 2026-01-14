@@ -18,7 +18,7 @@ def query_dataframe(
     act: str | list | None = None,
     h: float | int | list | None = None,
     t: float | int | list | None = None,
-):
+) -> pd.DataFrame:
     """
     Utility function to build strings to query Pandas DataFrames.
 
@@ -43,7 +43,7 @@ def build_query_string(
     act: str | list | None = None,
     h: float | int | list | None = None,
     t: float | int | list | None = None,
-):
+) -> str:
     """To query DataFrame representations of the AMRO data."""
     query = []
     if isinstance(act, str):
@@ -59,7 +59,7 @@ def build_query_string(
 
 def sine_builder(
     rads, amps: np.ndarray, freqs: np.ndarray, phases: np.ndarray, mean: float | int
-):
+) -> np.ndarray:
     """Returns a Fourier series consisting of sine terms and an offset."""
     summation = np.sum(
         amps[:, None] * np.sin(freqs[:, None] * rads + phases[:, None]), axis=0
@@ -73,7 +73,7 @@ def flatten_list(lst: list) -> list:
     return [item for sublist in lst for item in sublist]
 
 
-def calculate_model_resistivities(x, params: tuple):
+def calculate_model_resistivities(x, params: tuple) -> np.ndarray:
     """To be used with the output of convert_params_to_ndarrays(). Assumes x the x variable is in units of rads.
     The units of y_fit will depend on those of the 'mean' parameter."""
     (

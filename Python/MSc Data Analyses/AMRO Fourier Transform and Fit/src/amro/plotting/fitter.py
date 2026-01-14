@@ -161,7 +161,7 @@ def _plot_grid(
             _format_residuals_axis(ax_resid, n_rows, i, j, x_label)
 
 
-def _plot_residuals(x_plot, residuals, ax_resid):
+def _plot_residuals(x_plot, residuals, ax_resid) -> None:
     sns.scatterplot(
         x=x_plot,
         y=residuals,
@@ -209,7 +209,7 @@ def _plot_bad_fits(fitter, exp_chocie: str) -> tuple:
         return None, None
 
 
-def _format_data_axis(ax_fit, n_rows, i, j, subplot_title, x_label, y_label):
+def _format_data_axis(ax_fit, n_rows, i, j, subplot_title, x_label, y_label) -> None:
     ax_fit.set_title(subplot_title, fontsize=10)
     ax_fit.set_xticks([0, 90, 180, 270, 360])
     if i == (n_rows - 1):
