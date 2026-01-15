@@ -304,18 +304,23 @@ class AMROFitter:
 
         return
 
-    def _are_residuals_acceptable(self, residuals) -> bool:
+    def _are_residuals_acceptable(
+        self, residuals: np.ndarray, threshold: float = 0.01
+    ) -> bool:
         """Check if fit residuals are within acceptable bounds.
+
+        The mean absolute residual is compared against a threshold value.
+        This helps identify poor fits that may need manual inspection.
 
         Args:
             residuals: Array of fit residuals.
+            threshold: Maximum acceptable mean absolute residual (default 0.01).
 
         Returns:
-            True if residuals are acceptable, False otherwise.
+            True if mean absolute residual is below threshold, False otherwise.
         """
-        # TODO: Check the mean absolute residual against some value. This lets us better track poor fits.
-        # The average absolute residual is not greater than 1% of the mean?
-        return
+        mean_abs_residual = np.mean(np.abs(residuals))
+        return mean_abs_residual < threshold
 
     def plot_fits_with_residuals(self, exp_choice, save_fig=False, **kwargs):
         """Plot fitted curves overlaid on experimental data with residuals.

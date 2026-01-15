@@ -555,9 +555,33 @@ class AMROscillation:
             return None
 
     def get_oscillation_as_dataframe(self) -> pd.DataFrame:
-        """Convert oscillation data to a DataFrame. Not yet implemented."""
-        # TODO: Implement this
-        return
+        """Convert oscillation data to a DataFrame.
+
+        Returns:
+            DataFrame with one row per angle measurement, including all derived values.
+        """
+        data = self.osc_data
+        rows = []
+        for i in range(len(data.angles_degs)):
+            row = {
+                HEADER_EXP_LABEL: self.key.experiment_label,
+                HEADER_TEMP: self.key.temperature,
+                HEADER_MAGNET: self.key.magnetic_field,
+                HEADER_ANGLE_DEG: data.angles_degs[i],
+                HEADER_ANGLE_RAD: data.angles_rads[i],
+                HEADER_RES_OHM: data.res_ohms[i],
+                HEADER_RES_UOHM: c.convert_ohms_to_uohms(data.res_ohms[i]),
+                HEADER_RES_DEL_MEAN_OHM: data.delta_res_mean_ohms[i],
+                HEADER_RES_DEL_MEAN_UOHM: data.delta_res_mean_uohms[i],
+                HEADER_RES_DEF_MEAN_NORM: data.delta_res_mean_norm[i],
+                HEADER_RES_DEL_MEAN_NORM_PCT: data.delta_res_mean_norm_pct[i],
+                HEADER_RES_DEL_0DEG_OHM: data.delta_res_0deg_ohms[i],
+                HEADER_RES_DEL_0DEG_UOHM: data.delta_res_0deg_uohms[i],
+                HEADER_RES_DEL_0DEG_NORM: data.delta_res_0deg_norm[i],
+                HEADER_RES_DEL_0DEG_NORM_PCT: data.delta_res_0deg_norm_pct[i],
+            }
+            rows.append(row)
+        return pd.DataFrame(rows)
 
     def clear_fourier_result(self) -> None:
         """Remove the Fourier result from this oscillation."""
@@ -800,9 +824,12 @@ class ProjectData:
         return osc_list
 
     def check_for_saved_data(self) -> bool:
-        """Check for existing pickled project data. Not yet implemented."""
-        # TODO: Implement this
-        return
+        """Check for existing pickled project data.
+
+        Returns:
+            True if a pickle file exists at the configured path, False otherwise.
+        """
+        return self.pickle_fp.is_file()
 
     def read_amro_data_from_dataframe(self, df: pd.DataFrame) -> None:
         """Load AMRO data from a pandas DataFrame into the project structure.
