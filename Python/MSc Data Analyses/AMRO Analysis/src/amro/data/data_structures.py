@@ -86,7 +86,7 @@ class OscillationKey:
         return self.magnetic_field == other_magnetic_field
 
     def compare_keys(self, other_key: "OscillationKey") -> bool:
-        """Check if all key components match another OscillationKey."""
+        """Check if all of this key's attributes match another OscillationKey."""
         same_act = self.compare_exp_label(other_key.experiment_label)
         same_temp = self.compare_temperature(other_key.temperature)
         same_field = self.compare_magnetic_field(other_key.magnetic_field)
@@ -448,10 +448,6 @@ class FourierResult:
     def get_magnetic_field(self) -> float:
         """Return the magnetic field from the key."""
         return self.key.get_magnetic_field()
-
-    # def get_init_params(self):
-    #     """returns fourier component symmetries, their amplitudes and phases, and the mean"""
-    #     return
 
 
 @dataclass
@@ -837,8 +833,8 @@ class ProjectData:
                     key = OscillationKey(
                         experiment_label=act, temperature=t, magnetic_field=h
                     )
-                    angles = experiment_df[HEADER_ANGLE_DEG]
-                    res = experiment_df[HEADER_RES_OHM]
+                    angles = experiment_df[HEADER_ANGLE_DEG].values
+                    res = experiment_df[HEADER_RES_OHM].values
 
                     exp_data = ExperimentalData(
                         experiment_key=key, angles_degs=angles, res_ohms=res
@@ -871,7 +867,6 @@ class ProjectData:
                 sub_sub_df = u.query_dataframe(sub_df, t=t)
                 for h in sub_sub_df[HEADER_MAGNET].unique():
 
-                    # fit_result_df = u.query_dataframe(sub_sub_df, h=h)
                     lmfit_obj, refitted = lmfit_results_dict[act][t][h]
 
                     osc = exper.get_oscillation(t=t, h=h)

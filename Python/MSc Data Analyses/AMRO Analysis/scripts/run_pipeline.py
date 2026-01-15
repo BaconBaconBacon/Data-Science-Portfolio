@@ -9,7 +9,7 @@ def parse_args():
         Namespace object containing all pipeline configuration arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-name", required=True, help="Data file name")
+    parser.add_argument("--project-name", required=True, help="Project file name")
     # parser.add_argument("--experiments", nargs="+", help="Experiment labels")
     parser.add_argument("--fourier-only", action="store_true")
     parser.add_argument("--fit-only", action="store_true")
@@ -48,7 +48,7 @@ def main():
     """
     args = parse_args()
 
-    loader = AMROLoader(args.data_name, verbose=args.verbose)
+    loader = AMROLoader(args.project_name, verbose=args.verbose)
     project_data = loader.load_amro()
 
     check_geometry_defaults(project_data, verbose=True)
@@ -56,7 +56,7 @@ def main():
     if args.verbose:
         print(project_data.get_summary_statistics())
     if not args.fit_only:
-        fourier = Fourier(project_data, args.data_name, verbose=args.verbose)
+        fourier = Fourier(project_data, args.project_name, verbose=args.verbose)
         fourier.fourier_transform_experiments()
         project_data.save_fourier_results_to_csv()
         if args.verbose:
@@ -64,7 +64,7 @@ def main():
     if not args.fourier_only:
         fitter = AMROFitter(
             project_data,
-            save_name=args.data_name,
+            save_name=args.project_name,
             min_amp_ratio=args.min_amp_ratio,
             max_freq=args.max_freq,
             force_four_and_two_sym=args.force_symmetry,

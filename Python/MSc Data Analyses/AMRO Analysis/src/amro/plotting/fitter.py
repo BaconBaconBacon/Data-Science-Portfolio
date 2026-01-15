@@ -1,5 +1,7 @@
-"""
-    Plotting functionality for the utils_fitter.py file.
+"""Plotting functions for visualizing AMRO fit results.
+
+Provides functions to plot fitted sinusoidal models overlaid on experimental
+AMRO data, with residual subplots for assessing fit quality.
 """
 
 import matplotlib.pyplot as plt
@@ -7,22 +9,15 @@ import numpy as np
 import seaborn as sns
 
 from ..config import (
-    PROCESSED_DATA_PATH,
-    FINAL_DATA_PATH,
     H_PALETTE,
     PROCESSED_FIGURES_PATH,
-    HEADER_TEMP,
-    HEADER_MAGNET,
     HEADER_RES_UOHM,
     HEADER_RES_OHM,
-    HEADER_ANGLE_RAD,
     HEADER_ANGLE_DEG,
 )
 from matplotlib.patches import Patch
 
-from ..data import ProjectData, Experiment
-from ..utils import utils as u
-from pathlib import Path
+from ..data import Experiment
 
 
 # TODO: put this into a config file
@@ -33,7 +28,7 @@ context_font_scale = 1
 
 def _plot_fits_with_residuals(
     fitter,
-    exp_chocie: str,
+    exp_choice: str,
     h_choices: list | None | np.ndarray = None,
     t_choices: list | None | np.ndarray = None,
     figsize: tuple | None = None,
@@ -50,7 +45,7 @@ def _plot_fits_with_residuals(
 
     Args:
         fitter: AMROFitter instance containing fit results.
-        exp_chocie: Experiment label to plot.
+        exp_choice: Experiment label to plot.
         h_choices: Magnetic field values to include. If None, includes all.
         t_choices: Temperature values to include. If None, includes all.
         figsize: Figure size tuple (width, height). Auto-calculated if None.
@@ -65,10 +60,10 @@ def _plot_fits_with_residuals(
     # Set seaborn style
     project_data = fitter.project_data
 
-    if exp_chocie not in project_data.experiments_dict.keys():
-        print(f"{exp_chocie} is not a valid experiment choice.")
+    if exp_choice not in project_data.experiments_dict.keys():
+        print(f"{exp_choice} is not a valid experiment choice.")
         return None, None
-    experiment = project_data.get_experiment(exp_chocie)
+    experiment = project_data.get_experiment(exp_choice)
 
     exp_keys = experiment.oscillations_dict.keys()
     t_vals, h_vals = _get_plot_labels(exp_keys)
@@ -113,14 +108,14 @@ def _plot_fits_with_residuals(
     # Generate legend
     _generate_legend(fig)
     if save_fig:
-        filename = f"{exp_chocie}_figure_amro_fits_{fitter.filter_str}.pdf"
+        filename = f"{exp_choice}_figure_amro_fits_{fitter.filter_str}.pdf"
         _save_plot(fig, filename)
     return fig, axes
 
 
 def _plot_fits_with_residuals_uohm(
     fitter,
-    exp_chocie: str,
+    exp_choice: str,
     h_choices=None,
     t_choices=None,
     figsize=None,
@@ -132,7 +127,7 @@ def _plot_fits_with_residuals_uohm(
 
     Args:
         fitter: AMROFitter instance containing fit results.
-        exp_chocie: Experiment label to plot.
+        exp_choice: Experiment label to plot.
         h_choices: Magnetic field values to include.
         t_choices: Temperature values to include.
         figsize: Figure size tuple.
@@ -143,7 +138,7 @@ def _plot_fits_with_residuals_uohm(
     """
     fig, axes = _plot_fits_with_residuals(
         fitter=fitter,
-        exp_chocie=exp_chocie,
+        exp_choice=exp_choice,
         h_choices=h_choices,
         t_choices=t_choices,
         figsize=figsize,
@@ -239,12 +234,12 @@ def _plot_fit_over_data(x_plot, y, y_fit, ax, color) -> None:
     return
 
 
-def _plot_bad_fits(fitter, exp_chocie: str) -> tuple:
+def _plot_bad_fits(fitter, exp_choice: str) -> tuple:
     """Plot only oscillations where fitting failed.
 
     Args:
         fitter: AMROFitter instance containing failed fit information.
-        exp_chocie: Experiment label to check for failures.
+        exp_choice: Experiment label to check for failures.
 
     Returns:
         Tuple of (figure, axes) or (None, None) if no failures found.
@@ -256,19 +251,19 @@ def _plot_bad_fits(fitter, exp_chocie: str) -> tuple:
     t_labels = []
     h_labels = []
     for osc_key in fitter.failed_fits:
-        if osc_key.experiment_label == exp_chocie:
+        if osc_key.experiment_label == exp_choice:
             t_labels.append(osc_key.temperature)
             h_labels.append(osc_key.magnetic_field)
 
     if len(t_labels) > 0 and len(h_labels) > 0:
         fig, axes = _plot_fits_with_residuals(
-            fitter=fitter, exp_chocie=exp_chocie, t_choices=t_labels, h_choices=h_labels
+            fitter=fitter, exp_choice=exp_choice, t_choices=t_labels, h_choices=h_labels
         )
 
         plt.show()
         return fig, axes
     else:
-        print(f"No fits failed for {exp_chocie}.")
+        print(f"No fits failed for {exp_choice}.")
         return None, None
 
 
@@ -349,17 +344,6 @@ def _get_plot_labels(exp_keys: list):
     h_vals = list(set(h_vals))
 
     return t_vals, h_vals
-
-
-# def _get_fit_params(
-#     project_data: ProjectData, act: str, h: float, t: float
-# ) -> dict | None:
-#     exp = project_data.get_experiment(act)
-#     osc = exp.get_oscillation(t=t, h=h)
-#     if osc.fit_result is None:
-#         return None
-#     else:
-#         return osc.fit_result.guesses_dict
 
 
 def _calculate_fig_size(n_cols, n_rows):

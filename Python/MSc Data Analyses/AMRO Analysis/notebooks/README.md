@@ -4,9 +4,9 @@ Jupyter notebooks for interactive AMRO data analysis and exploration.
 
 ## Available Notebooks
 
-| Notebook | Description |
-|----------|-------------|
-| `01-load-fourier-and-fit.ipynb` | Complete analysis workflow: load cleaned data, perform Fourier transforms, fit oscillations, and visualize results |
+| Notebook                                        | Description                                                                                                       |
+|-------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
+| `01-example-analysis.ipynb` | Example analysis workflow: load cleaned data, perform Fourier transforms, fit oscillations, and visualize results |
 
 ## Usage
 
@@ -15,7 +15,7 @@ Jupyter notebooks for interactive AMRO data analysis and exploration.
 jupyter notebook notebooks/
 
 # Or open a specific notebook
-jupyter notebook notebooks/01-load-fourier-and-fit.ipynb
+jupyter notebook notebooks/01-example-analysis.ipynb
 ```
 
 ## Prerequisites

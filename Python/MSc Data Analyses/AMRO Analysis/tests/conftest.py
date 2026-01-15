@@ -46,12 +46,12 @@ def isolate_test_paths(tmp_path, monkeypatch):
     # Patch the paths in all modules that import them
     monkeypatch.setattr("amro.data.data_structures.FINAL_DATA_PATH", tmp_path)
     monkeypatch.setattr("amro.features.fourier.FINAL_DATA_PATH", tmp_path)
-    monkeypatch.setattr("amro.features.fourier.PROCESSED_DATA_PATH", tmp_path)
-    monkeypatch.setattr("amro.models.fitter.FINAL_DATA_PATH", tmp_path)
-    monkeypatch.setattr("amro.models.fitter.PROCESSED_DATA_PATH", tmp_path)
-    monkeypatch.setattr("amro.models.fitter.PROCESSED_FIGURES_PATH", tmp_path)
-    monkeypatch.setattr("amro.plotting.fitter.FINAL_DATA_PATH", tmp_path)
-    monkeypatch.setattr("amro.plotting.fitter.PROCESSED_DATA_PATH", tmp_path)
+    # monkeypatch.setattr("amro.features.fourier.PROCESSED_DATA_PATH", tmp_path)
+    # monkeypatch.setattr("amro.models.fitter.FINAL_DATA_PATH", tmp_path)
+    # monkeypatch.setattr("amro.models.fitter.PROCESSED_DATA_PATH", tmp_path)
+    # monkeypatch.setattr("amro.models.fitter.PROCESSED_FIGURES_PATH", tmp_path)
+    # monkeypatch.setattr("amro.plotting.fitter.FINAL_DATA_PATH", tmp_path)
+    # monkeypatch.setattr("amro.plotting.fitter.PROCESSED_DATA_PATH", tmp_path)
     monkeypatch.setattr("amro.plotting.fitter.PROCESSED_FIGURES_PATH", tmp_path)
 
     return tmp_path

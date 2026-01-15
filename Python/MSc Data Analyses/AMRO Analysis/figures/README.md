@@ -2,6 +2,8 @@
 
 Generated plots and visualizations from AMRO analysis.
 
+NOTE: The plotting functionality is limited, and can be expanded in the future should there be interest. 
+
 ## Directory Structure
 
 ### `raw/`
@@ -30,10 +32,10 @@ Figures are created by:
 ## Naming Convention
 
 ```
-{experiment_label}_figure_{type}_ratio_{min_amp_ratio}_maxf_{max_freq}_.pdf
+{experiment_label}_figure_{type}_ratio_{min_amp_ratio}_maxf_{max_freq}.pdf
 ```
 
-Example: `ACTRot11_figure_amro_fits_ratio_0.075_maxf_8_.pdf`
+Example: `ACTRot11_figure_amro_fits_ratio_0.075_maxf_8.pdf`
 
 ## Notes
 

@@ -1,44 +1,21 @@
-from pathlib import Path
-
 import lmfit as lm
 import numpy as np
-import pandas as pd
-import pickle
 
-from statsmodels.sandbox.distributions.try_pot import mean_residual_life
 
 from ..utils import utils as u
 from ..plotting.fitter import (
     _plot_fits_with_residuals,
     _plot_fits_with_residuals_uohm,
     _plot_bad_fits,
-    _save_plot,
 )
 
 from ..config import (
-    PROCESSED_DATA_PATH,
-    FINAL_DATA_PATH,
-    PROCESSED_FIGURES_PATH,
-    HEADER_ANGLE_DEG,
-    HEADER_ANGLE_RAD,
-    HEADER_RES_OHM,
-    HEADER_MAGNET,
-    HEADER_TEMP,
-    HEADER_EXP_LABEL,
-    HEADER_FREQ_LIST,
-    HEADER_FIT_CHISQ,
-    HEADER_FREQ,
-    HEADER_MAG_RATIO,
     HEADER_PARAM_AMP_PREFIX,
     HEADER_PARAM_PHASE_PREFIX,
     HEADER_PARAM_FREQ_PREFIX,
     HEADER_PARAM_MEAN_PREFIX,
-    HEADER_PHASE,
-    HEADER_MAG,
 )
 from ..data import (
-    FitResult,
-    OscillationKey,
     FourierResult,
     ProjectData,
     AMROscillation,
@@ -51,7 +28,6 @@ class AMROFitter:
     def __init__(
         self,
         amro_data: ProjectData,
-        save_name: str,
         min_amp_ratio=0.2,
         max_freq=10,
         force_four_and_two_sym=False,
@@ -78,12 +54,14 @@ class AMROFitter:
         self.verbose = verbose
         self.overwrite = if_save_file_exists_overwrite
 
-        self.filter_str = "ratio_{}_maxf_{}_".format(min_amp_ratio, max_freq)
+        self.filter_str = "ratio_{}_maxf_{}".format(min_amp_ratio, max_freq)
 
         self.failed_fits = []
         return
 
-    def _obj_func(self, params: lm.Parameters, angle: np.ndarray, res_data: np.ndarray) -> np.ndarray:
+    def _obj_func(
+        self, params: lm.Parameters, angle: np.ndarray, res_data: np.ndarray
+    ) -> np.ndarray:
         """Compute residuals for least squares minimization.
 
         Args:
@@ -186,8 +164,7 @@ class AMROFitter:
             else:
                 print("Fit was improved.")
             print("Continuing...")
-        # if self.verbose:
-        #     print("\n", lm.fit_report(results, show_correl=False), "\n")
+
         results.params = self._denormalize_parameters(results.params, norm_scale)
         del self.current_f_list
         return results, was_refitted
@@ -206,7 +183,9 @@ class AMROFitter:
             y_scale = 1.0
         return y / y_scale, y_scale
 
-    def _denormalize_parameters(self, params: lm.Parameters, y_scale: float) -> lm.Parameters:
+    def _denormalize_parameters(
+        self, params: lm.Parameters, y_scale: float
+    ) -> lm.Parameters:
         """Scale mean parameter back to original units after fitting.
 
         Args:
@@ -361,18 +340,6 @@ class AMROFitter:
         """
         return _plot_bad_fits(self, exp_choice)
 
-    # def save_plot(self, fig, filename, dpi=300):
-    #     _save_plot(fig, filename, dpi=dpi)
-    #
-    # def _save_to_disk(self):
-    #     """ """
-    #     with open(self.lmfit_results_fp, "wb") as f:
-    #         pickle.dump(self.lmfit_results_objs, f)
-    #
-    #     self.fit_params_df.to_csv(self.fit_params_fp, sep=",")
-    #     self.fit_amps_df.to_csv(self.fit_amps_fp, sep=",")
-    #     return
-
     def _fast_convert_params_to_ndarrays(
         self, params_obj: lm.Parameters, f_list: list
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -404,7 +371,9 @@ class AMROFitter:
             params_dict[HEADER_PARAM_MEAN_PREFIX],
         )
 
-    def _refit(self, params: lm.Parameters, x: np.ndarray, y_norm: np.ndarray) -> lm.minimizer.MinimizerResult:
+    def _refit(
+        self, params: lm.Parameters, x: np.ndarray, y_norm: np.ndarray
+    ) -> lm.minimizer.MinimizerResult:
         """Attempt refit with relaxed phase parameter bounds.
 
         Called when initial fit fails to produce a covariance matrix.

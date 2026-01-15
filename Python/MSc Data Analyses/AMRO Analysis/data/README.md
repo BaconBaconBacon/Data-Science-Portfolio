@@ -12,7 +12,9 @@ Storage for AMRO measurement data at various processing stages.
 - Format: `.dat` or `.csv` files with header metadata
 - Contents: Temperature, magnetic field, sample angle, and resistance measurements
 - Note: Includes both +H and -H field measurements (before anti-symmetrization)
-
+- The experiment's label is pulled from both the filename and the 'Material' field of the header.
+  - Should they not match, the code will default to the one in the filename.
+  
 ### `processed/`
 
 **Intermediate**: Cleaned and anti-symmetrized AMRO data.

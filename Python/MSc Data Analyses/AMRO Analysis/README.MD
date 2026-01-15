@@ -46,22 +46,69 @@ pip install -e ".[dev]"
 ```python
 from amro import AMROLoader, Fourier, AMROFitter
 
+project_name = 'YbPdBi_AMRO' 
+
 # Load cleaned AMRO data
-loader = AMROLoader("ACTRot11", verbose=True)
+loader = AMROLoader(project_name, verbose=True)
 project_data = loader.load_amro()
 
 # Perform Fourier analysis
-fourier = Fourier(project_data, "ACTRot11")
+fourier = Fourier(project_data, project_name)
 fourier.fourier_transform_experiments()
 
 # Fit oscillations with sinusoidal model
-fitter = AMROFitter(project_data, save_name="ACTRot11", min_amp_ratio=0.075, max_freq=8)
+fitter = AMROFitter(project_data, save_name=project_name, min_amp_ratio=0.075, max_freq=8)
 for exp_label in project_data.get_experiment_labels():
     fitter.fit_act_experiment(exp_label)
 
 # View results
 print(project_data.get_summary_statistics())
 ```
+
+## Expected Data Format
+
+### Input Files
+
+This package expects data files from a **QD USA PPMS ACT (AC Transport) Option**. Files should be `.dat` or `.csv` format with:
+
+- Header containing experiment metadata (experiment label, geometry, wire separation)
+  - The 'Material' field should also include the experiment label, with a prefix that matches HEADER_EXPERIMENT_PREFIX in config/settings.py
+  - The 'Comment' field should have the experiment's geometry, either parallel or perpendicular. Functionality for alternatives can be added to the repo later.
+- Columns for temperature, magnetic field, sample angle, and resistance
+
+For an example of the expected input data, see the `.dat` file in /tests/figures.
+
+Other data files from other measurement devices would need to have their own cleaner code written to massage the data into the format that the loader code requires as input.
+
+### File Naming
+
+Files should include an experiment label with the prefix given by the variable HEADER_EXPERIMENT_PREFIX in config/settings.py.
+
+The examples in this repo use `ACTRot` (e.g., `ACTRot11_sample_data.dat`). This prefix can be changed to match your project's naming conventions.
+
+This experiment label should match the one in the 'Material' field of the header of the ACT option.
+
+### Automatic Oscillation Detection
+The cleaner code has functionality to automatically detect oscillations in a data file with mixed measurements (i.e., a sweep of H at fixed angle), but be sure to review its output to be confident in its results. I can't exactly claim there was thorough testing on a plethora of input file types.
+
+### Geometry Correction
+
+If measurements were taken with default geometry values (wire_sep=1, cross_section=1), use:
+
+```python
+project_data.correct_geometry_scaling(
+    experiment_label="ACTRot11",
+    wire_sep=0.15,      # cm
+    cross_section=0.02  # cm^2
+)
+```
+## Naming Convention
+
+Each set of resistivity measurements as the sample rotation angle is changed, for a given |H| and T, is considered one AMROscillation. Each AMROscillation has an ExperimentalData, FourierResult and FitResult associated with it.
+
+Multiple AMROscillation's constitute one Experiment, which has an associated experiment label, geometry, wire separation, and cross-section. Multiple Experiments constitute one ProjectData. 
+
+The data is stored in custom data classes that reflect this hierarchy.
 
 ## Usage
 
@@ -77,7 +124,7 @@ This will:
 - Extract metadata from file headers
 - Filter for oscillation data
 - Remove outliers
-- Anti-symmetrize measurements (average +H and -H)
+- Anti-symmetrize measurements (average resistivity measurements taken at +H and -H)
 - Save cleaned data to `data/processed/`
 
 **Options:**
@@ -91,13 +138,13 @@ This will:
 Run the full Fourier transform and fitting pipeline:
 
 ```bash
-python scripts/run_pipeline.py --data-name ACTRot11 --verbose
+python scripts/run_pipeline.py --project-name YbPdBi_AMRO --verbose
 ```
 
 **Options:**
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--data-name` | (required) | Project/data file identifier |
+| `--project-name` | (required) | Project file identifier |
 | `--fourier-only` | False | Only run Fourier transform, skip fitting |
 | `--fit-only` | False | Only run fitting (requires prior Fourier results) |
 | `--min-amp-ratio` | 0.075 | Minimum amplitude ratio threshold for fitting |
@@ -111,13 +158,13 @@ python scripts/run_pipeline.py --data-name ACTRot11 --verbose
 For interactive exploration, use the Jupyter notebook:
 
 ```bash
-jupyter notebook notebooks/01-load-fourier-and-fit.ipynb
+jupyter notebook notebooks/01-example-analysis.ipynb
 ```
 
 ## Project Structure
 
 ```
-AMRO Fourier Transform and Fit/
+AMRO Analysis/
 ├── src/amro/               # Source code package
 │   ├── config/             # Configuration settings (paths, headers, params)
 │   ├── data/               # Data loading, cleaning, and data structures
@@ -139,30 +186,7 @@ AMRO Fourier Transform and Fit/
     └── raw/                # Raw data plots
 ```
 
-## Data Format
 
-### Input Files
-
-This package expects data files from a **QD USA PPMS ACT (AC Transport) Option**. Files should be `.dat` or `.csv` format with:
-
-- Header containing experiment metadata (sample label, geometry, wire separation)
-- Columns for temperature, magnetic field, sample angle, and resistance
-
-### File Naming
-
-Files should include an experiment label with the prefix `ACTRot` (e.g., `ACTRot11_sample_data.dat`).
-
-### Geometry Correction
-
-If measurements were taken with default geometry values (wire_sep=1, cross_section=1), use:
-
-```python
-project_data.correct_geometry_scaling(
-    experiment_label="ACTRot11",
-    wire_sep=0.15,      # cm
-    cross_section=0.02  # cm^2
-)
-```
 
 ## API Overview
 
@@ -241,4 +265,4 @@ ORCID: 0000-0003-2611-9686
 
 ## Acknowledgments
 
-This project was developed as part of MSc research investigating the electronic properties of YbPdBi at the Université de Montréal.
+This project was developed as part of graduate research investigating the quantum electronic properties of materials at l'Université de Montréal under the supervision of Prof. Andrea Bianchi.

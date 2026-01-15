@@ -60,7 +60,6 @@ class AMROLoader:
     magnetic field at 90deg. For the 'perp' geometry, the current vector is held
     orthogonal to the magnetic field for the entire rotation of the sample.
 
-    TODO: Add verbose functionality
     """
 
     def __init__(

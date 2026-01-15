@@ -54,7 +54,6 @@ def fourier_instance(sample_project_data_with_oscillations):
     """Create a Fourier instance."""
     return Fourier(
         amro_data=sample_project_data_with_oscillations,
-        save_name="test_fourier",
         verbose=False,
     )
 
@@ -91,7 +90,6 @@ class TestFourierInit:
     def test_verbose_mode(self, sample_project_data_with_oscillations):
         fourier = Fourier(
             amro_data=sample_project_data_with_oscillations,
-            save_name="test",
             verbose=True,
         )
         assert fourier.verbose is True
@@ -234,7 +232,7 @@ class TestKnownSignalRecovery:
         exp.add_oscillation(osc)
         project.add_experiment(exp)
 
-        fourier = Fourier(amro_data=project, save_name="test", verbose=False)
+        fourier = Fourier(amro_data=project, verbose=False)
         fourier.fourier_transform_experiments()
 
         # Check that 4-fold is dominant
@@ -268,7 +266,7 @@ class TestKnownSignalRecovery:
         exp.add_oscillation(osc)
         project.add_experiment(exp)
 
-        fourier = Fourier(amro_data=project, save_name="test", verbose=False)
+        fourier = Fourier(amro_data=project, verbose=False)
         fourier.fourier_transform_experiments()
 
         # Get n strongest should include 4 and 2

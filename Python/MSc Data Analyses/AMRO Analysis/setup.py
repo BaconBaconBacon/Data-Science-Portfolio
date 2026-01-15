@@ -5,7 +5,7 @@ setup(
     version="0.1.0",
     author="James Fraser",
     author_email="james.fraser@umontreal.ca",
-    description="AMRO Fourier Transform and Fitting Analysis for YbPdBi",
+    description="Angle-resolved Magnetoresistance Oscillation (AMRO) Analysis by Fourier transform and best fit.",
     license="MIT",
     packages=find_packages(where="src"),
     package_dir={"": "src"},

@@ -1,5 +1,7 @@
-"""
-    Plotting functionality for the utils_loader.py file.
+"""Plotting functions for quick visualization of loaded AMRO data.
+
+Provides functions to generate overview plots of AMRO experiments after
+loading, useful for data validation and exploration.
 """
 
 import seaborn as sns

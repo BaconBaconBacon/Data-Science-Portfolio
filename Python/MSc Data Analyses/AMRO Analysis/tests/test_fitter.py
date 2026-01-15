@@ -55,7 +55,7 @@ def sample_project_data_with_fourier():
     project.add_experiment(exp)
 
     # Run Fourier transform on all oscillations
-    fourier = Fourier(amro_data=project, save_name="test", verbose=False)
+    fourier = Fourier(amro_data=project, verbose=False)
     fourier.fourier_transform_experiments()
 
     return project
@@ -66,7 +66,6 @@ def fitter_instance(sample_project_data_with_fourier):
     """Create an AMROFitter instance."""
     return AMROFitter(
         amro_data=sample_project_data_with_fourier,
-        save_name="test_fitter",
         min_amp_ratio=0.01,  # Low threshold to include most frequencies
         max_freq=10,
         verbose=False,
@@ -140,7 +139,6 @@ class TestInitializeParametersFromFourier:
         """Test that frequencies above max_freq are excluded."""
         fitter = AMROFitter(
             amro_data=sample_project_data_with_fourier,
-            save_name="test",
             min_amp_ratio=0.01,
             max_freq=3,  # Should exclude freq 4
             verbose=False,
@@ -161,7 +159,6 @@ class TestInitializeParametersFromFourier:
         """Test that weak components are excluded by min_amp_ratio."""
         fitter = AMROFitter(
             amro_data=sample_project_data_with_fourier,
-            save_name="test",
             min_amp_ratio=0.5,  # High threshold - should exclude weak components
             max_freq=10,
             verbose=False,
@@ -342,7 +339,7 @@ class TestFitActExperiment:
 
         fitter = AMROFitter(
             amro_data=sample_project_data_with_fourier,
-            save_name="test",
+            #
             min_amp_ratio=0.01,
             max_freq=10,
             verbose=False,
@@ -432,13 +429,12 @@ class TestFitterIntegration:
         project.add_experiment(exp)
 
         # Run Fourier
-        fourier = Fourier(amro_data=project, save_name="test", verbose=False)
+        fourier = Fourier(amro_data=project, verbose=False)
         fourier.fourier_transform_experiments()
 
         # Run Fitter
         fitter = AMROFitter(
             amro_data=project,
-            save_name="test",
             min_amp_ratio=0.05,
             max_freq=10,
             verbose=False,

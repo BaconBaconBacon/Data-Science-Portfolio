@@ -6,8 +6,6 @@ potential AMRO measurement systems in the future.
 
 import argparse
 from amro.data import AMROCleaner
-import argparse
-from amro.data import AMROCleaner
 
 
 def parse_args():

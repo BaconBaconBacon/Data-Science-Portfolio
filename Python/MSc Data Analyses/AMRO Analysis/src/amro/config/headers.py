@@ -10,10 +10,6 @@ HEADER_MAGNET = "H"
 HEADER_EXP_LABEL = "ACT_str"
 HEADER_GEO = "geo"
 HEADER_WIRE_SEP = "L (cm)"
-
-# TODO: Sort out the cross section vs width/height stuff.
-# HEADER_WIDTH = "W (cm)"
-# HEADER_HEIGHT = "H (cm)"
 HEADER_CROSS_SECTION = "cross (cm^2)"
 
 HEADER_TEMP_RAW = "Temperature (K)"
@@ -45,12 +41,7 @@ HEADER_AMP_RATIO_ERR_SUFFIX = "_err"
 HEADER_MEAN = "Mean (ohm-cm)"
 HEADER_0DEG = "0deg (ohm-cm)"
 
-# TODO: Once the data classes replace the META_DATA dict, these can be removed
-# KEY_RES_CONSTANTS = "res_constants"
-# KEY_TEMP_LABELS = "T_labels"
-# KEY_MAGNET_LABELS = "H_labels"
-
-### Alternative resistivity units (used mostly in loader and plotting functions)
+# Alternative resistivity units (used mostly in loader and plotting functions)
 # value = (res-res_{constant})
 HEADER_RES_DEL_MEAN_OHM = f"Delta Res. {HEADER_MEAN}"
 HEADER_RES_DEL_MEAN_UOHM = HEADER_RES_DEL_MEAN_OHM.replace("ohm", "uohm")

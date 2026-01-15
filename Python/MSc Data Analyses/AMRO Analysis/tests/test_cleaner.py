@@ -287,7 +287,7 @@ class TestOscillationLabels:
         )
         exp_label = f"{HEADER_EXPERIMENT_PREFIX}11"
 
-        labels = cleaner._get_oscillation_labels(data, exp_label)
+        labels = cleaner._generate_oscillation_keys(data, exp_label)
 
         assert len(labels) == 3  # (2.0, 3.0), (5.0, 3.0), (5.0, 7.0)
         assert all(isinstance(label, OscillationKey) for label in labels)
@@ -303,7 +303,7 @@ class TestOscillationLabels:
         )
         exp_label = f"{HEADER_EXPERIMENT_PREFIX}11"
 
-        labels = cleaner._get_oscillation_labels(data, exp_label)
+        labels = cleaner._generate_oscillation_keys(data, exp_label)
 
         assert len(labels) == 1
         assert labels[0].temperature == 2.0

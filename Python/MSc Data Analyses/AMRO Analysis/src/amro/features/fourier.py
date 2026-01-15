@@ -1,35 +1,15 @@
-import itertools
 import numpy as np
 import pandas as pd
 
 from ..config import (
     FINAL_DATA_PATH,
-    PROCESSED_DATA_PATH,
-    HEADER_ANGLE_DEG,
-    HEADER_ANGLE_RAD,
-    HEADER_RES_OHM,
-    H_PALETTE,
-    HEADER_EXP_LABEL,
-    HEADER_TEMP,
-    HEADER_MAGNET,
-    HEADER_MAG_RATIO,
-    HEADER_MAG,
-    HEADER_FREQ,
-    HEADER_PHASE,
-    HEADER_PHASE_RAW,
-    HEADER_GEO,
-    HEADER_RES_DEL_MEAN_OHM,
 )
 from ..data import (
     ProjectData,
-    FourierResult,
-    OscillationKey,
     ExperimentalData,
 )
 from ..plotting.fourier import _plot_n_strongest
 from scipy.fft import rfft, rfftfreq
-from ..utils import utils as u
-from pathlib import Path
 
 
 class Fourier:
@@ -38,7 +18,6 @@ class Fourier:
     def __init__(
         self,
         amro_data: ProjectData,
-        save_name: str,
         overwrite_result=False,
         verbose: bool = False,
     ):
@@ -53,9 +32,9 @@ class Fourier:
         self.project_data = amro_data
 
         self.all_results_df = pd.DataFrame()
-        self.save_name = save_name
+        self.save_name = amro_data.project_name
         self.save_dir = FINAL_DATA_PATH
-        self.save_fp = self.save_dir / save_name
+        self.save_fp = self.save_dir / self.save_name
         self.verbose = verbose
         self.overwrite = overwrite_result
 
@@ -68,7 +47,6 @@ class Fourier:
         FFT analysis on each. Results are stored in the oscillation objects
         and saved to CSV and pickle files.
         """
-        results_list = []
         for exp_label in self.project_data.get_experiment_labels():
 
             experiment = self.project_data.get_experiment(exp_label)
@@ -142,16 +120,18 @@ class Fourier:
     def _perform_fourier_transform(
         self, data: ExperimentalData
     ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Performs a Fourier transform on the AMR oscillation of an experiment,
-        where the mean resistivity has been subtracted from the data to centre
-        the oscillation about zero.
+        """Perform FFT on mean-subtracted AMRO oscillation data.
 
-        Input:
-            df: DataFrame storing an AMRO experiment's data
-        Return:
-            yf: List of complex numbers storing the amplitudes and phases
-            xf: List of the rotational symmetries
+        Computes the real FFT of the resistance oscillation after subtracting
+        the mean, centering the oscillation about zero for cleaner frequency
+        extraction.
+
+        Args:
+            data: ExperimentalData object containing oscillation measurements.
+
+        Returns:
+            Tuple of (frequencies, amplitudes) where frequencies are the
+            rotational symmetry values and amplitudes are complex FFT coefficients.
         """
         fft_data = data.delta_res_mean_ohms
 

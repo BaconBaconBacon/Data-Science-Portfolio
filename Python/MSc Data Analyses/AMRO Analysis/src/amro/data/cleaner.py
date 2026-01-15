@@ -30,7 +30,6 @@ from ..config import (
     RAW_DATA_PATH,
     CLEANER_HEADER_LENGTH,
     CLEANER_COL_RENAME_DICT,
-    CLEANER_T_MIN_RESOLUTION,
     HEADER_MAGNET_RAW_OE,
     HEADER_TEMP_RAW,
     HEADER_MAGNET_RAW_OE_ABS,
@@ -120,6 +119,7 @@ class AMROCleaner:
                 )
                 exp_label = self._compare_labels(exp_label_fn, exp_label_head)
                 self.experiment_labels.append(exp_label)
+
                 # then reads the data into one large df
                 data = self._load_file(fp)
                 data = self._get_columns_for_calcs(data)
@@ -127,7 +127,7 @@ class AMROCleaner:
                 data = self._clean_outliers(data)
 
                 # Identifies the unique H and T pairings
-                osc_labels = self._get_oscillation_labels(data, exp_label)
+                osc_labels = self._generate_oscillation_keys(data, exp_label)
 
                 # for each unique H and T pairing, it anti-symmetrizes
                 cleaned_oscs = []
@@ -277,7 +277,7 @@ class AMROCleaner:
         element = header[row][col]
         return element
 
-    def _get_oscillation_labels(
+    def _generate_oscillation_keys(
         self, data: pd.DataFrame, exp_label: str
     ) -> list[OscillationKey]:
         """Generate unique OscillationKey objects for each T/H combination in the data.
@@ -307,8 +307,7 @@ class AMROCleaner:
         """Anti-symmetrize an oscillation by averaging +H and -H measurements.
 
         For each sample angle, averages the resistivity measured at positive
-        and negative magnetic field to remove contributions from the ordinary
-        Hall effect.
+        and negative magnetic field to remove Hall Effect contributions.
 
         Args:
             raw_df: DataFrame containing raw oscillation data with +/- field measurements.
@@ -321,7 +320,6 @@ class AMROCleaner:
             [HEADER_TEMP, HEADER_MAGNET, HEADER_ANGLE_DEG], as_index=False
         )
 
-        # TODO Encapsulate this code properly
         # There should be only 2 measurements per angle, per T, per H
         counted_df = grouped_df.count()
         avg_count = np.mean(counted_df[HEADER_RES_OHM].values)
@@ -443,8 +441,6 @@ class AMROCleaner:
         df[HEADER_MAGNET] = c.convert_oe_to_teslas(df[HEADER_MAGNET_RAW_OE_ABS]).round(
             CLEANER_T_MIN_RESOLUTION
         )
-        # df["Field Polarity"] = np.sign(df[HEADER_MAGNET_RAW_OE])
-
         return df
 
     def _verify_averaged_df(

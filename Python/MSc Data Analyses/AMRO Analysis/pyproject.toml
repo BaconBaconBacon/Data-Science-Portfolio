@@ -5,17 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "amro"
 version = "0.1.0"
-description = "AMRO Fourier Transform and Fitting Analysis for YbPdBi"
+description = "Angle-resolved Magnetoresistance Oscillation (AMRO) Analysis by Fourier transform and best fit."
 readme = "README.MD"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
-    {name = "James Fraser", email = "james.fraser@umontreal.ca", orcid = "0000-0003-2611-9686"}
+    {name = "James Fraser", email = "james.fraser@umontreal.ca"} # ORCID:  "0000-0003-2611-9686"
+
 ]
 maintainers = [
     {name = "James Fraser", email = "james.fraser@umontreal.ca"}
 ]
-keywords = ["physics", "condensed-matter", "fermi-surface", "magnetoresistance", "amro"]
+keywords = ["physics", "condensed-matter", "fermi-surface", "magnetoresistance", "amr", "amro"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",

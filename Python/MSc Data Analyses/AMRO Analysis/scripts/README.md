@@ -21,11 +21,11 @@ python scripts/run_cleaner.py --datafile-type .dat --verbose
 Run the complete Fourier transform and fitting analysis pipeline.
 
 ```bash
-python scripts/run_pipeline.py --data-name ACTRot11 --verbose
+python scripts/run_pipeline.py --project-name YbPdBi_amro --verbose
 ```
 
 **Options:**
-- `--data-name`: Project/data identifier (required)
+- `--project-name`: Project/data identifier (required)
 - `--fourier-only`: Only run Fourier analysis
 - `--fit-only`: Only run fitting (requires prior Fourier results)
 - `--min-amp-ratio`: Amplitude threshold for fitting (default: 0.075)

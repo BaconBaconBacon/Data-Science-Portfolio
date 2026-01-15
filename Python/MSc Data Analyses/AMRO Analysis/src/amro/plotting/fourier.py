@@ -1,5 +1,7 @@
-"""
-    Plotting functionality for the utils_fourier.py file.
+"""Plotting functions for visualizing Fourier analysis results.
+
+Provides functions to create bar plots of the strongest Fourier components
+extracted from AMRO data.
 """
 
 from ..config import (
