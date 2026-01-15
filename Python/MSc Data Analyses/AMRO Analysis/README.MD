@@ -1,4 +1,4 @@
-# AMRO Fourier Transform and Fit
+# AMRO Analysis
 
 **Fermi Surface Symmetry Analysis via Angle-Resolved Magnetoresistance Oscillations**
 
@@ -7,9 +7,7 @@
 
 ## Introduction
 
-The purpose of this project is to determine the symmetry of the Fermi surface of YbPdBi, a material which has demonstrated interesting quantum effects. A [Fermi surface](https://en.wikipedia.org/wiki/Fermi_surface) is a quantum mechanical structure that determines many of the electronic transport properties of a material (that is to say, the way electricity runs through it). For example, this surface will be different for metals, semi-conductors, and insulators.
-
-To investigate this, we analyze angle-resolved magnetoresistance oscillation (AMRO) data, wherein we measure the longitudinal resistivity of a rectangular prism sample as we rotate it within a strong applied magnetic field. Resistivity is an intrinsic analogue to resistance. The resistivity is measured at both positive and negative magnetic field values, and then anti-symmetrized to minimize the influence of sample misalignment and any transverse resistivity that may be present.
+The purpose of this project is to provide a package to quickly analyze angle-resolved magnetoresistance oscillation (AMRO) data, wherein we measure the longitudinal resistivity of a rectangular prism sample as we rotate it within a strong applied magnetic field. Resistivity is an intrinsic analogue to resistance. The resistivity is measured at both positive and negative magnetic field values, and then anti-symmetrized to minimize the influence of sample misalignment and any transverse resistivity that may be present. From this, we can gain insight on the [Fermi surface](https://en.wikipedia.org/wiki/Fermi_surface), a quantum mechanical structure that determines many of the electronic transport properties of a material (that is to say, the way electricity runs through it). For example, this surface will be different for metals, semi-conductors, and insulators.
 
 The symmetry of the AMRO (how many times the resistivity repeats per sample rotation) is determined by the Fermi surface. A significant change in the AMRO symmetry indicates a significant change in the Fermi surface structure—an unusual occurrence indicative of interesting quantum physics. Investigations of such behaviour can help discover new materials for use in future technologies.
 
@@ -27,7 +25,7 @@ The symmetry of the AMRO (how many times the resistivity repeats per sample rota
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd "AMRO Fourier Transform and Fit"
+cd "AMRO Analysis"
 
 # Install the package in development mode
 pip install -e .

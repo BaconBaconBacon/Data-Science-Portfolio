@@ -720,25 +720,6 @@ class Experiment:
                 rows.append(row)
         return pd.DataFrame(rows)
 
-    def apply_geometry_correction(
-        self, wire_sep, width=None, height=None, cross_section=None
-    ):
-        """Scale resistance to resistivity using sample geometry.
-
-        Used when measurements were taken with default geometry values.
-
-        Args:
-            wire_sep: Wire separation distance in cm.
-            width: Sample width in cm (optional if cross_section given).
-            height: Sample height in cm (optional if cross_section given).
-            cross_section: Cross-sectional area in cm^2.
-        """
-        if cross_section is None:
-            cross_section = width * height
-
-        scale_factor = cross_section / wire_sep
-        return
-
 
 @dataclass
 class ProjectData:

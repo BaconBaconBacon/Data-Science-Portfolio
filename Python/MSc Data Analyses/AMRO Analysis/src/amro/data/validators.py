@@ -1,6 +1,9 @@
 """ Code to validate any loaded data."""
 
+# TODO:
+# Is is worth implementing this kind of code?
 # Claude suggestions:
+#
 # import numpy as np
 #
 #
