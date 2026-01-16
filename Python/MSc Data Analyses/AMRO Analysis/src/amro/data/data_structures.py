@@ -33,6 +33,8 @@ from ..config import (
     HEADER_RES_DEL_0DEG_OHM,
     HEADER_RES_DEL_0DEG_UOHM,
     HEADER_RES_DEL_0DEG_NORM,
+    COMBINED_AMRO_FN_SUFFIX,
+    FOURIER_FN_SUFFIX,
 )
 from ..utils import conversions as c
 from ..utils import utils as u
@@ -988,7 +990,7 @@ class ProjectData:
         """
         if filepath is None:
             filepath = FINAL_DATA_PATH / (
-                f"{self.project_name}_fit_results_" + self.fit_filter_str + ".csv"
+                self.project_name + "_fit_results_" + self.fit_filter_str + ".csv"
             )
 
         df = self.get_fit_results_as_df(filepath=filepath)
@@ -1049,7 +1051,7 @@ class ProjectData:
             filepath: Path for saving. Uses default naming if None.
         """
         if filepath is None:
-            filepath = FINAL_DATA_PATH / f"{self.project_name}_fourier_results.csv"
+            filepath = FINAL_DATA_PATH / (self.project_name + FOURIER_FN_SUFFIX)
         df = self.get_fourier_results_as_df(filepath=filepath)
         df.to_csv(filepath, index=False)
         return
@@ -1201,3 +1203,27 @@ class ProjectData:
             raise ValueError("Wire separation must be positive.")
 
         return True
+
+    def save_amro_data_to_csv(self, fp: Path = None):
+        """TODO: Write tests for this"""
+        if fp is None:
+            fp = FINAL_DATA_PATH / (self.project_name + COMBINED_AMRO_FN_SUFFIX)
+
+        dfs = []
+        for exp_key, exp in self.experiments_dict.items():
+            df = exp.get_experiment_as_dataframe()
+            dfs.append(df)
+        if len(dfs) > 0:
+            df = pd.concat(dfs)
+            df.to_csv(fp, index=False, sep=",")
+        else:
+            print("No experiments found to save!")
+        return
+
+    @classmethod
+    def load_amro_data_from_csv(cls, fp: Path = None):
+        """Expected format should match that outputted by save_amro_data_to_csv()"""
+        df = pd.read_csv(fp, sep=",")
+
+        # TODO Implement the reading in of the CSV into Experiment's and their AMROscillations.
+        return

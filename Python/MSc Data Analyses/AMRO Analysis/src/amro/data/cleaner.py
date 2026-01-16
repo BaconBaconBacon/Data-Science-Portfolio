@@ -111,8 +111,8 @@ class AMROCleaner:
                 exp_label_fn = self._get_experiment_label_from_fn(filepath.name)
 
                 # For each file, reads and parses the header info
-                fp = self.load_path / filepath
-                with open(fp) as file:
+                # fp = self.load_path / filepath
+                with open(filepath) as file:
                     header = self._extract_header(file)
                 exp_label_head, geom, wire_sep, cross_section = (
                     self._parse_and_verify_header(header)
@@ -121,7 +121,7 @@ class AMROCleaner:
                 self.experiment_labels.append(exp_label)
 
                 # then reads the data into one large df
-                data = self._load_file(fp)
+                data = self._load_file(filepath)
                 data = self._get_columns_for_calcs(data)
                 data = self._filter_for_oscillation_data(data)
                 data = self._clean_outliers(data)

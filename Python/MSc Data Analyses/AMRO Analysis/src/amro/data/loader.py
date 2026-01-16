@@ -31,6 +31,7 @@ from ..config import (
     CLEANER_SAVE_FN_SUFFIX,
     HEADER_EXPERIMENT_PREFIX,
     HEADER_CROSS_SECTION,
+    COMBINED_AMRO_FN_SUFFIX,
 )
 from ..plotting.loader import _quick_plot_amro
 from ..utils import utils as u
@@ -167,8 +168,14 @@ class AMROLoader:
             print("Could not find valid data!")
         else:
             print("AMRO loading complete")
+            self.project_data.save_amro_data_to_csv()
+            print(
+                f"Combined AMRO saved to {self.project_data.project_name + COMBINED_AMRO_FN_SUFFIX}"
+            )
             self.project_data.save_project_to_pickle()
-            print("Project saved as: {}".format(self.project_data.pickle_fp.name))
+            print(
+                "Project state pickled as: {}".format(self.project_data.pickle_fp.name)
+            )
         return None
 
     def _is_valid_amro_filename(self, filename: Path) -> bool:

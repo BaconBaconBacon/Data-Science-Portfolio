@@ -118,10 +118,20 @@ class AMROFitter:
             if not lmfit_result.success:
                 self.failed_fits.append(osc.key)
         print(f"Total fitted: {i}")
-        print("Saving to CSV.")
         self.project_data.save_fit_results_to_csv()
-        print(f"Pickling project data.")
+
+        # TODO: Get this into the settings.py
+        fn = (
+            self.project_data.project_name
+            + "_fit_results_"
+            + self.project_data.fit_filter_str
+            + ".csv"
+        )
+        print("Fit results saved to: " + fn)
+
         self.project_data.save_project_to_pickle()
+        print("Project state pickled.")
+
         return
 
     def _fit_oscillation(

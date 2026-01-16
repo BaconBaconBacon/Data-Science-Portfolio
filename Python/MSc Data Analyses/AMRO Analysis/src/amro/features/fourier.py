@@ -3,6 +3,7 @@ import pandas as pd
 
 from ..config import (
     FINAL_DATA_PATH,
+    FOURIER_FN_SUFFIX,
 )
 from ..data import (
     ProjectData,
@@ -68,10 +69,14 @@ class Fourier:
                 xf, yf = self._perform_fourier_transform(osc.osc_data)
                 osc.add_fourier_result(xf, yf)
 
-        print("Saving Fourier results.")
         self.project_data.save_fourier_results_to_csv()
-        print("Pickling project data.")
+        print(
+            "Saving Fourier results saved as: "
+            + self.project_data.project_name
+            + FOURIER_FN_SUFFIX
+        )
         self.project_data.save_project_to_pickle()
+        print("Project state pickled.")
 
         return
 

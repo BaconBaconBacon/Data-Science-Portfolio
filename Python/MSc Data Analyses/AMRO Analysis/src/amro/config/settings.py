@@ -18,9 +18,10 @@ CLEANER_MAG_FIELD_STABLE_THRESH = 0.01  # T
 CLEANER_OUTLIER_RES_STD = 5  # many standard deviations
 CLEANER_SAVE_FN_SUFFIX = "_antisymmetrized.csv"
 
+COMBINED_AMRO_FN_SUFFIX = "_amro_combined.csv"
+FOURIER_FN_SUFFIX = "_fourier_results.csv"
 
 # The loader functionality reads only these from the cleaned AMRO data
-# TODO: Replace this in the code with the respective HEADER_X_ stuff
 LOADER_DESIRED_COLS = [
     HEADER_TEMP_RAW,
     HEADER_ANGLE_DEG,
