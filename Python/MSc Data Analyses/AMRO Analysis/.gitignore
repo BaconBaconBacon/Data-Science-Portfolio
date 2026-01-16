@@ -155,7 +155,7 @@ cython_debug/
 ehthumbs.db
 Thumbs.db
 
-# Data files (raw, processed, intermediate)
+# data files (raw, processed, intermediate)
 data/raw/*
 data/processed/*
 data/intermediate/*
