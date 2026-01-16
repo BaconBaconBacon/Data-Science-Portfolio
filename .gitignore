@@ -4,8 +4,8 @@
 .virtual_documents
 __pycache__
 /Python/references
-/Written Analysis Excerpt/James Fraser Master
 Car Sales Analysis/
+
 
 # Basic data file types
 *.csv

@@ -9,7 +9,9 @@ The Python project section showcases one example from my M.Sc. in physics, one p
 
 N.B: Some of the Python projects require re-factoring, tidying, or removing proprietary information, and so appear somewhat empty for now.
 
+### AMRO Analysis
 
+An example of a Python data analysis I performed on angle-resolved magnetoresistance oscillation (AMRO) data. Currently needs significant tidying.
 ### Recipe Site Traffic
 Machine learning case study involving a hypothetical food recipe website seeking to increase traffic by identifying what kinds of recipes they ought to display on their front page.
 
@@ -20,18 +22,13 @@ Machine learning case study predicting the sale price of houses for a hypothetic
 
 
 
-### Property Wildfire Risk (Currently Tidying)
+### Property Wildfire Risk (Currently Re-writing)
 
 Machine learning project to predict wildfire risk for US properties using US census data. Currently re-writing to remove proprietary information.
 
 
 
-### AMRO Fourier Transform and Fit (Needs Refactoring)
-
-An example of a Python data analysis I performed on angle-resolved magnetoresistance oscillation (AMRO) data. Currently needs significant tidying. 
-
-
-### Demagnetization Analysis (Needs Tidying)
+### Demagnetization Analysis (Needs Re-factoring)
 
 Involves extrapolating magnetization data using a modified Brillouin model.
 
