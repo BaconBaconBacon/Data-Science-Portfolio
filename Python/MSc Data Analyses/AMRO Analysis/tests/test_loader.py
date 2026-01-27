@@ -83,7 +83,9 @@ class TestFilenameValidation:
         assert loader._is_valid_amro_filename(valid_path) is True
 
     def test_valid_amro_filename_variant(self, loader):
-        valid_path = Path(f"{HEADER_EXPERIMENT_PREFIX}12_Dres2_10K_3.0T{CLEANER_SAVE_FN_SUFFIX}")
+        valid_path = Path(
+            f"{HEADER_EXPERIMENT_PREFIX}12_Dres2_10K_3.0T{CLEANER_SAVE_FN_SUFFIX}"
+        )
         assert loader._is_valid_amro_filename(valid_path) is True
 
     def test_invalid_missing_prefix(self, loader):
@@ -158,7 +160,7 @@ class TestMicroohmCalculation:
 
 
 # =============================================================================
-# Project Data Access Tests
+# Project data Access Tests
 # =============================================================================
 
 
@@ -197,7 +199,7 @@ class TestLoadAmroIntegration:
 
 
 # =============================================================================
-# Data Structure Creation Tests
+# data Structure Creation Tests
 # =============================================================================
 
 

@@ -2,11 +2,19 @@ import census
 import geopandas as gpd
 import json
 import numpy as np
+
 import os
+from pathlib import Path
 import pandas as pd
 
 # import pytidycensus as tc
 import sqlalchemy as sql
+from settings import (
+    CENSUS_FEATURES,
+    GIS_DEFAULT_CRS,
+    PATH_DATA_CENSUS,
+    TEST_SQL_ENGINE_STR,
+)
 
 
 class CensusData:
@@ -16,7 +24,7 @@ class CensusData:
     possible features to choose, so will need to find guess
     relevant ones.
 
-    FOR ACS5, some ariables are at block group precision, and
+    FOR ACS5, some variables are at block group precision, and
     some are stored at tract and higher.
 
     To prep for machine learning, it's best to get each feature
@@ -86,53 +94,6 @@ class CensusData:
 
     """
 
-    # Set the coordinate system
-    DEFAULT_CRS = 5070
-
-    DEFAULT_FEATURES = [
-        "B25014",
-        "B25015",
-        "B25016",
-        "B25017",
-        "B25024",
-        "B25032",
-        "B25033",
-        "B25034",
-        "B25035",
-        "B25040",
-        "B25041",
-        "B25047",
-        "B25063",
-        "B25070",
-        "B25091",
-        "B01001",
-        "B01002",
-        "B01003",
-        "B01005",
-        "B01009",
-        "B02001",
-        "B03001",
-        "B05001",
-        "B05002",
-        "B06001",
-        "B19001",
-        "B19013",
-        "B19019",
-        "B19020",
-        "B19083",
-        "B19301",
-        "B19326",
-        "B23025",
-        "B23032",
-        "B24010",
-        "B24050",
-        "B08201",
-        "B08202",
-        "B08203",
-        "B08204",
-        "B25031",
-    ]
-
     def __init__(self, sql_engine, sql_conn, year: int):
 
         self.year = year
@@ -140,39 +101,37 @@ class CensusData:
         self.census = census.Census(
             os.environ.get("US_CENSUS_API_KEY"), year=self.year
         ).acs5
-        self.metadata_filepath = os.path.join(
-            "Data", "acs5_variables_{}.txt".format(self.year)
-        )
+        self.metadata_filepath = PATH_DATA_CENSUS / f"acs5_variables_{year}.txt"
 
         if not os.path.exists(self.metadata_filepath):
             self._generate_variable_metadata()
 
-        # TODO: IF EXISTS, CONNECT. IF NOT EXISTS, CREATE EMPTY
+        # TODO: IF EXISTS, CONNECT AND READ. IF NOT EXISTS, CREATE EMPTY
         self.sql_engine = sql_engine
         self.sql_conn = sql_conn
 
-        # Chosen variables for model (query these from the sql table, if they don't exist, generate it
+        # Chosen variables for model (query these from the SQL table, if they don't exist, generate it
         self.census_variables_list = []
 
-        return self
-
-    def _extract_from_geoid(self, geo_id: list | str) -> gpd.GeoDataFrame:
-        """
-        Takes in regional identfier to get census information.
-        """
-
-        tmp_list = []
-        for t in geo_id:
-            tmp_list.append()
-        data = gpd.GeoDataFrame(tmp_list, crs=self.DEFAULT_CRS)
-
-        return data
-
-    def extract_from_regions(self, tracts: list | str) -> gpd.GeoDataFrame:
-        """
-        Can add this functionality at another time.
-        """
-        return
+    # def _extract_from_geoid(self, geo_id: list | str) -> gpd.GeoDataFrame:
+    #     """
+    #     Takes in regional identfier to get census information.
+    #     """
+    #     raise NotImplementedError
+    #     tmp_list = []
+    #     for t in geo_id:
+    #         # TODO: Figure out what you were trying to do and implement it.
+    #         # tmp_list.append(census_data)
+    #         pass
+    #     data = gpd.GeoDataFrame(tmp_list, crs=GIS_DEFAULT_CRS)
+    #
+    #     return data
+    #
+    # def extract_from_regions(self, tracts: list | str) -> gpd.GeoDataFrame:
+    #     """
+    #     Can add this functionality at another time.
+    #     """
+    #     return
 
     def _transform(self, raw_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         return
@@ -194,9 +153,9 @@ class CensusData:
             json.dump(acs5_dict, f, indent=4)
         return
 
-    def get_variable_universe(self, variable: str | list) -> str:
-        meta_fp = os.path.join("Data", self.metadata_filepath)
-        with open("acs_variables.txt", "r") as f:
+    def get_variable_universe(self, variable: str | list) -> str | list:
+
+        with open(self.metadata_filepath, "r") as f:
             loaded_dict = json.load(f)
         if isinstance(variable, str):
             return loaded_dict[variable]["universe"]
@@ -207,10 +166,10 @@ class CensusData:
 
     def add_census_variables(self, var_list: list | str) -> None:
 
-        if isinstance(var, list):
+        if isinstance(var_list, list):
             for var in var_list:
                 pass
-        elif isinstance(var, str):
+        elif isinstance(var_list, str):
             pass
         else:
             raise TypeError("'var_list' must be a string of list of strings")
@@ -221,6 +180,9 @@ class CensusData:
 
 
 if __name__ == "__main__":
-    test_obj = LoadCensus("Data")
+    engine = sql.create_engine(TEST_SQL_ENGINE_STR)
+    conn = engine.connect()
+
+    test_obj = CensusData(sql_engine=engine, sql_conn=conn, year=2023)
     print(test_obj.C.tables())
     test_obj.visualize_data()

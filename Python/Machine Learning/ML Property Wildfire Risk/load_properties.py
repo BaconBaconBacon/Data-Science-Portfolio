@@ -1,6 +1,8 @@
 # import census
 import censusgeocode as cg
-import os
+
+# import os
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import sqlalchemy as sql
@@ -10,131 +12,123 @@ from random_address import real_random_address
 from shapely.geometry import Point
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
+from settings import (
+    GIS_DEFAULT_CRS,
+    PROP_TABLE_NAME,
+    PROP_LABELS_KEYS_MAP,
+    PATH_DATA_PROPERTIES,
+)
 
 
-class Properties():
-    '''
-        For each property, we want lat/long, and state/county/tract/block 
-        group information so that we can later query the ACS5.
-    '''
-    # Set the coordinate system
-    DEFAULT_CRS = 5070
-    TABLE_NAME = 'properties'
-    LABELS_KEYS_MAP = {
-        'geoid':  'GEOID',
-        'block_id' :  'BLOCK',
-        'block_grp':  "BLKGRP",
-        'tract_id':  'TRACT',
-        'county_id': 'COUNTY',
-        'state_id': 'STATE'
-    }
-    
+class Properties:
+    """
+    For each property, we want lat/long, and state/county/tract/block
+    group information so that we can later query the ACS5.
+    """
+
     def __init__(self, sql_engine, sql_conn):
-        
+
         self.sql_engine = sql_engine
         self.sql_conn = sql_conn
         # self.Session = sessionmaker(bind=self.sql_engine)
 
         self._connect_to_sql()
+        self.data_path = PATH_DATA_PROPERTIES
 
-
-    def add_random_properties(self, quantity:int)->None:
+    def add_random_properties(self, quantity: int) -> None:
         """
-            Add 'quantity' many new random addresses
+        Add 'quantity' many new random addresses
         """
         # TODO: Drop duplicates. Floating point rounding errors in the coords may affect this.
         # Could keep a hash of the address, for privacy?
         # self.session = self.Session()
-        print('Adding {} more properties'.format(quantity))
+        print("Adding {} more properties".format(quantity))
 
         # TODO: Turn this into a dictionary, should be faster
-        temp_lst = [None]*quantity
+        temp_lst = [None] * quantity
         for i in range(quantity):
-        
-            coords = real_random_address()['coordinates']
-            
-            lat = coords['lat']
-            long = coords['lng']
-            block = cg.coordinates(x=long, y=lat)['2020 Census Blocks'][0]
 
-            temp_lst[i] = {key : int(block[self.LABELS_KEYS_MAP[key]]) for key in self.LABELS_KEYS_MAP.keys()}
-            temp_lst[i]['geom'] = Point(long, lat)
+            coords = real_random_address()["coordinates"]
 
-            
-            if not (i+1)%50: 
+            lat = coords["lat"]
+            long = coords["lng"]
+            block = cg.coordinates(x=long, y=lat)["2020 Census Blocks"][0]
+
+            temp_lst[i] = {
+                key: int(block[PROP_LABELS_KEYS_MAP[key]])
+                for key in PROP_LABELS_KEYS_MAP.keys()
+            }
+            temp_lst[i]["geom"] = Point(long, lat)
+
+            if not (i + 1) % 50:
                 self._update_gpd_and_sql(temp_lst)
 
-        self._update_gpd_and_sql(temp_lst)       
+        self._update_gpd_and_sql(temp_lst)
         self._commit_database_changes()
         self._update_property_counts()
 
         return
-    
-    def delete_at_random(self, quantity:int)->None:
+
+    def delete_at_random(self, quantity: int) -> None:
         """
         Remove "quantity" many addresses from the db, at random.
         """
         return
-    
-    def get_random_subset(self, quantity:int)->gpd.GeoDataFrame:
+
+    def get_random_subset(self, quantity: int) -> gpd.GeoDataFrame:
         return
-    
-    def get_state_subset(self, state:str)->gpd.GeoDataFrame:
+
+    def get_state_subset(self, state: str) -> gpd.GeoDataFrame:
         return
-    
+
     # def property_count(self) ->int:
     #     '''
     #         Returns how many properties are in the list.
     #     '''
     #     return
-    def _update_gpd_and_sql(self, temp_lst:list)->None:
-        print(temp_lst)
-        tmp = gpd.GeoDataFrame(
-            data=temp_lst, geometry='geom', 
-            crs=self.DEFAULT_CRS
-        )
+    def _update_gpd_and_sql(self, temp_lst: list) -> None:
 
+        tmp = gpd.GeoDataFrame(data=temp_lst, geometry="geom", crs=GIS_DEFAULT_CRS)
         self.properties_gpd = gpd.GeoDataFrame(
-            pd.concat(
-                [self.properties_gpd, tmp]
-            ).reset_index(drop=True)
+            pd.concat([self.properties_gpd, tmp]).reset_index(drop=True)
         )
 
         self.properties_gpd.to_postgis(
-            self.TABLE_NAME, 
-            con=self.sql_conn, 
-            if_exists='replace'
+            self.PROP_TABLE_NAME, con=self.sql_conn, if_exists="replace"
         )
         return
-        
-    def _connect_to_sql(self)->None:
-            
+
+    def _connect_to_sql(self) -> None:
+
         # check if properties table exists, and connect
-        if self.sql_engine.dialect.has_table(self.sql_conn, self.TABLE_NAME):
+        if self.sql_engine.dialect.has_table(self.sql_conn, PROP_TABLE_NAME):
             print("'properties' table found.")
-            q = 'SELECT * FROM {}'.format(self.TABLE_NAME)
+            q = "SELECT * FROM {}".format(PROP_TABLE_NAME)
 
             # TODO: needs to convert to gpd
-            self.properties_gpd  = gpd.read_postgis(q, con=self.sql_conn,  geom_col='geom')
+            self.properties_gpd = gpd.read_postgis(
+                q, con=self.sql_conn, geom_col="geom"
+            )
             print("'properties' table loaded.")
         else:
             print("Creating new 'properties' table with 10 entries.")
-            q = 'CREATE TABLE {} ('.format(self.TABLE_NAME)
-            for key in self.LABELS_KEYS_MAP.keys():
-                q+= '{} INTEGER,'.format(key)
-            q+= 'geom geometry); '.format(self.DEFAULT_CRS)
+            q = "CREATE TABLE {} (".format(PROP_TABLE_NAME)
+            for key in PROP_LABELS_KEYS_MAP.keys():
+                q += "{} INTEGER,".format(key)
+            q += "geom geometry); ".format(GIS_DEFAULT_CRS)
             self.sql_conn.execute(text(q))
 
-            
-            q = 'SELECT * FROM {}'.format(self.TABLE_NAME)
-            self.properties_gpd  = gpd.read_postgis(q, con=self.sql_conn,  geom_col='geom')
+            q = "SELECT * FROM {}".format(PROP_TABLE_NAME)
+            self.properties_gpd = gpd.read_postgis(
+                q, con=self.sql_conn, geom_col="geom"
+            )
             self.add_random_properties(10)
         self._update_property_counts()
         return
 
-    def _commit_database_changes(self)->None:
+    def _commit_database_changes(self) -> None:
         print("Committing changes to properties SQL db.")
-        self.sql_conn.execute(text('COMMIT;'))
+        self.sql_conn.execute(text("COMMIT;"))
         return
 
     def _update_property_counts(self):
@@ -143,12 +137,16 @@ class Properties():
 
     def get_properties_gpd(self):
         return self.properties_gpd
-        
+
+
 if __name__ == "__main__":
     import sys
-    engine = sql.create_engine("postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project")
 
-    conn = engine.connect() 
+    engine = sql.create_engine(
+        "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project"
+    )
+
+    conn = engine.connect()
     props = Properties(engine, conn)
     props.add_random_properties(int(sys.argv[1]))
     print("Job done.")
