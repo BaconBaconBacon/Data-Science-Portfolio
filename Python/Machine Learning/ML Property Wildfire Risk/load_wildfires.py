@@ -29,11 +29,10 @@ class WildfireData:
     def __init__(self, sql_obj: SQL):
 
         self.sql_obj = sql_obj
-        self.test_mode = sql_obj.test_mode
+        self.test_mode = self.sql_obj.test_mode
 
         self.data_path = PATH_DATA_WILDFIRES
 
-        # TODO: Change to SQL DB from parquet files
         if self.sql_obj.check_table_exists(WILDFIRES_TABLE_NAME) and not self.test_mode:
             self.data = self._read_from_sql()
             print(

@@ -176,7 +176,7 @@ class SQL:
         table_name = self._sanitize_string(table_name)
 
         q = f"SELECT * FROM {table_name}"
-        print(table_name)
+
         return gpd.read_postgis(q, con=self.connection, geom_col=HEADER_GEOM)
 
     def initialize_properties_table(self, prop_name: str):

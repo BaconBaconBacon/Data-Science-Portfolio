@@ -19,6 +19,8 @@ from settings import (
     TABLE_NAME_CENSUS_TEST,
     TABLE_NAME_CACHE,
     CENSUS_SUMMARY_TABLES,
+    TABLE_NAME_CENSUS_PROPS_TEST,
+    TABLE_NAME_CENSUS_PROPS,
 )
 
 # from sqlalchemy import text
@@ -126,46 +128,124 @@ class CensusData:
             pass
 
         self.sql_obj = sql_obj
+        self.test_mode = self.sql_obj.test_mode
 
-        if self.sql_obj.test_mode:
-
+        if self.test_mode:
             self.table_name = TABLE_NAME_CENSUS_TEST
-            if self.sql_obj.check_table_exists(TABLE_NAME_CENSUS_TEST):
-                self.sql_obj.drop_table(TABLE_NAME_CENSUS_TEST, confirm=True)
         else:
             self.table_name = TABLE_NAME_CENSUS
+        self.data = self._read_from_sql()
+
         # Chosen variables for model (query these from the SQL table, if they don't exist, generate it
         self.census_variables_list = []
 
     def merge_census_info(self, properties_gpd: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-        """TODO: This is running super slow. Better to query at the block group level."""
+        """check existing data, only fetch missing geoids"""
+
+        # TODO: *** Encapsulate this stuff for clarity ***
+
         if "geoid" not in properties_gpd.columns:
             raise ValueError("No geoid column in input.")
 
-        if self.leafs_only:
-            variables = self._get_leaf_variables()
-        else:
-            variables = self._get_all_variables()
-        print(
-            f"Getting {len(variables)} many features for {properties_gpd.shape[0]} "
-            f"many properties at the {self.granularity} level."
+        # Check existing data
+        merge_cols = self._get_merge_columns()
+
+        existing_wide = self._get_existing_wide(merge_cols)
+        missing_geos = self._get_missing_geos(properties_gpd, existing_wide, merge_cols)
+
+        if not missing_geos.empty:
+            existing_wide = self._add_missing_geos(
+                properties_gpd, existing_wide, merge_cols, missing_geos
+            )
+
+            # Merge wide census data onto all properties
+        result = properties_gpd.merge(existing_wide, on=merge_cols, how="left")
+
+        # Drop geo ID columns (previously done in _transform_and_clean)
+        drop_cols = [x for x in result.columns if ("_id" in x) or ("_grp" in x)]
+        result = result.drop(columns=drop_cols)
+        return result
+
+    def _add_missing_geos(
+        self,
+        gdf: gpd.GeoDataFrame,
+        wide: pd.DataFrame,
+        merge_cols: list,
+        missing_geos,
+    ) -> gpd.GeoDataFrame:
+        variables = (
+            self._get_leaf_variables() if self.leafs_only else self._get_all_variables()
         )
-
         self.sql_obj.create_census_cache_table()
-        census_df = self._extract_from_geoid(properties_gpd, variables)
 
-        cleaned_df = self._transform_and_clean(census_df)
+        missing_props = gdf.merge(missing_geos, on=merge_cols, how="inner")
+        new_census_df = self._extract_from_geoid(missing_props, variables)
+        new_cleaned = self._transform_and_clean(new_census_df)
+        self._load_to_sql(new_cleaned)
 
-        self._load_to_sql(cleaned_df)
+        new_wide = self._wide_from_cleaned(new_cleaned, merge_cols)
+        existing_wide = (
+            pd.concat([wide, new_wide], ignore_index=True)
+            if not wide.empty
+            else new_wide
+        )
+        self.data = self._read_from_sql()
 
-        return cleaned_df
+        return existing_wide
+
+    def _get_missing_geos(
+        self, gdf: gpd.GeoDataFrame, wide, merge_cols: list
+    ) -> gpd.GeoDataFrame:
+
+        required_geos = gdf[merge_cols].drop_duplicates()
+
+        if not wide.empty:
+            check = required_geos.merge(
+                wide[merge_cols].drop_duplicates(),
+                on=merge_cols,
+                how="left",
+                indicator=True,
+            )
+            missing_geos = check[check["_merge"] == "left_only"].drop(
+                columns=["_merge"]
+            )
+        else:
+            missing_geos = required_geos
+
+        print(
+            f"{len(required_geos)} geographies needed, "
+            f"{len(required_geos) - len(missing_geos)} cached, "
+            f"{len(missing_geos)} to fetch."
+        )
+        return missing_geos
+
+    def _get_existing_wide(self, merge_cols: list) -> pd.DataFrame:
+
+        if self.data is None or self.data.empty:
+            return pd.DataFrame()
+        filtered = self.data[
+            (self.data["granularity"] == self.granularity)
+            & (self.data["year"] == self.year)
+        ]
+        if filtered.empty:
+            return pd.DataFrame()
+        wide = filtered.pivot_table(
+            index=merge_cols, columns="variable", values="value", aggfunc="first"
+        ).reset_index()
+        wide.columns.name = None
+
+        return wide
+
+    def _wide_from_cleaned(self, df: pd.DataFrame, merge_cols: list) -> pd.DataFrame:
+
+        census_cols = [c for c in df.columns if c.startswith("B")]
+        return df[merge_cols + census_cols].drop_duplicates(subset=merge_cols)
 
     def _get_merge_columns(self) -> list[str]:
         if self.granularity == "county":
             merge_cols = ["state_id", "county_id"]
         elif self.granularity == "tract":
             merge_cols = ["state_id", "county_id", "tract_id"]
-
         else:  # block_group
             merge_cols = ["state_id", "county_id", "tract_id", "block_grp"]
         return merge_cols
@@ -292,8 +372,8 @@ class CensusData:
             for col in table_cols:
                 df[col] = df[col] / total
 
-        # 3. Drop columns that are entirely NaN
-        df.dropna(axis=1, how="all", inplace=True)
+        # Drop columns that are entirely NaN
+        df = df.dropna(axis=1, how="all")
 
         return df
 
@@ -306,8 +386,9 @@ class CensusData:
 
         # Melt wide format to narrow: one row per (geography, variable)
         # gets past row size limits
-        long_df = (
-            clean_data[merge_cols + census_cols]
+        # Save props joined with census
+        props_long = (
+            clean_data[["geoid"] + merge_cols + census_cols]
             .copy()
             .melt(
                 id_vars=merge_cols,
@@ -315,20 +396,43 @@ class CensusData:
                 value_name="value",
             )
         )
+        props_long["granularity"] = self.granularity
+        props_long["year"] = self.year
 
         table_name = (
-            TABLE_NAME_CENSUS_TEST if self.sql_obj.test_mode else TABLE_NAME_CENSUS
+            TABLE_NAME_CENSUS_PROPS_TEST if self.test_mode else TABLE_NAME_CENSUS_PROPS
         )
-        self.sql_obj.save_df_to_sql(table_name, long_df)
+        self.sql_obj.save_df_to_sql(table_name, props_long)
+
+        # Save just the census information to TABLE_NAME_CENSUS.
+        census_df = clean_data.drop_duplicates(merge_cols)
+        census_long = (
+            census_df[merge_cols + census_cols]
+            .copy()
+            .melt(
+                id_vars=merge_cols,
+                var_name="variable",
+                value_name="value",
+            )
+        )
+        census_long["granularity"] = self.granularity
+        census_long["year"] = self.year
+
+        table_name = TABLE_NAME_CENSUS_TEST if self.test_mode else TABLE_NAME_CENSUS
+        self.sql_obj.save_df_to_sql(table_name, census_long)
+
         return
 
-    def _read_from_sql(self) -> pd.DataFrame:
-
-        return
-
-    def initialize_census_db(self) -> None:
-
-        return
+    def _read_from_sql(self) -> pd.DataFrame | None:
+        if self.sql_obj.check_table_exists(self.table_name):
+            df = self.sql_obj.read_df_from_sql(self.table_name)
+            if "granularity" not in df.columns or "year" not in df.columns:
+                self.sql_obj.drop_table(self.table_name, confirm=True)
+                return None
+            else:
+                return df
+        else:
+            return None
 
     def _generate_variable_metadata(self) -> None:
 
@@ -351,19 +455,6 @@ class CensusData:
             return [loaded_dict[var]["universe"] for var in variable]
         else:
             raise TypeError("'variable' must be a string or list of strings.")
-
-    def add_census_variables(self, var_list: list | str) -> None:
-        """TODO: Implement, should update the saved HDD version CENSUS_FEATURES, and the
-        saved HDD version of the SQL DB with the census info. Eventually adding in the
-        SQL DB functionality."""
-        if isinstance(var_list, list):
-            for var in var_list:
-                pass
-        elif isinstance(var_list, str):
-            pass
-        else:
-            raise TypeError("'var_list' must be a string of list of strings")
-        return
 
     # def visualize_data(self):
     #     return

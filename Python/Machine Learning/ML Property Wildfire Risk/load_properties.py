@@ -92,18 +92,6 @@ class Properties:
 
         return
 
-    def delete_at_random(self, quantity: int) -> None:
-        """
-        Remove "quantity" many addresses from the db, at random.
-        """
-        return
-
-    def get_random_subset(self, quantity: int) -> gpd.GeoDataFrame:
-        return
-
-    def get_state_subset(self, state: str) -> gpd.GeoDataFrame:
-        return
-
     # def property_count(self) ->int:
     #     '''
     #         Returns how many properties are in the list.
@@ -118,9 +106,6 @@ class Properties:
         )
 
         self.sql_obj.save_gpd_to_sql(self.table_name, self.properties_gpd)
-        # self.properties_gpd.to_postgis(
-        #     self.table_name, con=self.sql_conn, if_exists="append"
-        # )
 
         return
 

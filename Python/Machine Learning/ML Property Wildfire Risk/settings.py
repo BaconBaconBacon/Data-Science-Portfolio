@@ -32,11 +32,15 @@ TEST_SQL_ENGINE_STR = SQL_ENGINE_STR
 #     "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project_TEST"
 # ))
 
+# Should be stored as a star schema?
 TABLE_NAME_CACHE = "census_cache"
 TABLE_NAME_PROPERTIES = "properties"
 TABLE_NAME_PROPERTIES_TEST = "properties_test"
 TABLE_NAME_CENSUS = "census"
 TABLE_NAME_CENSUS_TEST = "census_test"
+TABLE_NAME_CENSUS_PROPS = "props_census"
+TABLE_NAME_CENSUS_PROPS_TEST = "props_census_test"
+
 
 CENSUS_FEATURES = [
     "B25014",

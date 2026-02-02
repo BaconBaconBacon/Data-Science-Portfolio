@@ -67,6 +67,10 @@ def calc_idw(
 ) -> pd.Series:
     """Inverse distance weighting: sum(w_j / d_j^p) for fires within radius.
 
+    The most common spatial proximity metric:
+        score = Σ (1 / d_j^p)   for all fires within radius
+        With p=2, this naturally downweights distant fires. This is what the reference's own theoretical formula was going for before they simplified it away.
+
     Parameters
     ----------
     properties : GeoDataFrame of property points.
@@ -106,6 +110,11 @@ def calc_kde(
     at each property point. Returns log1p-transformed density to
     reduce right-skew.
 
+    Steps: build a continuous fire density surface, then sample at
+    property locations. This is the textbook GIS approach for point
+    pattern risk surfaces, and geopandas/scipy support it.
+
+
     Parameters
     ----------
     properties : GeoDataFrame of property points.
@@ -119,7 +128,9 @@ def calc_kde(
     _validate_inputs(properties, fires)
 
     fire_coords = np.vstack([fires.geometry.x, fires.geometry.y])
-    kde = gaussian_kde(fire_coords, bw_method=bandwidth / fire_coords.std(axis=1).mean())
+    kde = gaussian_kde(
+        fire_coords, bw_method=bandwidth / fire_coords.std(axis=1).mean()
+    )
 
     prop_coords = np.vstack([properties.geometry.x, properties.geometry.y])
     density = kde(prop_coords)
@@ -135,6 +146,9 @@ def calc_exponential_decay(
     weight_col: str | None = None,
 ) -> pd.Series:
     """Exponential decay score: sum(w_j * exp(-d_j / bandwidth)).
+
+    Has a natural physical interpretation (risk decays exponentially
+     with distance). The bandwidth parameter controls how quickly.
 
     Parameters
     ----------
@@ -169,6 +183,10 @@ def calc_buffer_ring_features(
     weight_col: str | None = None,
 ) -> pd.DataFrame:
     """Count fires (and optionally sum weights) in concentric distance rings.
+
+    — count fires in 0-10km, 10-25km, 25-50km as separate columns. Let the ML model
+    learn the weighting rather than baking it into one formula. This is arguably the
+    best approach when the score feeds into an ML model anyway.
 
     Parameters
     ----------
