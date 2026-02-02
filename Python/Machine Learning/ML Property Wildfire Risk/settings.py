@@ -25,9 +25,16 @@ GIS_DEFAULT_CRS = 5070
 SQL_ENGINE_STR = (
     "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project"
 )
-TEST_SQL_ENGINE_STR = (
-    "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project_TEST"
-)
+TEST_SQL_ENGINE_STR = SQL_ENGINE_STR
+#     (
+#     "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project_TEST"
+# ))
+
+TABLE_NAME_CACHE = "census_cache"
+TABLE_NAME_PROPERTIES = "properties"
+TABLE_NAME_PROPERTIES_TEST = "properties_test"
+TABLE_NAME_CENSUS = "census"
+TABLE_NAME_CENSUS_TEST = "census_test"
 
 CENSUS_FEATURES = [
     "B25014",
@@ -47,14 +54,14 @@ CENSUS_FEATURES = [
     "B25091",
     "B01001",
     "B01002",
-    "B01003",
-    "B01005",
-    "B01009",
+    # "B01003",  # total pop, redundant with b01001_001E
+    # "B01005",  # Ancestry pop, redundant pop total
+    # "B01009",  # pop total, redundant pop total
     "B02001",
     "B03001",
     "B05001",
     "B05002",
-    "B06001",
+    # "B06001",  # place of birth by age, low wildfire relevance
     "B19001",
     "B19013",
     "B19019",
@@ -63,15 +70,29 @@ CENSUS_FEATURES = [
     "B19301",
     "B19326",
     "B23025",
-    "B23032",
-    "B24010",
-    "B24050",
-    "B08201",
-    "B08202",
-    "B08203",
-    "B08204",
+    # "B23032",  #Weeks worked by sex, low wf relevance
+    # "B24010",# Sex by occupation, large, low wf relevance
+    # "B24050",#Industry by occupations, low wf relevance
+    # "B08201", transportation, marginal relevance
+    # "B08202", transportation, marginal relevance
+    # "B08203", transportation, marginal relevance
+    # "B08204", transportation, marginal relevance
     "B25031",
 ]
+
+# not to be converted into percentages!
+CENSUS_SUMMARY_TABLES = {
+    "B01002",  # Median Age by Sex
+    "B19013",  # Median Household Income
+    "B19019",  # Median Household Income by Presence of Children
+    "B19020",  # Aggregate Household Income
+    "B19083",  # Gini Index
+    "B19301",  # Per Capita Income
+    "B19326",  # Median Income by Sex
+    "B25035",  # Median Year Structure Built
+}
+
+CENSUS_VALID_GRANULARITY_LEVELS = {"block_group", "tract", "county"}
 
 
 PATH_DATA = Path("data")
@@ -82,6 +103,7 @@ PATH_DATA_MODELS = PATH_DATA / "models"
 
 
 PROP_TABLE_NAME = "properties"
+PROP_TABLE_NAME_TEST = PROP_TABLE_NAME + "_test"
 PROP_LABELS_KEYS_MAP = {
     "geoid": "GEOID",
     "block_id": "BLOCK",
@@ -106,3 +128,5 @@ USA_MIN_LON = -124  # °43′37″W 48°23′09″N, Cape Flattery, Washington
 SAVENAME_WILDFIRES = "combined_wildfire_data.parquet"
 SAVENAME_CENSUS = ""
 SAVENAME_PROPERTIES = ""
+
+PROPERTIES_INIT_COUNT = 10

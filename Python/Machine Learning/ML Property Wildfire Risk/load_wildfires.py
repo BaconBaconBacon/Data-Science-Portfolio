@@ -4,7 +4,6 @@ import census
 
 import numpy as np
 import pandas as pd
-import sqlalchemy as sql
 import geopandas as gpd
 from settings import (
     GIS_DESIRED_COLS,
@@ -21,33 +20,34 @@ from settings import (
 )
 
 from sklearn.cluster import DBSCAN
+from sql_funcs import SQL
 
 
 class WildfireData:
 
-    def __init__(self, sql_engine, sql_conn):
+    def __init__(self, sql_obj: SQL):
 
-        self.sql_engine = sql_engine
-        self.sql_conn = sql_conn
+        self.sql_obj = sql_obj
+        self.test_mode = sql_obj.test_mode
 
         self.data_path = PATH_DATA_WILDFIRES
         self.save_path = PATH_DATA_WILDFIRES / SAVENAME_WILDFIRES
 
         # TODO: Change to SQL DB from parquet files
-        if self.save_path.exists():
+        if self.save_path.exists() and not self.test_mode:
             self.data = gpd.read_parquet(self.save_path)
             print(
                 "Loading previously extracted wildfire data from:",
                 self.data["SAT_NAME"].unique(),
             )
-
         else:
             print("Extracting wildfire data from GIS files.")
             raw_data = self._extract(self.data_path)
             self.data = self._transform(raw_data)
 
-            # Save to parquet
-            self._load(self.data)
+            # Save to parquet/SQL
+            if not self.test_mode:
+                self._load_to_sql(self.data)
         return
 
     def _extract(self, data_path: Path) -> gpd.GeoDataFrame:
@@ -114,6 +114,8 @@ class WildfireData:
 
         Currently converting overlapping geometries into a centroid and radius, but may be worth
         including functionatlity to turn it into a wildfire perimeter.
+
+        DBSCAN : https://www.geeksforgeeks.org/machine-learning/dbscan-clustering-in-ml-density-based-clustering/
         """
 
         # Extract coordinates (CRS 5070 is in meters)
@@ -163,7 +165,7 @@ class WildfireData:
 
         return gpd.GeoDataFrame(aggregated, geometry="geometry", crs=data.crs)
 
-    def _load(self, clean_data: gpd.GeoDataFrame):
+    def _load_to_sql(self, clean_data: gpd.GeoDataFrame):
         """
         Save the data to disk. TODO: Integrate the SQL db.
         """
@@ -237,8 +239,8 @@ class WildfireData:
 
 
 if __name__ == "__main__":
-    engine = sql.create_engine(TEST_SQL_ENGINE_STR)
-    conn = engine.connect()
 
-    test_obj = WildfireData(sql_engine=engine, sql_conn=conn)
+    sql_o = SQL()
+
+    test_obj = WildfireData(sql_obj=sql_o)
     test_obj.visualize_data()
