@@ -15,6 +15,7 @@ from settings import (
     PATH_DATA_CENSUS,
     TEST_SQL_ENGINE_STR,
     CENSUS_VALID_GRANULARITY_LEVELS,
+    CENSUS_CHUNK_SIZE,
     TABLE_NAME_CENSUS,
     TABLE_NAME_CENSUS_TEST,
     TABLE_NAME_CACHE,
@@ -132,6 +133,8 @@ class CensusData:
 
         if self.test_mode:
             self.table_name = TABLE_NAME_CENSUS_TEST
+            self.sql_obj.drop_table(TABLE_NAME_CENSUS_TEST, confirm=True)
+            # self.data = None
         else:
             self.table_name = TABLE_NAME_CENSUS
         self.data = self._read_from_sql()
@@ -151,19 +154,23 @@ class CensusData:
         merge_cols = self._get_merge_columns()
 
         existing_wide = self._get_existing_wide(merge_cols)
-        missing_geos = self._get_missing_geos(properties_gpd, existing_wide, merge_cols)
+        existing_wide = self._handle_missing_geos(
+            properties_gpd, existing_wide, merge_cols
+        )
 
-        if not missing_geos.empty:
-            existing_wide = self._add_missing_geos(
-                properties_gpd, existing_wide, merge_cols, missing_geos
-            )
-
-            # Merge wide census data onto all properties
+        # Merge wide census data onto all properties
         result = properties_gpd.merge(existing_wide, on=merge_cols, how="left")
 
-        # Drop geo ID columns (previously done in _transform_and_clean)
+        # Drop geo ID columns
         drop_cols = [x for x in result.columns if ("_id" in x) or ("_grp" in x)]
         result = result.drop(columns=drop_cols)
+
+        if self.test_mode:
+            try:
+                _ = self._read_from_sql()
+                print("_read_from_sql() Sucessfully tested.")
+            except Exception as e:
+                print(f"_read_from_sql() failed with {e}")
         return result
 
     def _add_missing_geos(
@@ -172,14 +179,21 @@ class CensusData:
         wide: pd.DataFrame,
         merge_cols: list,
         missing_geos,
-    ) -> gpd.GeoDataFrame:
+    ) -> pd.DataFrame:
         variables = (
             self._get_leaf_variables() if self.leafs_only else self._get_all_variables()
         )
         self.sql_obj.create_census_cache_table()
 
         missing_props = gdf.merge(missing_geos, on=merge_cols, how="inner")
+
+        print(
+            f"missing_props: {missing_props.shape}, dtypes: {missing_props[merge_cols].dtypes.to_dict()}"
+        )
+        print(f"missing_geos dtypes: {missing_geos[merge_cols].dtypes.to_dict()}")
+
         new_census_df = self._extract_from_geoid(missing_props, variables)
+        print("A", new_census_df)
         new_cleaned = self._transform_and_clean(new_census_df)
         self._load_to_sql(new_cleaned)
 
@@ -193,9 +207,9 @@ class CensusData:
 
         return existing_wide
 
-    def _get_missing_geos(
+    def _handle_missing_geos(
         self, gdf: gpd.GeoDataFrame, wide, merge_cols: list
-    ) -> gpd.GeoDataFrame:
+    ) -> pd.DataFrame:
 
         required_geos = gdf[merge_cols].drop_duplicates()
 
@@ -217,7 +231,10 @@ class CensusData:
             f"{len(required_geos) - len(missing_geos)} cached, "
             f"{len(missing_geos)} to fetch."
         )
-        return missing_geos
+        if not missing_geos.empty:
+            wide = self._add_missing_geos(gdf, wide, merge_cols, missing_geos)
+
+        return wide
 
     def _get_existing_wide(self, merge_cols: list) -> pd.DataFrame:
 
@@ -283,9 +300,9 @@ class CensusData:
         unique_geos = properties_data[merge_cols].drop_duplicates()
         print(f"Unique geoids: {len(unique_geos)}.")
 
-        chunk_size = 50
         var_chunks = [
-            variables[i : i + chunk_size] for i in range(0, len(variables), chunk_size)
+            variables[i : i + CENSUS_CHUNK_SIZE]
+            for i in range(0, len(variables), CENSUS_CHUNK_SIZE)
         ]
 
         results = []
@@ -305,6 +322,7 @@ class CensusData:
 
             # Query API
             geo_id, query_for, query_in = self._get_geoid_query_strings(row)
+
             print(f"[{idx}] Querying id {geo_id} at {self.granularity}...")
 
             combined_result = {}
@@ -324,7 +342,12 @@ class CensusData:
             except Exception as e:
                 print(f"Skipped! Error for {geo_id}: {e}")
 
-        return properties_data.merge(pd.DataFrame(results), on=merge_cols, how="left")
+        if len(results) > 0:
+            return properties_data.merge(
+                pd.DataFrame(results), on=merge_cols, how="left"
+            )
+        else:
+            raise RuntimeError("Length of results is zero!")
 
     def _cache_results(self, row, merge_cols, result_dict):
         """Save results to cache table."""

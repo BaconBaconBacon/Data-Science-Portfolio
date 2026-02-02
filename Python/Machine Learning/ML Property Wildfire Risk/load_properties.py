@@ -75,7 +75,7 @@ class Properties:
                 key: int(block[PROP_LABELS_KEYS_MAP[key]])
                 for key in PROP_LABELS_KEYS_MAP.keys()
             }
-            temp_lst[i]["geom"] = Point(long, lat)
+            temp_lst[i][HEADER_GEOM] = Point(long, lat)
 
             if not (i + 1) % 50:
                 if verbose:

@@ -138,7 +138,7 @@ class WildfireData:
             data.groupby("cluster_id")
             .agg(
                 {
-                    "geometry": lambda g: g.unary_union.centroid,
+                    HEADER_GEOM: lambda g: g.unary_union.centroid,
                     "ACQ_DATE": "min",  # earliest detection date
                     "LATITUDE": "mean",
                     "LONGITUDE": "mean",
