@@ -1,12 +1,15 @@
 """ Stores commonly used SQL functions."""
 
 import sqlalchemy as s
+from scipy.stats import foldnorm
+
 from settings import (
     SQL_ENGINE_STR,
     TEST_SQL_ENGINE_STR,
     PROP_LABELS_KEYS_MAP,
     GIS_DEFAULT_CRS,
     TABLE_NAME_CACHE,
+    HEADER_GEOM,
 )
 import pandas as pd
 import geopandas as gpd
@@ -173,8 +176,8 @@ class SQL:
         table_name = self._sanitize_string(table_name)
 
         q = f"SELECT * FROM {table_name}"
-
-        return gpd.read_postgis(q, con=self.connection, geom_col="geom")
+        print(table_name)
+        return gpd.read_postgis(q, con=self.connection, geom_col=HEADER_GEOM)
 
     def initialize_properties_table(self, prop_name: str):
 
@@ -188,7 +191,7 @@ class SQL:
         self.connection.execute(s.text(q))
 
         q = f"SELECT * FROM {prop_name}"
-        return gpd.read_postgis(q, con=self.connection, geom_col="geom")
+        return gpd.read_postgis(q, con=self.connection, geom_col=HEADER_GEOM)
 
     def drop_duplicates_from_table(self, table_name) -> None:
         """Drops duplicate addresses without committing changes using internal row identified ctid."""
@@ -206,3 +209,19 @@ class SQL:
         self.connection.commit()
 
         return
+
+    def _rename_column(self, table_name: str, old_name: str, new_name: str) -> None:
+        self.connection.execute(
+            s.text(f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name};")
+        )
+        self.connection.commit()
+
+        return
+
+    def list_table_headers(self, table_name: str) -> list:
+        result = self.connection.execute(
+            s.text(
+                f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
+            )
+        )
+        return [row[0] for row in result]

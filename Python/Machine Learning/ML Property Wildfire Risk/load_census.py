@@ -127,7 +127,7 @@ class CensusData:
 
         self.sql_obj = sql_obj
 
-        if self.sql_obj.test_mode is True:
+        if self.sql_obj.test_mode:
 
             self.table_name = TABLE_NAME_CENSUS_TEST
             if self.sql_obj.check_table_exists(TABLE_NAME_CENSUS_TEST):

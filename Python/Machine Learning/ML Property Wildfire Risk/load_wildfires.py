@@ -9,14 +9,15 @@ from settings import (
     GIS_DESIRED_COLS,
     GIS_DEFAULT_CRS,
     PATH_DATA_WILDFIRES,
-    TEST_SQL_ENGINE_STR,
     WILDFIRES_CLUSTER_TIME_SCALE,
     WILDFIRES_CLUSTER_SPATIAL_EPS,
     USA_MAX_LAT,
     USA_MIN_LAT,
     USA_MAX_LON,
     USA_MIN_LON,
-    SAVENAME_WILDFIRES,
+    WILDFIRES_TABLE_NAME,
+    HEADER_GEOM,
+    HEADER_SAT_ID,
 )
 
 from sklearn.cluster import DBSCAN
@@ -31,14 +32,13 @@ class WildfireData:
         self.test_mode = sql_obj.test_mode
 
         self.data_path = PATH_DATA_WILDFIRES
-        self.save_path = PATH_DATA_WILDFIRES / SAVENAME_WILDFIRES
 
         # TODO: Change to SQL DB from parquet files
-        if self.save_path.exists() and not self.test_mode:
-            self.data = gpd.read_parquet(self.save_path)
+        if self.sql_obj.check_table_exists(WILDFIRES_TABLE_NAME) and not self.test_mode:
+            self.data = self._read_from_sql()
             print(
                 "Loading previously extracted wildfire data from:",
-                self.data["SAT_NAME"].unique(),
+                self.data[HEADER_SAT_ID].unique(),
             )
         else:
             print("Extracting wildfire data from GIS files.")
@@ -46,8 +46,8 @@ class WildfireData:
             self.data = self._transform(raw_data)
 
             # Save to parquet/SQL
-            if not self.test_mode:
-                self._load_to_sql(self.data)
+            # if not self.test_mode:
+            self._load_to_sql(self.data)
         return
 
     def _extract(self, data_path: Path) -> gpd.GeoDataFrame:
@@ -69,7 +69,7 @@ class WildfireData:
                 print("Loading satellite: ", sat_name)
 
                 sat_data = gpd.read_file(fp)  # [GIS_DESIRED_COLS]
-                sat_data["SAT_ID"] = sat_name
+                sat_data[HEADER_SAT_ID] = sat_name
 
                 # 0 is 'probable wildfire', h is high confidence
                 if "TYPE" in sat_data.columns:
@@ -144,7 +144,7 @@ class WildfireData:
                     "LATITUDE": "mean",
                     "LONGITUDE": "mean",
                     "FRP": "mean",
-                    "SAT_ID": lambda x: ",".join(x.unique()),
+                    HEADER_SAT_ID: lambda x: ",".join(x.unique()),
                     "CONFIDENCE": "first",
                     "TYPE": "first",
                 }
@@ -163,14 +163,18 @@ class WildfireData:
             .values
         )
 
-        return gpd.GeoDataFrame(aggregated, geometry="geometry", crs=data.crs)
+        return gpd.GeoDataFrame(aggregated, geometry=HEADER_GEOM, crs=data.crs)
 
-    def _load_to_sql(self, clean_data: gpd.GeoDataFrame):
+    def _load_to_sql(self, clean_data: gpd.GeoDataFrame) -> None:
         """
         Save the data to disk. TODO: Integrate the SQL db.
         """
-        clean_data.to_parquet(self.data_path / SAVENAME_WILDFIRES)
+        # clean_data.to_parquet(self.data_path / SAVENAME_WILDFIRES)
+        self.sql_obj.save_gpd_to_sql(WILDFIRES_TABLE_NAME, clean_data)
         return
+
+    def _read_from_sql(self) -> gpd.GeoDataFrame:
+        return self.sql_obj.read_gpd_from_sql(WILDFIRES_TABLE_NAME)
 
     def visualize_data(self):
         """

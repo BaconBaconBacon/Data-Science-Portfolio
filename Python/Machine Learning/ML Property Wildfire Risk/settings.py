@@ -1,5 +1,7 @@
 from pathlib import Path
 
+HEADER_GEOM = "geometry"
+HEADER_SAT_ID = "SAT_ID"
 GIS_DESIRED_COLS = [
     "LATITUDE",  # Center of nominal 375 m fire pixel
     "LONGITUDE",  # Center of nominal 375 m fire pixel
@@ -8,7 +10,7 @@ GIS_DESIRED_COLS = [
     # 'TRACK',
     "ACQ_DATE",
     # 'ACQ_TIME',
-    "SAT_ID",  # N21 = NOAA-21, N=SNPP
+    HEADER_SAT_ID,  # N21 = NOAA-21, N=SNPP
     # 'INSTRUMENT',
     "CONFIDENCE",  # It is intended to help users gauge the quality of individual hotspot/fire pixels.
     # 'VERSION',
@@ -16,7 +18,7 @@ GIS_DESIRED_COLS = [
     "FRP",  # FRP depicts the pixel-integrated fire radiative power in MW (megawatts)
     # 'DAYNIGHT',
     "TYPE",  # Inferred hot spot type: 0 is presumed vegetation fire
-    "geometry",
+    HEADER_GEOM,
 ]
 
 # Set the coordinate system
@@ -125,8 +127,13 @@ USA_MAX_LON = -66  # °57′02″W 44°48′54″N # West Quoddy Head Light, Mai
 USA_MIN_LON = -124  # °43′37″W 48°23′09″N, Cape Flattery, Washington
 
 
-SAVENAME_WILDFIRES = "combined_wildfire_data.parquet"
-SAVENAME_CENSUS = ""
-SAVENAME_PROPERTIES = ""
+# SAVENAME_WILDFIRES = "combined_wildfire_data.parquet"
+WILDFIRES_TABLE_NAME = "wildfires"
 
 PROPERTIES_INIT_COUNT = 10
+
+# GIS proximity scoring defaults
+GIS_SCORING_DEFAULT_RADIUS_M = 80467  # 50 miles
+GIS_SCORING_DEFAULT_POWER = 2
+GIS_SCORING_DEFAULT_BANDWIDTH_M = 25000  # 25km
+GIS_SCORING_DEFAULT_RINGS_M = [10_000, 25_000, 50_000, 100_000]

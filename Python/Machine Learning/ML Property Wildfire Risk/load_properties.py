@@ -22,6 +22,7 @@ from settings import (
     SQL_ENGINE_STR,
     PROPERTIES_INIT_COUNT,
     PROP_TABLE_NAME_TEST,
+    HEADER_GEOM,
 )
 from sql_funcs import SQL
 
@@ -111,7 +112,7 @@ class Properties:
 
     def _update_gpd_and_sql(self, temp_lst: list) -> None:
 
-        tmp = gpd.GeoDataFrame(data=temp_lst, geometry="geom", crs=GIS_DEFAULT_CRS)
+        tmp = gpd.GeoDataFrame(data=temp_lst, geometry=HEADER_GEOM, crs=GIS_DEFAULT_CRS)
         self.properties_gpd = gpd.GeoDataFrame(
             pd.concat([self.properties_gpd, tmp]).reset_index(drop=True)
         )
