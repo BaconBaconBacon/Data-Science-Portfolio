@@ -1,5 +1,6 @@
 import censusgeocode as cg
 import sys
+import time
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -54,9 +55,12 @@ class Properties:
         # self.session = self.Session()
         print(f"Adding {quantity} properties...")
 
-        # TODO: Turn this into a dictionary, should be faster
         temp_lst = [None] * quantity
         last_added = 0
+        start_time = time.time()
+        estimate_sample = min(10, quantity)
+        estimate_shown = False
+
         for i in range(quantity):
 
             coords = real_random_address()["coordinates"]
@@ -75,11 +79,33 @@ class Properties:
             }
             temp_lst[i][HEADER_GEOM] = Point(long, lat)
 
+            # Show time estimate after first N properties
+            if (i + 1) == estimate_sample and not estimate_shown and verbose:
+                elapsed = time.time() - start_time
+                per_property = elapsed / estimate_sample
+                remaining = quantity - estimate_sample
+                est_remaining_sec = remaining * per_property
+                est_total_sec = quantity * per_property
+                print(
+                    f"  Time estimate: {self._format_duration(est_total_sec)} total "
+                    f"({per_property:.2f}s per property, "
+                    f"{self._format_duration(est_remaining_sec)} remaining)"
+                )
+                estimate_shown = True
+
             if not (i + 1) % 50:
                 if verbose:
-                    print(f"Updating with {i+1} properties...")
+                    elapsed = time.time() - start_time
+                    remaining_count = quantity - (i + 1)
+                    per_property = elapsed / (i + 1)
+                    est_remaining = remaining_count * per_property
+                    print(
+                        f"  {i+1}/{quantity} properties... "
+                        f"({self._format_duration(est_remaining)} remaining)"
+                    )
                 self._update_gpd_and_sql(temp_lst[: i + 1])
                 last_added = i + 1
+
         if last_added < quantity:
             remaining = [x for x in temp_lst[last_added:] if x is not None]
             self._update_gpd_and_sql(remaining)
@@ -87,7 +113,25 @@ class Properties:
         self.sql_obj.drop_duplicates_from_table(self.table_name)
         self._update_property_count()
 
+        total_time = time.time() - start_time
+        if verbose:
+            print(f"Completed in {self._format_duration(total_time)}")
+
         return
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        """Format seconds into human-readable duration string."""
+        if seconds < 60:
+            return f"{seconds:.1f}s"
+        elif seconds < 3600:
+            mins = int(seconds // 60)
+            secs = int(seconds % 60)
+            return f"{mins}m {secs}s"
+        else:
+            hours = int(seconds // 3600)
+            mins = int((seconds % 3600) // 60)
+            return f"{hours}h {mins}m"
 
     def _add_properties_near_fires(
         self,
