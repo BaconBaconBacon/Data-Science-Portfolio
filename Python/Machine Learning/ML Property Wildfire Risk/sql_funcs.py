@@ -4,7 +4,6 @@ import sqlalchemy as s
 
 from settings import (
     SQL_ENGINE_STR,
-    TEST_SQL_ENGINE_STR,
     PROP_LABELS_KEYS_MAP,
     GIS_DEFAULT_CRS,
     TABLE_NAME_CACHE,
@@ -23,10 +22,7 @@ class SQL:
         self.connection = None
         self.engine = None
 
-        if self.test_mode:
-            self.engine_string = TEST_SQL_ENGINE_STR
-        else:
-            self.engine_string = SQL_ENGINE_STR
+        self.engine_string = SQL_ENGINE_STR
 
         self._connect_to_sql()
 
@@ -45,11 +41,35 @@ class SQL:
             self.engine.dispose()
             self.engine = None
 
-    def _execute_string(self, string: str) -> None:
+    @classmethod
+    def kill_idle(cls, test: bool = False) -> int:
+        """Terminate all other PostgreSQL connections, then close our own.
+
+        Kills idle, idle-in-transaction, and active connections from other
+        sessions. Creates a temporary connection, cleans up, and disposes.
+        Call before creating a long-lived SQL instance to clear stale locks.
+
+        Returns the number of connections terminated.
+        """
+        tmp = cls(test=test)
+        result = tmp.connection.execute(
+            s.text(
+                "SELECT pg_terminate_backend(pid) "
+                "FROM pg_stat_activity "
+                "WHERE pid <> pg_backend_pid()"
+            )
+        )
+        count = result.rowcount
+        print(f"kill_idle: terminated {count} connection(s)")
+        tmp.connection.commit()
+        tmp.disconnect_and_close()
+        return count
+
+    def _execute_string(self, string: str) -> s.engine.Result:
         """Execute string without committing."""
         string = self._sanitize_string(string)
-        self.connection.execute(s.text(string))
-        return
+        result = self.connection.execute(s.text(string))
+        return result
 
     def create_table(self, table_name: str, columns: dict[str, str]) -> None:
         """Create a table with the given column name -> SQL type mapping.
@@ -249,7 +269,7 @@ class SQL:
 
     def read_df_from_sql(self, query: str):
         query = self._sanitize_string(query)
-        return pd.read_sql(query, self.connection)
+        return pd.read_sql(query, self.engine)
 
     def save_gpd_to_sql(self, table_name: str, gdf: gpd.GeoDataFrame) -> None:
         table_name = self._sanitize_string(table_name)
@@ -262,7 +282,7 @@ class SQL:
 
         q = f"SELECT * FROM {table_name}"
 
-        return gpd.read_postgis(q, con=self.connection, geom_col=HEADER_GEOM)
+        return gpd.read_postgis(q, con=self.engine, geom_col=HEADER_GEOM)
 
     def initialize_properties_table(self, prop_name: str):
 
@@ -275,9 +295,10 @@ class SQL:
             q += f"{key} {col_type},"
         q += f"{HEADER_GEOM} geometry(Geometry, {GIS_DEFAULT_CRS}));"  # .format(GIS_DEFAULT_CRS)
         self.connection.execute(s.text(q))
+        self.connection.commit()
 
         q = f"SELECT * FROM {prop_name}"
-        return gpd.read_postgis(q, con=self.connection, geom_col=HEADER_GEOM)
+        return gpd.read_postgis(q, con=self.engine, geom_col=HEADER_GEOM)
 
     def drop_duplicates_from_table(self, table_name) -> None:
         """Drops duplicate addresses without committing changes using internal row identified ctid."""

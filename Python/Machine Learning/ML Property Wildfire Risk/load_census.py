@@ -13,7 +13,6 @@ from settings import (
     CENSUS_FEATURES,
     GIS_DEFAULT_CRS,
     PATH_DATA_CENSUS,
-    TEST_SQL_ENGINE_STR,
     CENSUS_VALID_GRANULARITY_LEVELS,
     CENSUS_CHUNK_SIZE,
     TABLE_NAME_CENSUS,
@@ -477,15 +476,6 @@ class CensusData:
         else:
             raise TypeError("'variable' must be a string or list of strings.")
 
-    # def visualize_data(self):
-    #     return
-
-    # def _store_feature_info(self):
-    #     """Stores the descriptions of the features in a table in the SQL DB.
-    #     This table can be updated and queried to add additional features to
-    #     the combined GeoDataFrame."""
-    #     return
-
     def get_acs5_fields(self, year=2023):
         """
         Cheeky bypass for the census package's fields() method.
@@ -545,6 +535,7 @@ class CensusData:
 
 
 if __name__ == "__main__":
-
+    SQL.kill_idle()
     sql_obj = SQL()
     test_obj = CensusData(sql_obj=sql_obj, year=2023)
+    sql_obj.disconnect_and_close()

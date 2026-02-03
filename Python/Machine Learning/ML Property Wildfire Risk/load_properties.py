@@ -34,13 +34,13 @@ class Properties:
     ):
 
         self.sql_obj = sql_obj
-
         self.test_mode = sql_obj.test_mode
+
         if not self.test_mode:
             self.table_name = PROP_TABLE_NAME
         else:
             self.table_name = PROP_TABLE_NAME_TEST
-        self._connect_to_sql()
+        self._read_from_sql()
 
     def add_random_properties(self, quantity: int, verbose=True) -> None:
         """
@@ -198,17 +198,18 @@ class Properties:
             pd.concat([self.properties_gpd, tmp]).reset_index(drop=True)
         )
 
-        self.sql_obj.save_gpd_to_sql(self.table_name, self.properties_gpd)
+        # Save only the new rows, not the entire GeoDataFrame (prevents table bloat)
+        self.sql_obj.save_gpd_to_sql(self.table_name, tmp)
 
         return
 
-    def _connect_to_sql(self) -> None:
+    def _read_from_sql(self) -> None:
 
         # check if properties table exists, and connect
         if self.sql_obj.check_table_exists(self.table_name):
-
+            print(f"{self.table_name} found")
             self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)
-            print(f"'{self.table_name}' table found.")
+            print(f"'{self.table_name}' table loaded.")
         else:
             print(
                 f"Initializing table '{self.table_name}' with {PROPERTIES_INIT_COUNT} properties."
@@ -245,8 +246,15 @@ class Properties:
 
 if __name__ == "__main__":
 
+    # Just in case
+    SQL.kill_idle(True)
+    print("Starting...")
     sql_obj = SQL()
-    props = Properties(sql_obj=sql_obj)
-    print(props.properties_gpd.head())
-    props.add_random_properties(int(sys.argv[1]))
-    print("Job done.")
+    try:
+        print("SQL connected")
+        props = Properties(sql_obj=sql_obj)
+        print(props.properties_gpd.head())
+        props.add_random_properties(int(sys.argv[1]))
+        print("Job done.")
+    finally:
+        sql_obj.disconnect_and_close()

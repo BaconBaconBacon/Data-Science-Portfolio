@@ -30,3 +30,4 @@ TODO.txt
 /anaconda_projects/db
 *.egg-info/
 /Python/Machine Learning/ML PyTorch/
+/Python/LLM/

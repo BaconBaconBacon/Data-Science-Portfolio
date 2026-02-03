@@ -27,10 +27,7 @@ GIS_DEFAULT_CRS = 5070
 SQL_ENGINE_STR = (
     "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project"
 )
-TEST_SQL_ENGINE_STR = SQL_ENGINE_STR
-#     (
-#     "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project_TEST"
-# ))
+
 
 # Should be stored as a star schema?
 TABLE_NAME_CACHE = "census_cache"

@@ -19,6 +19,7 @@ from settings import (
 from pathlib import Path
 from sklearn.cluster import DBSCAN
 from sql_funcs import SQL
+from visualize import create_wildfire_map
 
 
 class WildfireData:
@@ -173,75 +174,27 @@ class WildfireData:
     def _read_from_sql(self) -> gpd.GeoDataFrame:
         return self.sql_obj.read_gpd_from_sql(WILDFIRES_TABLE_NAME)
 
-    def visualize_data(self):
+    def visualize_data(self, save_path: Path = None):
         """
-        Helper function for visualizing the data using Folium.
+        Visualize wildfire locations on a Folium map.
 
-        Needs adaptation.
+        Parameters
+        ----------
+        save_path : Path, optional
+            If provided, save the map to this HTML file.
+
+        Returns
+        -------
+        folium.Map
+            The generated map object.
         """
 
-        #     legend_html = '''
-        #         <div style="position: fixed;
-        #              bottom: 50px; left: 50px; width: 200px; height: 150px;
-        #              border:2px solid grey; z-index:9999; font-size:14px;
-        #              background-color:white; opacity: 0.85;">
-        #              &nbsp; <b>Legend</b> <br>
-        #              &nbsp; NOAA-20 &nbsp; <i class="fa fa-circle" style="color:red"></i><br>
-        #              &nbsp; S-NPP &nbsp; <i class="fa fa-circle" style="color:purple"></i><br>
-        #              &nbsp; MTBS &nbsp; <i class="fa fa-square" style="color:red"></i><br>
-        #              &nbsp; MADIS &nbsp; <i class="fa fa-square" style="color:orange"></i><br>
-        #              &nbsp; WFIGS &nbsp; <i class="fa fa-square" style="color:blue"></i><br>
-        #         </div>
-        #     '''
-
-        #     centre = [pred_df['latitude'].mean(), pred_df['longitude'].mean()]
-        #     m=folium.Map(centre, zoom_start=5)
-
-        #     # Perimeters
-        #     i=0
-        #     for df in perims_lst:
-        #         for _, r in df.iterrows():
-        #             fill_color = per_color_lst[i]  # Issue with Python closures
-        #             sim_geo = gpd.GeoSeries(r["geometry"]).simplify(tolerance=0.001)
-        #             geo_j = sim_geo.to_json()
-        #             geo_j = folium.GeoJson(
-        #                 data=geo_j,
-        #                 style_function=make_style(fill_color)
-        #             )
-        #             geo_j.add_to(m)
-        #         i+=1
-
-        #     # Points
-        #     i=0
-        #     for df in points_lst:
-        #         for _, r in df.iterrows():
-        #             folium.CircleMarker(
-        #                 location=[r['LATITUDE'], r['LONGITUDE']],
-        #                 radius=3,
-        #                 fill=True,
-        #                 fill_opacity=0.7,
-        #                 weight=1,
-        #                 fill_color=pts_color_lst[i],
-        #                 color=pts_color_lst[i]
-
-        #             ).add_to(m)
-
-        #         i+=1
-        #     # State map
-        #     geo_j = folium.GeoJson(data=usa_map.to_json())
-        #     geo_j.add_to(m)
-
-        #     # add legend
-        #     m.get_root().html.add_child(folium.Element(legend_html))
-
-        # IFrame(src=save_path, width=1000, height=600)
-
-        return
+        return create_wildfire_map(self.data, save_path=save_path)
 
 
 if __name__ == "__main__":
-
-    sql_o = SQL()
-
-    test_obj = WildfireData(sql_obj=sql_o)
+    SQL.kill_idle()
+    sql_obj = SQL()
+    test_obj = WildfireData(sql_obj=sql_obj)
     test_obj.visualize_data()
+    sql_obj.disconnect_and_close()
