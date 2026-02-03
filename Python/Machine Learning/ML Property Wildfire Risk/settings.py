@@ -129,6 +129,7 @@ USA_MAX_LAT = 49  # °23′04.08″N 95°9′12.16″W, Northwest Angle, Minneso
 USA_MIN_LAT = 24  # °31′15″N 81°57′49″W, Ballast Key, Florida
 USA_MAX_LON = -66  # °57′02″W 44°48′54″N # West Quoddy Head Light, Maine
 USA_MIN_LON = -124  # °43′37″W 48°23′09″N, Cape Flattery, Washington
+EARTH_RADIUS_KM = 6371.0  # Earth radius in km
 
 
 # SAVENAME_WILDFIRES = "combined_wildfire_data.parquet"

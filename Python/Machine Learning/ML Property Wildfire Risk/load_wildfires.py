@@ -1,10 +1,7 @@
-from pathlib import Path
-
-import census
-
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+
 from settings import (
     GIS_DESIRED_COLS,
     GIS_DEFAULT_CRS,
@@ -19,7 +16,7 @@ from settings import (
     HEADER_GEOM,
     HEADER_SAT_ID,
 )
-
+from pathlib import Path
 from sklearn.cluster import DBSCAN
 from sql_funcs import SQL
 
@@ -60,9 +57,7 @@ class WildfireData:
 
         temp_list = []
         for fp in filepaths:
-            if (
-                fp.name.endswith(".csv") or fp.name.endswith(".shp")
-            ) and "property" not in fp.name:
+            if "property" not in fp.name:
 
                 sat_name = fp.name.split(".")[0].split("_")[-2]
                 print("Loading satellite: ", sat_name)
@@ -85,7 +80,6 @@ class WildfireData:
     def _transform(self, raw_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
         raw_data["ACQ_DATE"] = pd.to_datetime(raw_data["ACQ_DATE"])
-        raw_data["year"] = raw_data["ACQ_DATE"].dt.year
 
         raw_data = raw_data[GIS_DESIRED_COLS]
 
@@ -140,8 +134,8 @@ class WildfireData:
                 {
                     HEADER_GEOM: lambda g: g.unary_union.centroid,
                     "ACQ_DATE": "min",  # earliest detection date
-                    "LATITUDE": "mean",
-                    "LONGITUDE": "mean",
+                    # "LATITUDE": "mean",
+                    # "LONGITUDE": "mean",
                     "FRP": "mean",
                     HEADER_SAT_ID: lambda x: ",".join(x.unique()),
                     "CONFIDENCE": "first",
@@ -150,6 +144,10 @@ class WildfireData:
             )
             .reset_index(drop=True)
         )
+
+        centroids_4326 = aggregated.set_geometry(HEADER_GEOM, crs=data.crs).to_crs(4326)
+        aggregated["LATITUDE"] = centroids_4326.geometry.y
+        aggregated["LONGITUDE"] = centroids_4326.geometry.x
 
         aggregated["fire_radius_m"] = (
             data.groupby("cluster_id")

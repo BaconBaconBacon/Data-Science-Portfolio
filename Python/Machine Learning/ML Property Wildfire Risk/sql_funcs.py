@@ -1,7 +1,6 @@
 """ Stores commonly used SQL functions."""
 
 import sqlalchemy as s
-from scipy.stats import foldnorm
 
 from settings import (
     SQL_ENGINE_STR,
@@ -39,22 +38,41 @@ class SQL:
         return
 
     def disconnect_and_close(self) -> None:
-        return
+        if self.connection is not None:
+            self.connection.close()
+            self.connection = None
+        if self.engine is not None:
+            self.engine.dispose()
+            self.engine = None
 
     def _execute_string(self, string: str) -> None:
         """Execute string without committing."""
         string = self._sanitize_string(string)
-        self.connection.execute(string)
+        self.connection.execute(s.text(string))
         return
 
-    def create_table(self) -> None:
-        return
+    def create_table(self, table_name: str, columns: dict[str, str]) -> None:
+        """Create a table with the given column name -> SQL type mapping.
+
+        Parameters
+        ----------
+        table_name : str
+            Name of the table to create.
+        columns : dict[str, str]
+            Mapping of column name to SQL type, e.g. {"id": "SERIAL PRIMARY KEY", "name": "TEXT"}.
+        """
+        if not columns:
+            raise ValueError("columns dict must not be empty.")
+        col_defs = ", ".join(f"{name} {dtype}" for name, dtype in columns.items())
+        q = f"CREATE TABLE IF NOT EXISTS {table_name} ({col_defs});"
+        self.connection.execute(s.text(q))
+        self.connection.commit()
 
     def check_table_exists(self, table_name: str) -> bool:
         return s.inspect(self.engine).has_table(table_name)
 
     def drop_table(self, table_name: str, confirm: bool = False) -> None:
-
+        print(table_name)
         if not confirm:
             raise RuntimeError(
                 "Potentially accidental function call. Set confirm variable."
@@ -63,6 +81,10 @@ class SQL:
             q = s.text(f"DROP TABLE IF EXISTS {table_name};")
             self.connection.execute(q)
             self.connection.commit()
+            if self.check_table_exists(table_name):
+                print("Drop failed!")
+            else:
+                print("Drop success!")
         except Exception as e:
             raise RuntimeError(f"Failed to drop table: {table_name}': {e}")
 
@@ -70,32 +92,90 @@ class SQL:
             s.text(
                 "SELECT EXISTS ("
                 "SELECT FROM information_schema.tables "
-                f"WHERE table_name = '{table_name}'"
+                "WHERE table_name = :table_name"
                 ");"
-            )
+            ),
+            {"table_name": table_name},
         ).scalar()
         if result:
             raise RuntimeError(f"Table '{table_name}' still exists after DROP.")
 
         return
 
-    def get_table_names(self) -> list:
-        return
+    def get_table_names(self) -> list[str]:
+        """Return a list of all table names in the public schema."""
+        return s.inspect(self.engine).get_table_names()
 
-    def rename_table(self) -> None:
-        return
+    def rename_table(self, old_name: str, new_name: str) -> None:
+        """Rename a table from old_name to new_name."""
+        q = f"ALTER TABLE {old_name} RENAME TO {new_name};"
+        self.connection.execute(s.text(q))
+        self.connection.commit()
 
-    def add_rows_to_table(self) -> None:
-        return
+    def add_rows_to_table(self, table_name: str, rows: list[dict]) -> None:
+        """Insert rows into a table. Each dict maps column name -> value.
 
-    def remove_rows_from_table(self) -> None:
-        return
+        Uses parameterized INSERT via SQLAlchemy to avoid injection.
+        """
+        if not rows:
+            return
+        columns = list(rows[0].keys())
+        col_str = ", ".join(columns)
+        param_str = ", ".join(f":{col}" for col in columns)
+        q = s.text(f"INSERT INTO {table_name} ({col_str}) VALUES ({param_str})")
+        self.connection.execute(q, rows)
+        self.connection.commit()
 
-    def add_columns_to_table(self) -> None:
-        return
+    def remove_rows_from_table(self, table_name: str, conditions: dict) -> None:
+        """Delete rows matching all key=value conditions.
 
-    def remove_columns_from_table(self) -> None:
-        return
+        Parameters
+        ----------
+        table_name : str
+            Target table.
+        conditions : dict
+            Column name -> value pairs joined with AND.
+        """
+        if not conditions:
+            raise ValueError("conditions must not be empty (would delete all rows).")
+        where_clause = " AND ".join(f"{col} = :{col}" for col in conditions)
+        q = s.text(f"DELETE FROM {table_name} WHERE {where_clause}")
+        self.connection.execute(q, conditions)
+        self.connection.commit()
+
+    def add_columns_to_table(self, table_name: str, columns: dict[str, str]) -> None:
+        """Add columns to an existing table.
+
+        Parameters
+        ----------
+        table_name : str
+            Target table.
+        columns : dict[str, str]
+            Mapping of column name to SQL type, e.g. {"score": "DOUBLE PRECISION"}.
+        """
+        if not columns:
+            raise ValueError("columns dict must not be empty.")
+        for col_name, col_type in columns.items():
+            q = f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
+            self.connection.execute(s.text(q))
+        self.connection.commit()
+
+    def remove_columns_from_table(self, table_name: str, columns: list[str]) -> None:
+        """Drop columns from an existing table.
+
+        Parameters
+        ----------
+        table_name : str
+            Target table.
+        columns : list[str]
+            Column names to drop.
+        """
+        if not columns:
+            raise ValueError("columns list must not be empty.")
+        for col_name in columns:
+            q = f"ALTER TABLE {table_name} DROP COLUMN IF EXISTS {col_name};"
+            self.connection.execute(s.text(q))
+        self.connection.commit()
 
     def execute_and_commit_string(self, query: str):
         self.execute_string(query)
@@ -145,14 +225,19 @@ class SQL:
     ) -> pd.Series | None:
         """Return cached census results as a Series (variable names →
         values), or None if not cached."""
-        conditions = " AND ".join([f"{col} = {row[col]}" for col in cols])
-        q = f"""
+        conditions = " AND ".join([f"{col} = :{col}" for col in cols])
+        q = s.text(
+            f"""
             SELECT variable, value FROM {TABLE_NAME_CACHE}
             WHERE {conditions}
-            AND granularity = '{granularity}'
-            AND year = {year}
+            AND granularity = :granularity
+            AND year = :year
             """
-        result = self.read_df_from_sql(q)
+        )
+        params: dict[str, int | str] = {col: int(row[col]) for col in cols}
+        params["granularity"] = granularity
+        params["year"] = year
+        result = pd.read_sql(q, self.connection, params=params)
         if len(result) > 0:
             return pd.Series(result["value"].values, index=result["variable"].values)
         return None
@@ -183,11 +268,12 @@ class SQL:
 
         prop_name = self._sanitize_string(prop_name)
 
-        print(f"Creating new '{prop_name}' table with 10 entries.")
+        print(f"Creating empty '{prop_name}' table.")
         q = "CREATE TABLE {} (".format(prop_name)
         for key in PROP_LABELS_KEYS_MAP.keys():
-            q += f"{key} BIGINT,"
-        q += f"geom geometry(Geometry, {GIS_DEFAULT_CRS}));"  # .format(GIS_DEFAULT_CRS)
+            col_type = "TEXT" if key == "geoid" else "BIGINT"
+            q += f"{key} {col_type},"
+        q += f"{HEADER_GEOM} geometry(Geometry, {GIS_DEFAULT_CRS}));"  # .format(GIS_DEFAULT_CRS)
         self.connection.execute(s.text(q))
 
         q = f"SELECT * FROM {prop_name}"
@@ -202,8 +288,8 @@ class SQL:
         q = f"DELETE FROM {table_name} "
         q += "WHERE ctid NOT IN ("
         q += "SELECT MIN(ctid) "
-        q += "FROM properties "
-        q += "GROUP BY state_id, county_id, tract_id, block_id, block_grp, geom);"
+        q += f"FROM {table_name} "
+        q += f"GROUP BY state_id, county_id, tract_id, block_id, block_grp, {HEADER_GEOM});"
 
         self.connection.execute(s.text(q))
         self.connection.commit()
@@ -221,7 +307,8 @@ class SQL:
     def list_table_headers(self, table_name: str) -> list:
         result = self.connection.execute(
             s.text(
-                f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
-            )
+                "SELECT column_name FROM information_schema.columns WHERE table_name = :table_name"
+            ),
+            {"table_name": table_name},
         )
         return [row[0] for row in result]

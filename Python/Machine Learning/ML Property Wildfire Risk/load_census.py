@@ -187,13 +187,8 @@ class CensusData:
 
         missing_props = gdf.merge(missing_geos, on=merge_cols, how="inner")
 
-        print(
-            f"missing_props: {missing_props.shape}, dtypes: {missing_props[merge_cols].dtypes.to_dict()}"
-        )
-        print(f"missing_geos dtypes: {missing_geos[merge_cols].dtypes.to_dict()}")
-
         new_census_df = self._extract_from_geoid(missing_props, variables)
-        print("A", new_census_df)
+
         new_cleaned = self._transform_and_clean(new_census_df)
         self._load_to_sql(new_cleaned)
 
@@ -315,9 +310,10 @@ class CensusData:
 
             if cached is not None:
                 print(f"[{idx}] Cache hit")
+                cached_dict = cached.to_dict()
                 for col in merge_cols:
-                    cached[col] = row[col]
-                results.append(cached)
+                    cached_dict[col] = row[col]
+                results.append(cached_dict)
                 continue
 
             # Query API
@@ -414,11 +410,12 @@ class CensusData:
             clean_data[["geoid"] + merge_cols + census_cols]
             .copy()
             .melt(
-                id_vars=merge_cols,
+                id_vars=["geoid"] + merge_cols,
                 var_name="variable",
                 value_name="value",
             )
         )
+        props_long["value"] = props_long["value"].astype(float)
         props_long["granularity"] = self.granularity
         props_long["year"] = self.year
 
@@ -438,6 +435,7 @@ class CensusData:
                 value_name="value",
             )
         )
+        census_long["value"] = census_long["value"].astype(float)
         census_long["granularity"] = self.granularity
         census_long["year"] = self.year
 
@@ -524,7 +522,7 @@ class CensusData:
             all_vars.extend(table_vars)
         return all_vars
 
-    def _get_leaf_variables(self, year=2023):
+    def _get_leaf_variables(self):
         """Keep only leaf (most granular) variables — drop totals/subtotals."""
         all_fields = self.get_acs5_fields_with_labels(year=self.year)
 
@@ -549,6 +547,4 @@ class CensusData:
 if __name__ == "__main__":
 
     sql_obj = SQL()
-
     test_obj = CensusData(sql_obj=sql_obj, year=2023)
-    test_obj.visualize_data()
