@@ -1,3 +1,13 @@
+"""Property data generation and management for wildfire risk modeling.
+
+Generates random US property locations using the random_address library,
+reverse-geocodes them via the Census Geocoder API to obtain geographic
+identifiers (state, county, tract, block group), and persists to PostGIS.
+
+Supports both sequential and parallel property generation for speed.
+Test mode generates properties near known wildfire locations for validation.
+"""
+
 import censusgeocode as cg
 import sys
 import time
@@ -25,9 +35,32 @@ from settings import (
 
 
 class Properties:
-    """
-    For each property, we want lat/long, and state/county/tract/block
-    group information so that we can later query the ACS5.
+    """Property location manager with Census geographic identifiers.
+
+    Generates, stores, and retrieves random US property locations with
+    associated Census geography codes for later enrichment with ACS5 data.
+
+    Parameters
+    ----------
+    sql_obj : SQL
+        Database connection manager instance.
+
+    Attributes
+    ----------
+    properties_gpd : gpd.GeoDataFrame
+        Property locations with columns: geoid, block_id, block_grp,
+        tract_id, county_id, state_id, geometry.
+    num_properties : int
+        Current count of properties in the database.
+    test_mode : bool
+        Inherited from sql_obj; uses test table names if True.
+
+    Examples
+    --------
+    >>> sql = SQL()
+    >>> props = Properties(sql)
+    >>> props.add_random_properties(100, parallel=True, max_workers=10)
+    >>> gdf = props.get_properties_gpd()
     """
 
     def __init__(
@@ -419,7 +452,7 @@ if __name__ == "__main__":
         print("SQL connected")
         props = Properties(sql_obj=sql_obj)
         print(props.properties_gpd.head())
-        props.add_random_properties(int(sys.argv[1]), parallel=True, max_workers=10)
+        props.add_random_properties(int(sys.argv[1]), parallel=True, max_workers=50)
         print("Job done.")
     finally:
         sql_obj.disconnect_and_close()

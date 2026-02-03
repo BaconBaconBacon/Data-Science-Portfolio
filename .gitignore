@@ -23,6 +23,12 @@ Magnetization Extrapolation/
 .env
 Masters Thesis/
 
+# AWS - never commit these
+*.pem
+*credentials*
+*secret*
+.aws/
+
 TODO.txt
 .claude
 /anaconda_projects

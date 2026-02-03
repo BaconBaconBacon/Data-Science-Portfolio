@@ -1,4 +1,15 @@
-""" Stores commonly used SQL functions."""
+"""PostgreSQL database interface for the wildfire risk ML pipeline.
+
+Provides the SQL class for managing connections to a PostgreSQL/PostGIS database,
+with methods for:
+    - Table creation, modification, and deletion
+    - Reading/writing pandas DataFrames and GeoPandas GeoDataFrames
+    - Census data caching to reduce API calls
+    - Connection lifecycle management and idle connection cleanup
+
+Requires a running PostgreSQL instance with PostGIS extension enabled.
+Connection string is configured in settings.py.
+"""
 
 import sqlalchemy as s
 
@@ -14,10 +25,34 @@ import geopandas as gpd
 
 
 class SQL:
+    """Database connection manager for PostgreSQL/PostGIS.
+
+    Handles connection lifecycle, provides convenience methods for common
+    SQL operations, and supports both regular DataFrames and spatial
+    GeoDataFrames via PostGIS.
+
+    Parameters
+    ----------
+    test : bool, default False
+        If True, operates in test mode (uses test table names).
+
+    Attributes
+    ----------
+    test_mode : bool
+        Whether running in test mode.
+    connection : sqlalchemy.Connection
+        Active database connection.
+    engine : sqlalchemy.Engine
+        SQLAlchemy engine instance.
+
+    Examples
+    --------
+    >>> sql = SQL()
+    >>> df = sql.read_df_from_sql("SELECT * FROM properties LIMIT 10")
+    >>> sql.disconnect_and_close()
+    """
 
     def __init__(self, test=False) -> None:
-        # TODO: Move the SQL stuff into here when other classes are ready
-
         self.test_mode = test
         self.connection = None
         self.engine = None

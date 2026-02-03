@@ -1,3 +1,14 @@
+"""Census data retrieval and processing for property enrichment.
+
+Fetches American Community Survey 5-year (ACS5) data from the US Census API
+at configurable geographic granularity (block group, tract, or county).
+Features are normalized to percentages of their universe totals for ML use.
+
+Implements caching to avoid redundant API calls for previously-fetched
+geographies. Results are stored in PostGIS in narrow (long) format for
+efficient storage and flexible querying.
+"""
+
 import census
 import geopandas as gpd
 import json
@@ -8,7 +19,6 @@ import os
 from pathlib import Path
 import pandas as pd
 
-# import pytidycensus as tc
 from settings import (
     CENSUS_FEATURES,
     GIS_DEFAULT_CRS,
@@ -28,80 +38,40 @@ from sql_funcs import SQL
 
 
 class CensusData:
-    """
-    Based on the properties of interest, we need to pull ACS5
-    features relevant to each property. There are over 60,000
-    possible features to choose, so will need to find guess
-    relevant ones.
+    """ACS5 Census data handler for property feature enrichment.
 
-    FOR ACS5, some variables are at block group precision, and
-    some are stored at tract and higher.
+    Fetches socioeconomic and housing variables from the Census API,
+    caches results to reduce API calls, and merges onto property data.
 
-    To prep for machine learning, it's best to get each feature
-    into a percentage of total in their respective census universe.
+    Parameters
+    ----------
+    sql_obj : SQL
+        Database connection manager.
+    year : int
+        ACS5 data year (e.g., 2023).
+    granularity : str, default "tract"
+        Geographic level: "block_group", "tract", or "county".
+    sparse : bool, default True
+        If True, fetch only leaf variables (most granular); if False,
+        fetch all variables including totals/subtotals.
 
-    Universes (can extract this programmatically from pytidycensus responses):
-        Households
-        Housing Units
-        Civ. employed pop 16 years and over
-        Occupied housing units
+    Attributes
+    ----------
+    data : pd.DataFrame or None
+        Cached census data in long format from the database.
+    granularity : str
+        Current geographic granularity level.
+    year : int
+        ACS5 survey year.
 
-    Feature choices suggested by LLM (each will need unique cleaning/binning):
-        Income :
-            Median household income : B19013
-            Household income in last year : B19001
-            Public Assistance income : B19058
+    Notes
+    -----
+    ACS5 variables are organized by table codes (e.g., B19013 = Median
+    Household Income). Some variables are only available at tract level
+    or higher. Count variables are normalized to percentages of their
+    universe totals (e.g., households, housing units) for ML use.
 
-        Population :
-            Sex by age: B01001
-            Total population : B01003
-        Housing :
-            Housing unit count : B25001
-            Household type : B11001
-            Household type by relatives & nonrelatives : B11002
-            Tenure by age of householder by occupants per room :B25015
-            Tenure by plumbing facilities by occupants per room : B25016
-            Single-parent householes : B11005
-            Group Quarters Population : B26001
-            Multigenerational households : B11017
-            Units in structure (detached, MF, mobile homes) : B25024
-            Year structure built : B25034
-            Occupied vs vacant : B25002
-            Owner vs renter occupied : B25003
-            Rooms : B25017
-            Mobile homes vs. conventional structures : B25024
-            Total housing units (derive housing density): B25001
-            Vacancy status : B25002
-            Seasonal / recreational / occasional-use units : B25004
-            House heating fuel : B25040
-            Tenure by Occupants per Room: B25014
-        Ethnicity :
-            Language isolation : B16002
-        Economy :
-            Poverty rate : B17001
-            Rent burden : B25070
-            Mortgage burden: B25091
-            Energy costs (selected monthly costs) : B25031
-            Gini index : B19083
-
-        Employment:
-            Sex of workers by place of work: B08008
-            Unemployment : B23025
-            Sex by Occupation for Civ employed >=16 years old :C24010
-            Worker class (pvt/gov/self): C24060
-        Education :
-            Educational attainment : B15003
-        Transport :
-            Household Size by Vehicles Available : B08201
-            Number of Workers in Household by Vehicles Available : B08203
-            Means of Transportation to Work : B08301
-            Travel time to work : B08303
-            Sex of workers by Means of Transportation to Work : B08006
-        Disability :
-            Disability by age : C18108
-
-
-
+    See settings.CENSUS_FEATURES for the list of table codes used.
     """
 
     def __init__(
@@ -532,6 +502,11 @@ class CensusData:
                 if is_leaf:
                     all_vars.append(var)
         return all_vars
+
+    def _get_variable_name_from_code(self, code: str) -> str:
+
+        # TODO: Get human readable label from census code.
+        return
 
 
 if __name__ == "__main__":

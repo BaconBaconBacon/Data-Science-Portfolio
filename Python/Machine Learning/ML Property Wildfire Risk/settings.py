@@ -1,3 +1,15 @@
+"""Configuration settings and constants for the wildfire risk ML pipeline.
+
+Contains:
+    - GIS column names and coordinate reference systems
+    - Database connection strings and table names
+    - Census API feature codes and granularity levels
+    - File paths for data storage
+    - Clustering parameters for wildfire deduplication
+    - Geographic bounds for CONUS filtering
+    - Default parameters for proximity scoring functions
+"""
+
 from pathlib import Path
 
 HEADER_GEOM = "geometry"

@@ -1,3 +1,13 @@
+"""Wildfire data extraction, transformation, and loading (ETL).
+
+Loads VIIRS satellite fire detection data from shapefiles, applies quality
+filters (high confidence, presumed vegetation fires), clusters nearby
+detections into unique fire events using DBSCAN, and persists to PostGIS.
+
+Data source: NASA FIRMS (Fire Information for Resource Management System)
+Satellites: NOAA-21 (N21), Suomi NPP (SNPP)
+"""
+
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -23,6 +33,25 @@ from visualize import create_wildfire_map
 
 
 class WildfireData:
+    """ETL handler for NASA FIRMS wildfire detection data.
+
+    Extracts fire detections from VIIRS satellite shapefiles, transforms
+    by filtering for CONUS and clustering spatiotemporally similar detections,
+    then loads to PostGIS for persistence.
+
+    Parameters
+    ----------
+    sql_obj : SQL
+        Database connection manager instance.
+
+    Attributes
+    ----------
+    data : gpd.GeoDataFrame
+        Processed wildfire data with columns: geometry, ACQ_DATE, FRP,
+        SAT_ID, CONFIDENCE, TYPE, LATITUDE, LONGITUDE, fire_radius_m.
+    test_mode : bool
+        Inherited from sql_obj; affects table naming.
+    """
 
     def __init__(self, sql_obj: SQL):
 
