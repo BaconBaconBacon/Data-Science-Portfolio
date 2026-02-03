@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from random_address import real_random_address
 from shapely.geometry import Point
 from sql_funcs import SQL
@@ -43,16 +44,32 @@ class Properties:
             self.table_name = PROP_TABLE_NAME_TEST
         self._read_from_sql()
 
-    def add_random_properties(self, quantity: int, verbose=True) -> None:
+    def add_random_properties(
+        self, quantity: int, verbose=True, parallel=False, max_workers=10
+    ) -> None:
         """
-        Add 'quantity' many new random addresses
+        Add 'quantity' many new random addresses.
+
+        Parameters
+        ----------
+        quantity : int
+            Number of properties to add.
+        verbose : bool
+            Print progress updates.
+        parallel : bool
+            If True, use parallel API calls (faster but more aggressive).
+        max_workers : int
+            Number of parallel threads (only used if parallel=True).
         """
         if self.test_mode:
             # TODO: Check if there arent any in the test property table
             print("Test mode, cannot add more properties.")
             return
-        # Could keep a hash of the address, for privacy?
-        # self.session = self.Session()
+
+        # Route to parallel version if requested
+        if parallel:
+            return self._add_random_properties_parallel(quantity, verbose, max_workers)
+
         print(f"Adding {quantity} properties...")
 
         temp_lst = [None] * quantity
@@ -132,6 +149,110 @@ class Properties:
             hours = int(seconds // 3600)
             mins = int((seconds % 3600) // 60)
             return f"{hours}h {mins}m"
+
+    @staticmethod
+    def _fetch_single_property() -> dict | None:
+        """
+        Fetch a single random property with census block info.
+
+        Returns dict with property data, or None if geocoding fails.
+        """
+        try:
+            coords = real_random_address()["coordinates"]
+            lat = coords["lat"]
+            long = coords["lng"]
+
+            block = cg.coordinates(x=long, y=lat)["2020 Census Blocks"][0]
+
+            prop = {
+                key: (
+                    block[PROP_LABELS_KEYS_MAP[key]]
+                    if key == "geoid"
+                    else int(block[PROP_LABELS_KEYS_MAP[key]])
+                )
+                for key in PROP_LABELS_KEYS_MAP.keys()
+            }
+            prop[HEADER_GEOM] = Point(long, lat)
+            return prop
+
+        except (IndexError, KeyError, Exception):
+            return None
+
+    def _add_random_properties_parallel(
+        self, quantity: int, verbose: bool, max_workers: int
+    ) -> None:
+        """
+        Parallel version of add_random_properties using ThreadPoolExecutor.
+        """
+        print(f"Adding {quantity} properties with {max_workers} parallel workers...")
+
+        results = []
+        failed = 0
+        start_time = time.time()
+        estimate_shown = False
+        estimate_sample = min(10 * max_workers, quantity)
+        last_saved = 0
+        save_interval = 500
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self._fetch_single_property): i for i in range(quantity)
+            }
+
+            for future in as_completed(futures):
+                try:
+                    prop = future.result()
+                    if prop is not None:
+                        results.append(prop)
+                except Exception:
+                    failed += 1
+
+                completed = len(results) + failed
+
+                # Time estimate after initial sample
+                if completed == estimate_sample and not estimate_shown and verbose:
+                    elapsed = time.time() - start_time
+                    rate = len(results) / elapsed if elapsed > 0 else 0
+                    remaining = quantity - completed
+                    est_remaining_sec = remaining / rate if rate > 0 else 0
+                    print(
+                        f"  Time estimate: {self._format_duration(est_remaining_sec)} remaining "
+                        f"({rate:.2f} properties/sec)"
+                    )
+                    estimate_shown = True
+
+                # Progress every 500
+                if completed % 500 == 0 and completed > 0 and verbose:
+                    elapsed = time.time() - start_time
+                    rate = len(results) / elapsed if elapsed > 0 else 0
+                    remaining = quantity - completed
+                    est_remaining = remaining / rate if rate > 0 else 0
+                    print(
+                        f"  {completed}/{quantity} fetched ({len(results)} success, {failed} failed) "
+                        f"- {self._format_duration(est_remaining)} remaining"
+                    )
+
+                # Periodic save to SQL
+                if len(results) - last_saved >= save_interval:
+                    self._update_gpd_and_sql(results[last_saved:])
+                    last_saved = len(results)
+                    if verbose:
+                        print(f"  Saved {last_saved} properties to database...")
+
+        # Save remaining
+        if len(results) > last_saved:
+            self._update_gpd_and_sql(results[last_saved:])
+
+        self.sql_obj.drop_duplicates_from_table(self.table_name)
+        self._update_property_count()
+
+        total_time = time.time() - start_time
+        if verbose:
+            rate = len(results) / total_time if total_time > 0 else 0
+            print(
+                f"Completed in {self._format_duration(total_time)} "
+                f"({len(results)} added, {failed} failed, {rate:.2f}/sec)"
+            )
 
     def _add_properties_near_fires(
         self,
@@ -298,7 +419,7 @@ if __name__ == "__main__":
         print("SQL connected")
         props = Properties(sql_obj=sql_obj)
         print(props.properties_gpd.head())
-        props.add_random_properties(int(sys.argv[1]))
+        props.add_random_properties(int(sys.argv[1]), parallel=True, max_workers=10)
         print("Job done.")
     finally:
         sql_obj.disconnect_and_close()
