@@ -14,6 +14,7 @@ import geopandas as gpd
 import json
 import numpy as np
 import requests
+import time
 
 import os
 from pathlib import Path
@@ -33,7 +34,6 @@ from settings import (
     TABLE_NAME_CENSUS_PROPS,
 )
 
-# from sqlalchemy import text
 from sql_funcs import SQL
 
 
@@ -101,6 +101,7 @@ class CensusData:
         self.test_mode = self.sql_obj.test_mode
 
         if self.test_mode:
+            print("starting in test mode")
             self.table_name = TABLE_NAME_CENSUS_TEST
             self.sql_obj.drop_table(TABLE_NAME_CENSUS_TEST, confirm=True)
             # self.data = None
@@ -231,6 +232,20 @@ class CensusData:
             merge_cols = ["state_id", "county_id", "tract_id", "block_grp"]
         return merge_cols
 
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        """Format seconds into human-readable duration string."""
+        if seconds < 60:
+            return f"{seconds:.1f}s"
+        elif seconds < 3600:
+            mins = int(seconds // 60)
+            secs = int(seconds % 60)
+            return f"{mins}m {secs}s"
+        else:
+            hours = int(seconds // 3600)
+            mins = int((seconds % 3600) // 60)
+            return f"{hours}h {mins}m"
+
     def _get_geoid_query_strings(self, row: pd.Series) -> tuple[str, str, str]:
 
         if self.granularity == "county":
@@ -262,15 +277,24 @@ class CensusData:
 
         merge_cols = self._get_merge_columns()
         unique_geos = properties_data[merge_cols].drop_duplicates()
-        print(f"Unique geoids: {len(unique_geos)}.")
+        total_geos = len(unique_geos)
+        print(f"Unique geoids: {total_geos}.")
 
         var_chunks = [
             variables[i : i + CENSUS_CHUNK_SIZE]
             for i in range(0, len(variables), CENSUS_CHUNK_SIZE)
         ]
 
+        # Time tracking setup
+        start_time = time.time()
+        estimate_sample = min(5, total_geos)
+        estimate_shown = False
+        api_calls = 0
+        cache_hits = 0
+
         results = []
-        for idx, row in unique_geos.iterrows():
+        for i, (idx, row) in enumerate(unique_geos.iterrows()):
+            completed = i + 1
 
             # Check cache first
             cached = self.sql_obj.get_cached_census_results(
@@ -278,34 +302,71 @@ class CensusData:
             )
 
             if cached is not None:
-                print(f"[{idx}] Cache hit")
+                cache_hits += 1
+                print(f"[{completed}/{total_geos}] Cache hit")
                 cached_dict = cached.to_dict()
                 for col in merge_cols:
                     cached_dict[col] = row[col]
                 results.append(cached_dict)
-                continue
+            else:
+                # Query API
+                api_calls += 1
+                geo_id, query_for, query_in = self._get_geoid_query_strings(row)
 
-            # Query API
-            geo_id, query_for, query_in = self._get_geoid_query_strings(row)
+                print(
+                    f"[{completed}/{total_geos}] Querying id {geo_id} at {self.granularity}..."
+                )
 
-            print(f"[{idx}] Querying id {geo_id} at {self.granularity}...")
+                combined_result = {}
+                try:
+                    for chunk in var_chunks:
+                        result = self.census.get(
+                            chunk, {"for": query_for, "in": query_in}
+                        )
+                        if result:
+                            combined_result.update(result[0])
 
-            combined_result = {}
-            try:
-                for chunk in var_chunks:
-                    result = self.census.get(chunk, {"for": query_for, "in": query_in})
-                    if result:
-                        combined_result.update(result[0])
+                    if combined_result:
+                        # Cache immediately after success
+                        self._cache_results(row, merge_cols, combined_result)
+                        for col in merge_cols:
+                            combined_result[col] = row[col]
+                        results.append(combined_result)
 
-                if combined_result:
-                    # Cache immediately after success
-                    self._cache_results(row, merge_cols, combined_result)
-                    for col in merge_cols:
-                        combined_result[col] = row[col]
-                    results.append(combined_result)
+                except Exception as e:
+                    print(f"Skipped! Error for {geo_id}: {e}")
 
-            except Exception as e:
-                print(f"Skipped! Error for {geo_id}: {e}")
+            # Show initial time estimate after sample completes
+            if completed == estimate_sample and not estimate_shown:
+                elapsed = time.time() - start_time
+                per_geo = elapsed / completed
+                remaining = total_geos - completed
+                est_remaining_sec = remaining * per_geo
+                est_total_sec = total_geos * per_geo
+                print(
+                    f"  Time estimate: {self._format_duration(est_total_sec)} total "
+                    f"({per_geo:.2f}s per geography, "
+                    f"{self._format_duration(est_remaining_sec)} remaining)"
+                )
+                estimate_shown = True
+
+            # Show progress every 10 geographies (after estimate shown)
+            elif completed % 10 == 0 and estimate_shown:
+                elapsed = time.time() - start_time
+                per_geo = elapsed / completed
+                remaining = total_geos - completed
+                est_remaining = remaining * per_geo
+                print(
+                    f"  [{completed}/{total_geos}] {api_calls} API calls, {cache_hits} cache hits "
+                    f"- {self._format_duration(est_remaining)} remaining"
+                )
+
+        # Final completion message
+        total_time = time.time() - start_time
+        print(
+            f"Completed fetching census data in {self._format_duration(total_time)} "
+            f"({api_calls} API calls, {cache_hits} cache hits)"
+        )
 
         if len(results) > 0:
             return properties_data.merge(
@@ -411,8 +472,6 @@ class CensusData:
         table_name = TABLE_NAME_CENSUS_TEST if self.test_mode else TABLE_NAME_CENSUS
         self.sql_obj.save_df_to_sql(table_name, census_long)
 
-        return
-
     def _read_from_sql(self) -> pd.DataFrame | None:
         if self.sql_obj.check_table_exists(self.table_name):
             df = self.sql_obj.read_df_from_sql(self.table_name)
@@ -433,7 +492,6 @@ class CensusData:
 
         with open(self.metadata_filepath, "w") as f:
             json.dump(acs5_dict, f, indent=4)
-        return
 
     def get_variable_universe(self, variable: str | list) -> str | list:
 
@@ -504,9 +562,9 @@ class CensusData:
         return all_vars
 
     def _get_variable_name_from_code(self, code: str) -> str:
-
-        # TODO: Get human readable label from census code.
-        return
+        """Get human-readable label from census variable code."""
+        # TODO: Implement lookup from Census API metadata
+        raise NotImplementedError("Census variable name lookup not yet implemented")
 
 
 if __name__ == "__main__":

@@ -26,11 +26,14 @@ Test locally first with the test data:
 
 """
 
+import argparse
+import os
+import pickle
+import tempfile
+
+import boto3
 import numpy as np
 import pandas as pd
-import pickle
-import boto3
-import argparse
 
 from pathlib import Path
 from scipy.stats import randint, uniform
@@ -271,9 +274,6 @@ def parse_s3_path(s3_path: str) -> tuple[str, str]:
 def read_parquet_auto(path: str) -> pd.DataFrame:
     """Read parquet from local path or S3."""
     if is_s3_path(path):
-        import tempfile
-        import os
-
         bucket, key = parse_s3_path(path)
         # Create temp file, close it (Windows needs this), then download
         fd, tmp_path = tempfile.mkstemp(suffix=".parquet")
@@ -292,9 +292,6 @@ def read_parquet_auto(path: str) -> pd.DataFrame:
 
 def save_model_auto(model, path: str, pipeline=None, feature_names=None) -> None:
     """Save model to local path or S3."""
-    import tempfile
-    import os
-
     if is_s3_path(path):
         bucket, key = parse_s3_path(path)
         # Create temp file, close it (Windows needs this), then write

@@ -1,14 +1,21 @@
 """Property data generation and management for wildfire risk modeling.
 
-Generates random US property locations using the random_address library,
-reverse-geocodes them via the Census Geocoder API to obtain geographic
-identifiers (state, county, tract, block group), and persists to PostGIS.
+Generates random US property locations by sampling coordinates within
+Continental US (CONUS) bounds, then reverse-geocodes via the Census
+Geocoder API to obtain geographic identifiers (state, county, tract,
+block group) and persists to PostGIS.
 
 Supports both sequential and parallel property generation for speed.
 Test mode generates properties near known wildfire locations for validation.
+
+Note: ~30-40% of random CONUS points will successfully geocode (the rest
+fall in water, forests, or unpopulated areas). To get N properties,
+request approximately 3*N points.
+
 """
 
 import censusgeocode as cg
+import random
 import sys
 import time
 import numpy as np
@@ -16,7 +23,6 @@ import pandas as pd
 import geopandas as gpd
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from random_address import real_random_address
 from shapely.geometry import Point
 from sql_funcs import SQL
 from settings import (
@@ -31,6 +37,9 @@ from settings import (
     USA_MIN_LON,
     USA_MAX_LON,
     EARTH_RADIUS_KM,
+    PROP_ESTIMATE_SAMPLE,
+    PROP_PROGRESS_INTERVAL,
+    PROP_SAVE_INTERVAL,
 )
 
 
@@ -76,6 +85,7 @@ class Properties:
         else:
             self.table_name = PROP_TABLE_NAME_TEST
         self._read_from_sql()
+        print(f"{self.num_properties} many properties found.")
 
     def add_random_properties(
         self, quantity: int, verbose=True, parallel=False, max_workers=10
@@ -108,16 +118,19 @@ class Properties:
         temp_lst = [None] * quantity
         last_added = 0
         start_time = time.time()
-        estimate_sample = min(10, quantity)
+        estimate_sample = min(PROP_ESTIMATE_SAMPLE, quantity)
         estimate_shown = False
 
         for i in range(quantity):
 
-            coords = real_random_address()["coordinates"]
+            # Generate random coordinates within Continental US bounds
+            lat = random.uniform(USA_MIN_LAT, USA_MAX_LAT)
+            long = random.uniform(USA_MIN_LON, USA_MAX_LON)
 
-            lat = coords["lat"]
-            long = coords["lng"]
-            block = cg.coordinates(x=long, y=lat)["2020 Census Blocks"][0]
+            try:
+                block = cg.coordinates(x=long, y=lat)["2020 Census Blocks"][0]
+            except Exception:
+                continue  # Skip points that fail geocoding (water, unpopulated areas)
 
             temp_lst[i] = {
                 key: (
@@ -143,7 +156,7 @@ class Properties:
                 )
                 estimate_shown = True
 
-            if not (i + 1) % 50:
+            if not (i + 1) % PROP_PROGRESS_INTERVAL:
                 if verbose:
                     elapsed = time.time() - start_time
                     remaining_count = quantity - (i + 1)
@@ -161,6 +174,8 @@ class Properties:
             self._update_gpd_and_sql(remaining)
 
         self.sql_obj.drop_duplicates_from_table(self.table_name)
+        # Reload from SQL to get auto-generated property_ids
+        self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)
         self._update_property_count()
 
         total_time = time.time() - start_time
@@ -188,12 +203,14 @@ class Properties:
         """
         Fetch a single random property with census block info.
 
-        Returns dict with property data, or None if geocoding fails.
+        Generates random coordinates within CONUS bounds and reverse-geocodes
+        via Census API. Returns dict with property data, or None if geocoding
+        fails (e.g., point falls in water or unpopulated area).
         """
         try:
-            coords = real_random_address()["coordinates"]
-            lat = coords["lat"]
-            long = coords["lng"]
+            # Generate random coordinates within Continental US bounds
+            lat = random.uniform(USA_MIN_LAT, USA_MAX_LAT)
+            long = random.uniform(USA_MIN_LON, USA_MAX_LON)
 
             block = cg.coordinates(x=long, y=lat)["2020 Census Blocks"][0]
 
@@ -208,7 +225,7 @@ class Properties:
             prop[HEADER_GEOM] = Point(long, lat)
             return prop
 
-        except (IndexError, KeyError, Exception):
+        except Exception:
             return None
 
     def _add_random_properties_parallel(
@@ -223,9 +240,9 @@ class Properties:
         failed = 0
         start_time = time.time()
         estimate_shown = False
-        estimate_sample = min(10 * max_workers, quantity)
+        estimate_sample = min(PROP_ESTIMATE_SAMPLE * max_workers, quantity)
         last_saved = 0
-        save_interval = 500
+        save_interval = PROP_SAVE_INTERVAL
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -237,7 +254,8 @@ class Properties:
                     prop = future.result()
                     if prop is not None:
                         results.append(prop)
-                except Exception:
+                except Exception as e:
+                    print(f"Property fetch failed: {e}")
                     failed += 1
 
                 completed = len(results) + failed
@@ -276,7 +294,13 @@ class Properties:
         if len(results) > last_saved:
             self._update_gpd_and_sql(results[last_saved:])
 
+        # Backup before deduplication for large batches
+        if quantity >= 50000:
+            self.sql_obj.backup_table_to_parquet(self.table_name)
+
         self.sql_obj.drop_duplicates_from_table(self.table_name)
+        # Reload from SQL to get auto-generated property_ids
+        self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)
         self._update_property_count()
 
         total_time = time.time() - start_time
@@ -355,7 +379,7 @@ class Properties:
             # Reverse-geocode to census block
             try:
                 block = cg.coordinates(x=long, y=lat)["2020 Census Blocks"][0]
-            except (IndexError, KeyError, Exception):
+            except Exception:
                 continue
 
             temp_lst[num_added] = {
@@ -420,6 +444,8 @@ class Properties:
             else:
                 print(f"Adding {PROPERTIES_INIT_COUNT} new properties to table...")
                 self.add_random_properties(PROPERTIES_INIT_COUNT, verbose=False)
+            # Reload from SQL to get auto-generated property_ids
+            self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)
         self._update_property_count()
         return
 
@@ -452,7 +478,12 @@ if __name__ == "__main__":
         print("SQL connected")
         props = Properties(sql_obj=sql_obj)
         print(props.properties_gpd.head())
-        props.add_random_properties(int(sys.argv[1]), parallel=True, max_workers=50)
+        props.add_random_properties(
+            int(sys.argv[1]), parallel=True, max_workers=int(sys.argv[2])
+        )
         print("Job done.")
+        if int(sys.argv[1]) > 10000:
+            print("Backing up to parquet...")
+            sql_obj.backup_table_to_parquet(PROP_TABLE_NAME)
     finally:
         sql_obj.disconnect_and_close()

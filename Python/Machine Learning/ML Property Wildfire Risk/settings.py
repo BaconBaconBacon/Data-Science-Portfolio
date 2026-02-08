@@ -145,6 +145,9 @@ EARTH_RADIUS_KM = 6371.0  # Earth radius in km
 WILDFIRES_TABLE_NAME = "wildfires"
 
 PROPERTIES_INIT_COUNT = 10
+PROP_ESTIMATE_SAMPLE = 10  # Properties to sample before showing time estimate
+PROP_PROGRESS_INTERVAL = 50  # Print progress every N properties (sequential)
+PROP_SAVE_INTERVAL = 500  # Save to DB every N properties (parallel)
 
 # GIS proximity scoring defaults
 GIS_SCORING_DEFAULT_RADIUS_M = 80467  # 50 miles

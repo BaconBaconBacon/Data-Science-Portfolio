@@ -71,10 +71,7 @@ class WildfireData:
             raw_data = self._extract(self.data_path)
             self.data = self._transform(raw_data)
 
-            # Save to parquet/SQL
-            # if not self.test_mode:
             self._load_to_sql(self.data)
-        return
 
     def _extract(self, data_path: Path) -> gpd.GeoDataFrame:
         """
@@ -193,12 +190,8 @@ class WildfireData:
         return gpd.GeoDataFrame(aggregated, geometry=HEADER_GEOM, crs=data.crs)
 
     def _load_to_sql(self, clean_data: gpd.GeoDataFrame) -> None:
-        """
-        Save the data to disk. TODO: Integrate the SQL db.
-        """
-        # clean_data.to_parquet(self.data_path / SAVENAME_WILDFIRES)
+        """Save the wildfire data to PostgreSQL."""
         self.sql_obj.save_gpd_to_sql(WILDFIRES_TABLE_NAME, clean_data)
-        return
 
     def _read_from_sql(self) -> gpd.GeoDataFrame:
         return self.sql_obj.read_gpd_from_sql(WILDFIRES_TABLE_NAME)
