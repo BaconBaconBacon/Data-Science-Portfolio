@@ -8,16 +8,16 @@ This parallelism significantly reduces total runtime compared to sequential exec
 
 Usage:
     # Full parallel pipeline: add 300k properties + census merge
-    python run_pipeline.py --num-properties 300000 --workers 10 --granularity county
+    python run_etl_pipeline.py --num-properties 300000 --workers 10 --granularity county
 
     # Census merge only (use existing properties)
-    python run_pipeline.py --granularity county
+    python run_etl_pipeline.py --granularity county
 
     # Properties only (skip census)
-    python run_pipeline.py --num-properties 50000 --skip-census
+    python run_etl_pipeline.py --num-properties 50000 --skip-census
 
     # Sequential mode (disable parallelism)
-    python run_pipeline.py --num-properties 1000 --sequential
+    python run_etl_pipeline.py --num-properties 1000 --sequential
 """
 
 import argparse
@@ -82,6 +82,7 @@ def run_census_thread(
 
             # Load current properties from PostGIS
             from load_properties import Properties
+
             props = Properties(sql_obj=sql_obj)
             properties_gdf = props.get_properties_gpd()
 
@@ -94,12 +95,16 @@ def run_census_thread(
                 continue
 
             # Run census merge (handles missing geos internally)
-            print(f"[CENSUS] Processing {len(properties_gdf)} properties (poll {iteration})...")
+            print(
+                f"[CENSUS] Processing {len(properties_gdf)} properties (poll {iteration})..."
+            )
             result = census.merge_census_info(properties_gdf)
             new_count = len(result)
 
             if new_count > processed_count:
-                print(f"[CENSUS] Merged {new_count} properties (+{new_count - processed_count} new)")
+                print(
+                    f"[CENSUS] Merged {new_count} properties (+{new_count - processed_count} new)"
+                )
                 processed_count = new_count
 
             # Check if producer is done
