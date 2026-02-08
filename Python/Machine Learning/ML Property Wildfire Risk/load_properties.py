@@ -474,10 +474,11 @@ if __name__ == "__main__":
     SQL.kill_idle(True)
     print("Starting...")
     sql_obj = SQL()
+    print("SQL connected")
+    props = Properties(sql_obj=sql_obj)
+    print(props.properties_gpd.head())
+
     try:
-        print("SQL connected")
-        props = Properties(sql_obj=sql_obj)
-        print(props.properties_gpd.head())
         props.add_random_properties(
             int(sys.argv[1]), parallel=True, max_workers=int(sys.argv[2])
         )
@@ -486,4 +487,6 @@ if __name__ == "__main__":
             print("Backing up to parquet...")
             sql_obj.backup_table_to_parquet(PROP_TABLE_NAME)
     finally:
+        pro_gdf = props.get_properties_gpd()
+        print(f"Successfully added {pro_gdf.shape[0]} properties.")
         sql_obj.disconnect_and_close()

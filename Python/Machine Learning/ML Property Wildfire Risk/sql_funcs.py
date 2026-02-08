@@ -20,6 +20,8 @@ from settings import (
     PROP_LABELS_KEYS_MAP,
     GIS_DEFAULT_CRS,
     TABLE_NAME_CACHE,
+    TABLE_NAME_CENSUS_PROPS,
+    TABLE_NAME_CENSUS_PROPS_TEST,
     HEADER_GEOM,
     PATH_DATA,
 )
@@ -341,6 +343,27 @@ class SQL:
         q = f"SELECT * FROM {table_name}"
 
         return gpd.read_postgis(q, con=self.engine, geom_col=HEADER_GEOM)
+
+    def read_props_census(self) -> gpd.GeoDataFrame:
+        """Read pre-merged properties+census data from PostGIS.
+
+        Returns the props_census table containing properties enriched with
+        census data from a previous pipeline run.
+
+        Returns
+        -------
+        gpd.GeoDataFrame
+            Properties with census features merged.
+
+        Raises
+        ------
+        ValueError
+            If the props_census table does not exist (pipeline not run yet).
+        """
+        table = TABLE_NAME_CENSUS_PROPS_TEST if self.test_mode else TABLE_NAME_CENSUS_PROPS
+        if not self.check_table_exists(table):
+            raise ValueError(f"Table '{table}' does not exist. Run the pipeline first.")
+        return self.read_gpd_from_sql(table)
 
     def initialize_properties_table(self, prop_name: str):
 
