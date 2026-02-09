@@ -1,35 +1,21 @@
 """
-Standalone training script for wildfire risk ML pipeline.
-Handles preprocessing (fit on train only), model training, evaluation, and persistence.
-Can run locally or on EC2/SageMaker.
+Training module for wildfire risk ML pipeline.
 
-Test locally first with the test data:
- python train.py \
-    --input data/model_joined.parquet \
-    --output Models/test_model.pkl \
-    --n-iter 5 \
-    --model rf
+Provides preprocessing with adaptive imputation based on missingness analysis,
+model training with hyperparameter tuning, evaluation, and persistence.
+Supports both local and S3 storage.
 
-  Then test with S3:
-  # Upload test data to S3
-  aws s3 cp data/model_joined.parquet s3://wildfire-risk-ml/data/test_joined.parquet
-
-  # Train from S3, save to S3
-  python train.py     --input s3://wildfire-risk-ml/data/test_joined.parquet     --output s3://wildfire-risk-ml/models/test_model.pkl     --n-iter 5
-
-  Full run (after 300k properties are ready):
-  python train.py \
-    --input s3://wildfire-risk-ml/data/model_joined.parquet \
-    --output s3://wildfire-risk-ml/models/best_model.pkl \
-    --n-iter 50
-
-
+Usage:
+    python train.py --input data/model_joined.parquet --output Models/model.pkl
+    python train.py --input s3://bucket/data.parquet --output s3://bucket/model.pkl
 """
 
 import argparse
+import hashlib
 import os
 import pickle
 import tempfile
+import time
 
 import boto3
 import numpy as np
@@ -38,16 +24,296 @@ import pandas as pd
 from pathlib import Path
 from scipy.stats import randint, uniform
 from sklearn.base import BaseEstimator
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.impute import KNNImputer
+from sklearn.compose import ColumnTransformer
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
 
+from missing_analysis import (
+    analyze_missingness,
+    get_column_lists,
+    print_missingness_report,
+)
+from settings import PATH_DATA
 
-# ─── Preprocessing (fit on train only) ───────────────────────────────────────
+
+def _generate_preprocess_cache_key(
+    df: pd.DataFrame,
+    target_col: str,
+    drop_cols: list[str],
+    nan_threshold: float,
+    corr_threshold: float,
+    mar_corr_threshold: float,
+    test_size: float,
+    random_state: int,
+) -> str:
+    """
+    Generate MD5 hash key for preprocessing cache.
+
+    Creates a unique identifier based on data shape, column names, and all
+    preprocessing parameters to detect when cached results are valid.
+    """
+    col_hash = hashlib.md5("_".join(sorted(df.columns)).encode()).hexdigest()[:8]
+    drop_hash = hashlib.md5("_".join(sorted(drop_cols)).encode()).hexdigest()[:8]
+
+    key_parts = [
+        f"rows_{len(df)}",
+        f"cols_{len(df.columns)}",
+        f"colhash_{col_hash}",
+        f"drophash_{drop_hash}",
+        f"target_{target_col}",
+        f"nan_{nan_threshold}",
+        f"corr_{corr_threshold}",
+        f"mar_{mar_corr_threshold}",
+        f"test_{test_size}",
+        f"seed_{random_state}",
+    ]
+    return hashlib.md5("_".join(key_parts).encode()).hexdigest()[:12]
+
+
+def _get_preprocess_cache_path(cache_key: str) -> Path:
+    """Return the cache file path for a given cache key."""
+    cache_dir = PATH_DATA / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / f"preprocess_{cache_key}.pkl"
+
+
+def build_adaptive_pipeline(
+    mcar_cols: list[str],
+    mar_cols: list[str],
+    complete_cols: list[str],
+    random_state: int = 77,
+) -> Pipeline:
+    """
+    Build preprocessing pipeline with adaptive imputation per missingness type.
+
+    Parameters
+    ----------
+    mcar_cols
+        Columns with Missing Completely At Random - uses median imputation.
+    mar_cols
+        Columns with Missing At Random - uses iterative imputation to
+        preserve feature correlations.
+    complete_cols
+        Columns with no missing values - passed through unchanged.
+    random_state
+        Random seed for IterativeImputer reproducibility.
+
+    Returns
+    -------
+    Pipeline
+        Two-stage pipeline: ColumnTransformer for adaptive imputation,
+        then StandardScaler for normalization.
+    """
+    transformers = []
+
+    if mcar_cols:
+        transformers.append(
+            ("mcar_imputer", SimpleImputer(strategy="median"), mcar_cols)
+        )
+
+    if mar_cols:
+        transformers.append(
+            (
+                "mar_imputer",
+                IterativeImputer(max_iter=10, random_state=random_state),
+                mar_cols,
+            )
+        )
+
+    if complete_cols:
+        transformers.append(("passthrough", "passthrough", complete_cols))
+
+    return Pipeline(
+        [
+            ("imputer", ColumnTransformer(transformers, remainder="drop")),
+            ("scaler", StandardScaler()),
+        ]
+    )
+
+
+def preprocess_with_cache(
+    df: pd.DataFrame,
+    target_col: str,
+    drop_cols: list[str],
+    nan_threshold: float = 0.45,
+    corr_threshold: float = 0.85,
+    mar_corr_threshold: float = 0.1,
+    test_size: float = 0.2,
+    random_state: int = 77,
+    use_cache: bool = True,
+) -> tuple[np.ndarray, np.ndarray, pd.Series, pd.Series, list[str], Pipeline]:
+    """
+    Full preprocessing pipeline with adaptive imputation and disk caching.
+
+    Performs train/test split, drops high-NaN and correlated columns, analyzes
+    missingness mechanism per feature, applies appropriate imputation (median
+    for MCAR, iterative for MAR), and scales features. All artifacts are
+    cached to disk for fast re-runs.
+
+    Parameters
+    ----------
+    df
+        Input DataFrame containing features and target.
+    target_col
+        Name of the target variable column.
+    drop_cols
+        Columns to exclude from features (e.g., geometry, identifiers).
+    nan_threshold
+        Maximum allowed NaN fraction per column (0.0-1.0).
+    corr_threshold
+        Maximum allowed absolute correlation between feature pairs.
+    mar_corr_threshold
+        Minimum correlation between missingness indicator and other features
+        to classify as MAR (Missing At Random) vs MCAR.
+    test_size
+        Fraction of data reserved for test set.
+    random_state
+        Random seed for reproducibility.
+    use_cache
+        Whether to cache results and load from cache on re-runs.
+
+    Returns
+    -------
+    X_train
+        Preprocessed training features as numpy array.
+    X_test
+        Preprocessed test features as numpy array.
+    y_train
+        Training target values.
+    y_test
+        Test target values.
+    feature_names
+        Ordered list of feature names matching output columns.
+    pipeline
+        Fitted preprocessing pipeline for transforming new data.
+    """
+    cache_key = _generate_preprocess_cache_key(
+        df,
+        target_col,
+        drop_cols,
+        nan_threshold,
+        corr_threshold,
+        mar_corr_threshold,
+        test_size,
+        random_state,
+    )
+    cache_file = _get_preprocess_cache_path(cache_key)
+
+    if use_cache and cache_file.exists():
+        print(f"Loading cached preprocessing from {cache_file.name}")
+        try:
+            with open(cache_file, "rb") as f:
+                cached = pickle.load(f)
+
+            if cached.get("n_rows") == len(df):
+                y = df[target_col]
+                X = df.drop(columns=[target_col] + drop_cols)
+                X = X[cached["nan_keep_cols"]]
+                X = X[cached["corr_keep_cols"]]
+
+                train_idx = cached["train_idx"]
+                test_idx = cached["test_idx"]
+                X_train_df = X.iloc[train_idx]
+                X_test_df = X.iloc[test_idx]
+                y_train = y.iloc[train_idx]
+                y_test = y.iloc[test_idx]
+
+                pipeline = cached["pipeline"]
+                X_train = pipeline.transform(X_train_df)
+                X_test = pipeline.transform(X_test_df)
+
+                print(f"  Loaded {len(cached['feature_names'])} features from cache")
+                return (
+                    X_train,
+                    X_test,
+                    y_train,
+                    y_test,
+                    cached["feature_names"],
+                    pipeline,
+                )
+            else:
+                print(
+                    f"  Cache row count mismatch ({cached.get('n_rows')} vs {len(df)}), recomputing..."
+                )
+        except Exception as e:
+            print(f"  Cache load failed ({e}), recomputing...")
+
+    print("Computing preprocessing (will cache for future runs)...")
+    start = time.time()
+
+    y = df[target_col]
+    X = df.drop(columns=[target_col] + drop_cols)
+    X_train_df, X_test_df, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state
+    )
+
+    train_idx = X_train_df.index.tolist()
+    test_idx = X_test_df.index.tolist()
+
+    X_train_df = X_train_df.reset_index(drop=True)
+    X_test_df = X_test_df.reset_index(drop=True)
+    y_train = y_train.reset_index(drop=True)
+    y_test = y_test.reset_index(drop=True)
+
+    print(f"  Features before filtering: {X_train_df.shape[1]}")
+
+    X_train_df, X_test_df = drop_high_nan_columns(
+        X_train_df, X_test_df, threshold=nan_threshold
+    )
+    nan_keep_cols = X_train_df.columns.tolist()
+    print(f"  After NaN filter: {X_train_df.shape[1]}")
+
+    X_train_df, X_test_df = drop_correlated_features(
+        X_train_df, X_test_df, threshold=corr_threshold
+    )
+    corr_keep_cols = X_train_df.columns.tolist()
+    print(f"  After correlation filter: {X_train_df.shape[1]}")
+
+    print("  Analyzing missing data patterns...")
+    t0 = time.time()
+    analysis = analyze_missingness(X_train_df, threshold=mar_corr_threshold)
+    print_missingness_report(analysis)
+    print(f"  Missingness analysis completed in {time.time() - t0:.1f}s")
+
+    mcar_cols, mar_cols, complete_cols = get_column_lists(
+        analysis, X_train_df.columns.tolist()
+    )
+
+    feature_names = mcar_cols + mar_cols + complete_cols
+
+    print("  Fitting adaptive imputation pipeline...")
+    t0 = time.time()
+    pipeline = build_adaptive_pipeline(mcar_cols, mar_cols, complete_cols, random_state)
+    X_train = pipeline.fit_transform(X_train_df)
+    X_test = pipeline.transform(X_test_df)
+    print(f"  Pipeline fitting completed in {time.time() - t0:.1f}s")
+
+    print(f"  Final feature matrix: {X_train.shape}")
+    print(f"  Preprocessing completed in {time.time() - start:.1f}s")
+
+    if use_cache:
+        cache_data = {
+            "n_rows": len(df),
+            "nan_keep_cols": nan_keep_cols,
+            "corr_keep_cols": corr_keep_cols,
+            "mcar_cols": mcar_cols,
+            "mar_cols": mar_cols,
+            "complete_cols": complete_cols,
+            "pipeline": pipeline,
+            "feature_names": feature_names,
+            "train_idx": train_idx,
+            "test_idx": test_idx,
+        }
+        with open(cache_file, "wb") as f:
+            pickle.dump(cache_data, f)
+        print(f"  Cached preprocessing to {cache_file.name}")
+
+    return X_train, X_test, y_train, y_test, feature_names, pipeline
 
 
 def drop_high_nan_columns(
@@ -55,7 +321,12 @@ def drop_high_nan_columns(
     X_test: pd.DataFrame,
     threshold: float = 0.45,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Drop columns where NaN fraction exceeds threshold. Compute on train, apply to both."""
+    """
+    Remove columns with excessive missing values.
+
+    Computes NaN fraction on training data and applies same column selection
+    to both train and test sets to prevent data leakage.
+    """
     nan_frac = X_train.isna().mean()
     keep = nan_frac[nan_frac <= threshold].index
     return X_train[keep], X_test[keep]
@@ -66,29 +337,31 @@ def drop_correlated_features(
     X_test: pd.DataFrame,
     threshold: float = 0.85,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Drop second of each pair of columns with |r| > threshold. Compute on train, apply to both."""
+    """
+    Remove redundant highly-correlated features.
+
+    For each pair of features with absolute correlation above threshold,
+    drops the second feature. Computed on training data only.
+    """
     corr = X_train.corr().abs()
     upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
     to_drop = [col for col in upper.columns if any(upper[col] > threshold)]
     return X_train.drop(columns=to_drop), X_test.drop(columns=to_drop)
 
 
-def build_preprocessing_pipeline(n_neighbors: int = 5) -> Pipeline:
-    """Return a Pipeline that imputes then scales. Fit on train only.
+def build_simple_pipeline() -> Pipeline:
+    """
+    Build basic preprocessing pipeline with median imputation.
 
-    Steps:
-        1. KNNImputer  — fill NaN using k-nearest neighbors
-        2. StandardScaler — zero-mean, unit-variance
+    Use for quick experiments. For production, prefer build_adaptive_pipeline()
+    which selects imputation strategy based on missingness mechanism.
     """
     return Pipeline(
         [
-            ("imputer", KNNImputer(n_neighbors=n_neighbors)),
+            ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
         ]
     )
-
-
-# ─── Train / Test Split ──────────────────────────────────────────────────────
 
 
 def prepare_split(
@@ -98,14 +371,12 @@ def prepare_split(
     test_size: float = 0.2,
     random_state: int = 77,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Split into X_train, X_test, y_train, y_test after dropping non-feature columns."""
-
+    """
+    Split DataFrame into train/test sets after removing non-feature columns.
+    """
     y = df[target_col]
     X = df.drop(columns=[target_col] + drop_cols)
     return train_test_split(X, y, test_size=test_size, random_state=random_state)
-
-
-# ─── Model Training ──────────────────────────────────────────────────────────
 
 
 def train_xgboost(
@@ -115,7 +386,30 @@ def train_xgboost(
     cv: int = 5,
     random_state: int = 77,
 ) -> RandomizedSearchCV:
-    """RandomizedSearchCV over XGBRegressor hyperparameters."""
+    """
+    Train XGBoost regressor with randomized hyperparameter search.
+
+    Uses CUDA GPU acceleration. Searches over tree depth, learning rate,
+    regularization, and subsampling parameters.
+
+    Parameters
+    ----------
+    X_train
+        Training features (preprocessed).
+    y_train
+        Training target values.
+    n_iter
+        Number of random hyperparameter combinations to try.
+    cv
+        Number of cross-validation folds.
+    random_state
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    RandomizedSearchCV
+        Fitted search object with best_estimator_ and cv_results_.
+    """
     param_dist = {
         "n_estimators": randint(100, 1000),
         "learning_rate": uniform(0.01, 0.29),
@@ -128,14 +422,13 @@ def train_xgboost(
         "reg_lambda": uniform(0, 1),
     }
     search = RandomizedSearchCV(
-        estimator=XGBRegressor(random_state=random_state, n_jobs=-1),
+        estimator=XGBRegressor(random_state=random_state, device="cuda"),
         param_distributions=param_dist,
         n_iter=n_iter,
         scoring="neg_mean_squared_error",
-        device="cuda",
         cv=cv,
         random_state=random_state,
-        n_jobs=-1,
+        n_jobs=3,
         verbose=1,
     )
     search.fit(X_train, y_train)
@@ -149,7 +442,29 @@ def train_random_forest(
     cv: int = 5,
     random_state: int = 77,
 ) -> RandomizedSearchCV:
-    """RandomizedSearchCV over RandomForestRegressor hyperparameters."""
+    """
+    Train RandomForest regressor with randomized hyperparameter search.
+
+    Parameters
+    ----------
+    X_train
+        Training features (preprocessed).
+    y_train
+        Training target values.
+    n_iter
+        Number of random hyperparameter combinations to try.
+    cv
+        Number of cross-validation folds.
+    random_state
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    RandomizedSearchCV
+        Fitted search object with best_estimator_ and cv_results_.
+    """
+    from sklearn.ensemble import RandomForestRegressor
+
     param_dist = {
         "n_estimators": randint(100, 1000),
         "max_depth": randint(5, 50),
@@ -171,9 +486,6 @@ def train_random_forest(
     return search
 
 
-# ─── Evaluation ───────────────────────────────────────────────────────────────
-
-
 def evaluate_model(
     model: BaseEstimator,
     X_train: pd.DataFrame,
@@ -181,19 +493,23 @@ def evaluate_model(
     y_train: pd.Series,
     y_test: pd.Series,
 ) -> dict[str, float]:
-    """Return dict with train_rmse and test_rmse."""
+    """
+    Calculate RMSE on training and test sets.
+
+    Returns
+    -------
+    dict
+        Contains 'train_rmse' and 'test_rmse' values.
+    """
     return {
         "train_rmse": rmse(model, X_train, y_train),
         "test_rmse": rmse(model, X_test, y_test),
     }
 
 
-def rmse(
-    model: BaseEstimator,
-    x: pd.DataFrame,
-    y: pd.Series,
-):
-    return np.sqrt(mean_squared_error(y, model.predict(x)))
+def rmse(model: BaseEstimator, X: pd.DataFrame, y: pd.Series) -> float:
+    """Calculate root mean squared error for model predictions."""
+    return np.sqrt(mean_squared_error(y, model.predict(X)))
 
 
 def extract_feature_importance(
@@ -201,12 +517,16 @@ def extract_feature_importance(
     feature_names: list[str],
     top_n: int = 10,
 ) -> pd.Series:
-    """Return top_n features ranked by importance."""
+    """
+    Extract and rank feature importances from tree-based model.
+
+    Returns
+    -------
+    pd.Series
+        Top N features sorted by importance (descending).
+    """
     importances = pd.Series(model.feature_importances_, index=feature_names)
     return importances.sort_values(ascending=False).head(top_n)
-
-
-# ─── Persistence ──────────────────────────────────────────────────────────────
 
 
 def save_model(
@@ -215,18 +535,11 @@ def save_model(
     pipeline: Pipeline | None = None,
     feature_names: list[str] | None = None,
 ) -> None:
-    """Pickle model and preprocessing artifacts to disk.
+    """
+    Save trained model and preprocessing artifacts to disk.
 
-    Parameters
-    ----------
-    model : BaseEstimator
-        The trained estimator.
-    path : Path
-        Destination file path.
-    pipeline : Pipeline, optional
-        The fitted preprocessing pipeline (imputer + scaler).
-    feature_names : list[str], optional
-        Ordered feature names after column filtering.
+    Saves a dictionary containing the model, fitted pipeline, and feature
+    names for inference on new data.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     artifact = {
@@ -239,63 +552,82 @@ def save_model(
 
 
 def load_model(path: Path) -> dict:
-    """Load pickled model artifact from disk.
+    """
+    Load model artifact from disk.
 
-    Returns a dict with keys: 'model', 'pipeline', 'feature_names'.
+    Returns
+    -------
+    dict
+        Contains 'model', 'pipeline', and 'feature_names' keys.
     """
     with open(path, "rb") as f:
         return pickle.load(f)
 
 
-# ─── AWS ─────────────────────────────────────────────────────────────────────
-
-
-def upload_to_s3(local_path, bucket, key):
+def upload_to_s3(local_path: str, bucket: str, key: str) -> None:
+    """Upload local file to S3 bucket."""
     s3 = boto3.client("s3")
     s3.upload_file(local_path, bucket, key)
 
 
-def download_from_s3(bucket, key, local_path):
+def download_from_s3(bucket: str, key: str, local_path: str) -> None:
+    """Download file from S3 bucket to local path."""
     s3 = boto3.client("s3")
     s3.download_file(bucket, key, local_path)
 
 
 def is_s3_path(path: str) -> bool:
-    """Check if path is an S3 URI."""
+    """Check if path is an S3 URI (starts with s3://)."""
     return path.startswith("s3://")
 
 
 def parse_s3_path(s3_path: str) -> tuple[str, str]:
-    """Parse s3://bucket/key into (bucket, key)."""
+    """
+    Parse S3 URI into bucket and key components.
+
+    Example: 's3://my-bucket/path/to/file' -> ('my-bucket', 'path/to/file')
+    """
     path = s3_path.replace("s3://", "")
     parts = path.split("/", 1)
     return parts[0], parts[1] if len(parts) > 1 else ""
 
 
 def read_parquet_auto(path: str) -> pd.DataFrame:
-    """Read parquet from local path or S3."""
+    """
+    Read parquet file from local path or S3.
+
+    Automatically detects S3 URIs and handles temporary file management
+    for S3 downloads.
+    """
     if is_s3_path(path):
         bucket, key = parse_s3_path(path)
-        # Create temp file, close it (Windows needs this), then download
         fd, tmp_path = tempfile.mkstemp(suffix=".parquet")
-        os.close(fd)  # Close file handle so boto3/pandas can use it
+        os.close(fd)
         try:
             print(f"  Downloading from S3: {path}")
             download_from_s3(bucket, key, tmp_path)
             return pd.read_parquet(tmp_path)
         finally:
-            # Clean up temp file
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
     else:
         return pd.read_parquet(path)
 
 
-def save_model_auto(model, path: str, pipeline=None, feature_names=None) -> None:
-    """Save model to local path or S3."""
+def save_model_auto(
+    model: BaseEstimator,
+    path: str,
+    pipeline: Pipeline | None = None,
+    feature_names: list[str] | None = None,
+) -> None:
+    """
+    Save model to local path or S3.
+
+    Automatically detects S3 URIs and handles temporary file management
+    for S3 uploads.
+    """
     if is_s3_path(path):
         bucket, key = parse_s3_path(path)
-        # Create temp file, close it (Windows needs this), then write
         fd, tmp_path = tempfile.mkstemp(suffix=".pkl")
         os.close(fd)
         try:
@@ -308,9 +640,6 @@ def save_model_auto(model, path: str, pipeline=None, feature_names=None) -> None
     else:
         save_model(model, Path(path), pipeline, feature_names)
         print(f"  Model saved to {path}")
-
-
-# ─── Main ─────────────────────────────────────────────────────────────────────
 
 
 if __name__ == "__main__":
@@ -342,7 +671,10 @@ if __name__ == "__main__":
         help="RandomizedSearchCV iterations (default: 20)",
     )
     parser.add_argument(
-        "--cv", type=int, default=5, help="Cross-validation folds (default: 5)"
+        "--cv",
+        type=int,
+        default=5,
+        help="Cross-validation folds (default: 5)",
     )
     parser.add_argument(
         "--model",
@@ -363,6 +695,12 @@ if __name__ == "__main__":
         default=0.85,
         help="Correlation drop threshold (default: 0.85)",
     )
+    parser.add_argument(
+        "--mar-thresh",
+        type=float,
+        default=0.1,
+        help="MAR correlation threshold for adaptive imputation (default: 0.1)",
+    )
 
     args = parser.parse_args()
 
@@ -377,14 +715,13 @@ if __name__ == "__main__":
     print(f"cv:          {args.cv}")
     print(f"nan_thresh:  {args.nan_thresh}")
     print(f"corr_thresh: {args.corr_thresh}")
+    print(f"mar_thresh:  {args.mar_thresh}")
     print("=" * 60)
 
-    # Load data
     print("\n[1/5] Loading data...")
     df = read_parquet_auto(args.input)
     print(f"  Loaded {len(df)} rows, {len(df.columns)} columns")
 
-    # Split
     print("\n[2/5] Splitting data...")
     y = df[args.target]
     X = df.drop(columns=[args.target])
@@ -393,7 +730,6 @@ if __name__ == "__main__":
     )
     print(f"  Train: {X_train.shape}, Test: {X_test.shape}")
 
-    # Preprocess
     print("\n[3/5] Preprocessing...")
     print(f"  Features before filtering: {X_train.shape[1]}")
     X_train, X_test = drop_high_nan_columns(X_train, X_test, threshold=args.nan_thresh)
@@ -403,13 +739,22 @@ if __name__ == "__main__":
     )
     print(f"  After correlation filter: {X_train.shape[1]}")
 
-    feature_names = X_train.columns.tolist()
-    pipeline = build_preprocessing_pipeline(n_neighbors=5)
+    print("  Analyzing missing data patterns...")
+    analysis = analyze_missingness(X_train, threshold=args.mar_thresh)
+    print_missingness_report(analysis)
+
+    mcar_cols, mar_cols, complete_cols = get_column_lists(
+        analysis, X_train.columns.tolist()
+    )
+    feature_names = mcar_cols + mar_cols + complete_cols
+
+    pipeline = build_adaptive_pipeline(
+        mcar_cols, mar_cols, complete_cols, random_state=77
+    )
     X_train = pipeline.fit_transform(X_train)
     X_test = pipeline.transform(X_test)
     print(f"  Final feature matrix: {X_train.shape}")
 
-    # Train
     print("\n[4/5] Training models...")
     results = {}
 
@@ -435,7 +780,6 @@ if __name__ == "__main__":
         print(f"  XGB Train RMSE: {xgb_metrics['train_rmse']:.4f}")
         print(f"  XGB Test  RMSE: {xgb_metrics['test_rmse']:.4f}")
 
-    # Select best model
     if args.model == "both":
         if (
             results["xgb"]["metrics"]["test_rmse"]
@@ -455,7 +799,6 @@ if __name__ == "__main__":
 
     print(f"\n  Best model: {best_name}")
 
-    # Save
     print("\n[5/5] Saving model...")
     save_model_auto(
         best_model, args.output, pipeline=pipeline, feature_names=feature_names

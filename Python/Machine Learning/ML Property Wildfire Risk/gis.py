@@ -5,6 +5,7 @@ between property locations and wildfire detection points. All functions
 expect GeoDataFrames in a projected CRS (meters), e.g. EPSG:5070.
 
 Implements caching for calc_all_features() to avoid recomputation on re-runs.
+Uses scipy.spatial.cKDTree for fast vectorized distance calculations.
 """
 
 import hashlib
@@ -14,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from scipy.spatial import cKDTree
 from scipy.stats import gaussian_kde
 
 from settings import (
@@ -37,6 +39,17 @@ def _validate_inputs(properties: gpd.GeoDataFrame, fires: gpd.GeoDataFrame) -> N
             "Distances will be in degrees, not meters. "
             "Consider reprojecting to a projected CRS (e.g. EPSG:5070)."
         )
+
+
+def _get_coords(gdf: gpd.GeoDataFrame) -> np.ndarray:
+    """Extract x,y coordinates as numpy array for KDTree."""
+    return np.column_stack([gdf.geometry.x.values, gdf.geometry.y.values])
+
+
+def _build_kdtree(fires: gpd.GeoDataFrame) -> tuple[cKDTree, np.ndarray]:
+    """Build a KDTree from fire coordinates for fast spatial queries."""
+    coords = _get_coords(fires)
+    return cKDTree(coords), coords
 
 
 def _get_nearby_fires(
@@ -74,32 +87,28 @@ def calc_idw(
 
     The most common spatial proximity metric:
         score = Σ (1 / d_j^p)   for all fires within radius
-        With p=2, this naturally downweights distant fires. This is what the reference's own theoretical formula was going for before they simplified it away.
+        With p=2, this naturally downweights distant fires.
 
-    Parameters
-    ----------
-    properties : GeoDataFrame of property points.
-    fires : GeoDataFrame of fire points.
-    radius_m : Search radius in meters.
-    power : Distance exponent (2 = inverse-square).
-    weight_col : Optional column in fires to weight by (e.g. 'FRP').
-
-    Returns
-    -------
-    pd.Series indexed like properties with IDW scores.
+    Uses KDTree for fast vectorized computation.
     """
     _validate_inputs(properties, fires)
-    sindex = fires.sindex
+
+    tree, fire_coords = _build_kdtree(fires)
+    prop_coords = _get_coords(properties)
+    weights = fires[weight_col].values if weight_col else None
+
     scores = np.zeros(len(properties))
 
-    for i, (idx, row) in enumerate(properties.iterrows()):
-        nearby, dists = _get_nearby_fires(row.geometry, fires, radius_m, sindex)
-        if len(dists) == 0:
+    # Query all neighbors within radius for all properties at once
+    neighbors = tree.query_ball_point(prop_coords, radius_m)
+
+    for i, neighbor_idx in enumerate(neighbors):
+        if not neighbor_idx:
             continue
-        # Clamp minimum distance to 1m to avoid division by zero
-        dists = np.maximum(dists, 1.0)
-        weights = nearby[weight_col].values if weight_col else np.ones(len(dists))
-        scores[i] = np.sum(weights / dists**power)
+        dists = np.linalg.norm(prop_coords[i] - fire_coords[neighbor_idx], axis=1)
+        dists = np.maximum(dists, 1.0)  # Clamp to avoid division by zero
+        w = weights[neighbor_idx] if weights is not None else np.ones(len(dists))
+        scores[i] = np.sum(w / dists**power)
 
     return pd.Series(scores, index=properties.index, name="idw_score")
 
@@ -153,30 +162,23 @@ def calc_exponential_decay(
     """Exponential decay score: sum(w_j * exp(-d_j / bandwidth)).
 
     Has a natural physical interpretation (risk decays exponentially
-     with distance). The bandwidth parameter controls how quickly.
-
-    Parameters
-    ----------
-    properties : GeoDataFrame of property points.
-    fires : GeoDataFrame of fire points.
-    radius_m : Search radius in meters.
-    bandwidth : Decay length scale in meters.
-    weight_col : Optional column in fires to weight by (e.g. 'FRP').
-
-    Returns
-    -------
-    pd.Series indexed like properties with decay scores.
+    with distance). Uses KDTree for fast vectorized computation.
     """
     _validate_inputs(properties, fires)
-    sindex = fires.sindex
-    scores = np.zeros(len(properties))
 
-    for i, (idx, row) in enumerate(properties.iterrows()):
-        nearby, dists = _get_nearby_fires(row.geometry, fires, radius_m, sindex)
-        if len(dists) == 0:
+    tree, fire_coords = _build_kdtree(fires)
+    prop_coords = _get_coords(properties)
+    weights = fires[weight_col].values if weight_col else None
+
+    scores = np.zeros(len(properties))
+    neighbors = tree.query_ball_point(prop_coords, radius_m)
+
+    for i, neighbor_idx in enumerate(neighbors):
+        if not neighbor_idx:
             continue
-        weights = nearby[weight_col].values if weight_col else np.ones(len(dists))
-        scores[i] = np.sum(weights * np.exp(-dists / bandwidth))
+        dists = np.linalg.norm(prop_coords[i] - fire_coords[neighbor_idx], axis=1)
+        w = weights[neighbor_idx] if weights is not None else np.ones(len(dists))
+        scores[i] = np.sum(w * np.exp(-dists / bandwidth))
 
     return pd.Series(scores, index=properties.index, name="exp_decay_score")
 
@@ -189,28 +191,16 @@ def calc_buffer_ring_features(
 ) -> pd.DataFrame:
     """Count fires (and optionally sum weights) in concentric distance rings.
 
-    — count fires in 0-10km, 10-25km, 25-50km as separate columns. Let the ML model
-    learn the weighting rather than baking it into one formula. This is arguably the
-    best approach when the score feeds into an ML model anyway.
-
-    Parameters
-    ----------
-    properties : GeoDataFrame of property points.
-    fires : GeoDataFrame of fire points.
-    rings_m : Ring outer boundaries in meters. Default [10k, 25k, 50k, 100k].
-    weight_col : Optional column in fires to sum per ring (e.g. 'FRP').
-
-    Returns
-    -------
-    pd.DataFrame indexed like properties, with columns per ring for
-    count and (optionally) weight sum.
+    Uses KDTree for fast vectorized computation.
     """
     _validate_inputs(properties, fires)
     if rings_m is None:
         rings_m = GIS_SCORING_DEFAULT_RINGS_M
     rings_m = sorted(rings_m)
 
-    sindex = fires.sindex
+    tree, fire_coords = _build_kdtree(fires)
+    prop_coords = _get_coords(properties)
+    weights = fires[weight_col].values if weight_col else None
     outer_radius = rings_m[-1]
 
     # Build column names
@@ -223,17 +213,17 @@ def calc_buffer_ring_features(
 
     count_cols = [f"fire_count_{lbl}" for lbl in ring_labels]
     columns = list(count_cols)
-    weight_cols = []
     if weight_col:
         weight_cols = [f"fire_{weight_col}_{lbl}" for lbl in ring_labels]
         columns += weight_cols
 
     result = np.zeros((len(properties), len(columns)))
+    neighbors = tree.query_ball_point(prop_coords, outer_radius)
 
-    for i, (idx, row) in enumerate(properties.iterrows()):
-        nearby, dists = _get_nearby_fires(row.geometry, fires, outer_radius, sindex)
-        if len(dists) == 0:
+    for i, neighbor_idx in enumerate(neighbors):
+        if not neighbor_idx:
             continue
+        dists = np.linalg.norm(prop_coords[i] - fire_coords[neighbor_idx], axis=1)
 
         for j in range(len(rings_m)):
             inner = boundaries[j]
@@ -241,7 +231,7 @@ def calc_buffer_ring_features(
             mask = (dists >= inner) & (dists < outer)
             result[i, j] = mask.sum()
             if weight_col:
-                result[i, len(rings_m) + j] = nearby[weight_col].values[mask].sum()
+                result[i, len(rings_m) + j] = weights[np.array(neighbor_idx)[mask]].sum()
 
     return pd.DataFrame(result, index=properties.index, columns=columns)
 
@@ -252,33 +242,16 @@ def calc_nearest_fire(
 ) -> pd.Series:
     """Distance to the nearest fire point, in kilometers.
 
-    Parameters
-    ----------
-    properties : GeoDataFrame of property points.
-    fires : GeoDataFrame of fire points.
-
-    Returns
-    -------
-    pd.Series indexed like properties with nearest-fire distance in km.
-    Properties with no fires in the dataset get np.inf.
+    Fully vectorized using KDTree.query() - extremely fast.
     """
     _validate_inputs(properties, fires)
-    sindex = fires.sindex
-    distances_km = np.full(len(properties), np.inf)
 
-    for i, (idx, row) in enumerate(properties.iterrows()):
-        pt = row.geometry
-        # Expanding search: start at 50km, widen if nothing found
-        for search_radius in [50_000, 200_000, 500_000, np.inf]:
-            if np.isinf(search_radius):
-                # Brute force fallback
-                all_dists = fires.geometry.distance(pt)
-                distances_km[i] = all_dists.min() / 1000
-                break
-            nearby, dists = _get_nearby_fires(pt, fires, search_radius, sindex)
-            if len(dists) > 0:
-                distances_km[i] = dists.min() / 1000
-                break
+    tree, _ = _build_kdtree(fires)
+    prop_coords = _get_coords(properties)
+
+    # Query nearest neighbor for all properties at once
+    distances_m, _ = tree.query(prop_coords, k=1)
+    distances_km = distances_m / 1000
 
     return pd.Series(distances_km, index=properties.index, name="nearest_fire_km")
 
@@ -362,13 +335,36 @@ def calc_all_features(
         else:
             print("Cache size mismatch, recomputing...")
 
+    import time
     print(f"Computing GIS features for {len(properties)} properties...")
+    start = time.time()
 
-    idw = calc_idw(properties, fires, radius_m, power, weight_col)
-    kde = calc_kde(properties, fires, bandwidth)
-    decay = calc_exponential_decay(properties, fires, radius_m, bandwidth, weight_col)
-    rings = calc_buffer_ring_features(properties, fires, rings_m, weight_col)
+    print("  [1/5] Nearest fire distance...", end=" ", flush=True)
+    t0 = time.time()
     nearest = calc_nearest_fire(properties, fires)
+    print(f"done ({time.time() - t0:.1f}s)")
+
+    print("  [2/5] KDE density...", end=" ", flush=True)
+    t0 = time.time()
+    kde = calc_kde(properties, fires, bandwidth)
+    print(f"done ({time.time() - t0:.1f}s)")
+
+    print("  [3/5] IDW scores...", end=" ", flush=True)
+    t0 = time.time()
+    idw = calc_idw(properties, fires, radius_m, power, weight_col)
+    print(f"done ({time.time() - t0:.1f}s)")
+
+    print("  [4/5] Exponential decay...", end=" ", flush=True)
+    t0 = time.time()
+    decay = calc_exponential_decay(properties, fires, radius_m, bandwidth, weight_col)
+    print(f"done ({time.time() - t0:.1f}s)")
+
+    print("  [5/5] Buffer ring counts...", end=" ", flush=True)
+    t0 = time.time()
+    rings = calc_buffer_ring_features(properties, fires, rings_m, weight_col)
+    print(f"done ({time.time() - t0:.1f}s)")
+
+    print(f"  Total: {time.time() - start:.1f}s")
 
     result = pd.concat([idw, kde, decay, rings, nearest], axis=1)
 
