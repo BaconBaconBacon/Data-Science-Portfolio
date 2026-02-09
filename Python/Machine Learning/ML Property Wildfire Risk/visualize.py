@@ -33,6 +33,9 @@ def create_wildfire_map(
     """
     Create a Folium map showing wildfire locations.
 
+    Uses FastMarkerCluster for performance — points are clustered at low
+    zoom levels and expand as you zoom in.
+
     Parameters
     ----------
     wildfire_gdf : gpd.GeoDataFrame
@@ -42,9 +45,9 @@ def create_wildfire_map(
     zoom_start : int
         Initial zoom level.
     radius : int
-        Circle marker radius in pixels.
+        Circle marker radius in pixels (unused with FastMarkerCluster).
     color : str
-        Marker color.
+        Marker color (unused with FastMarkerCluster).
     save_path : Path, optional
         If provided, save the map to this HTML file.
 
@@ -53,6 +56,8 @@ def create_wildfire_map(
     folium.Map
         The generated map object.
     """
+    from folium.plugins import FastMarkerCluster
+
     # Convert to WGS84 if needed
     if wildfire_gdf.crs and wildfire_gdf.crs.to_epsg() != 4326:
         wildfire_gdf = wildfire_gdf.to_crs(4326)
@@ -63,18 +68,10 @@ def create_wildfire_map(
 
     m = folium.Map(location=center, zoom_start=zoom_start)
 
-    # Add wildfire points
-    for _, row in wildfire_gdf.iterrows():
-        folium.CircleMarker(
-            location=[row["LATITUDE"], row["LONGITUDE"]],
-            radius=radius,
-            fill=True,
-            fill_opacity=0.7,
-            weight=1,
-            fill_color=color,
-            color=color,
-            popup=f"Date: {row.get('ACQ_DATE', 'N/A')}<br>FRP: {row.get('FRP', 'N/A'):.1f}",
-        ).add_to(m)
+    # Use FastMarkerCluster for performance (all points, clustered on zoom)
+    coords = wildfire_gdf[["LATITUDE", "LONGITUDE"]].values.tolist()
+    print(f"Adding {len(coords)} wildfire points to map...")
+    FastMarkerCluster(data=coords).add_to(m)
 
     # Add legend
     legend_html = """
@@ -214,6 +211,9 @@ def create_combined_map(
     """
     Create a Folium map showing both properties and wildfires.
 
+    Uses FastMarkerCluster for wildfires (performance) and CircleMarkers
+    for properties (to show risk coloring).
+
     Parameters
     ----------
     properties_gdf : gpd.GeoDataFrame
@@ -234,6 +234,8 @@ def create_combined_map(
     folium.Map
         The generated map object.
     """
+    from folium.plugins import FastMarkerCluster
+
     # Convert to WGS84 if needed
     props = properties_gdf.copy()
     fires = wildfire_gdf.copy()
@@ -258,39 +260,34 @@ def create_combined_map(
     fire_group = folium.FeatureGroup(name="Wildfires")
     prop_group = folium.FeatureGroup(name="Properties")
 
-    # Add wildfire points
-    for _, row in fires.iterrows():
-        folium.CircleMarker(
-            location=[row["LATITUDE"], row["LONGITUDE"]],
-            radius=4,
-            fill=True,
-            fill_opacity=0.6,
-            weight=1,
-            fill_color="red",
-            color="darkred",
-        ).add_to(fire_group)
+    # Add wildfire points using FastMarkerCluster
+    print(f"Adding {len(fires)} wildfire points...")
+    fire_coords = fires[["LATITUDE", "LONGITUDE"]].values.tolist()
+    FastMarkerCluster(data=fire_coords).add_to(fire_group)
 
     # Add property points with risk coloring
+    # Properties are typically fewer, so CircleMarkers are fine
+    print(f"Adding {len(props)} property points...")
     if risk_column in props.columns:
         risk_values = props[risk_column].values
         vmin, vmax = np.nanmin(risk_values), np.nanmax(risk_values)
         cmap = plt.cm.get_cmap("RdYlGn").reversed()
 
-        for _, row in props.iterrows():
-            risk = row[risk_column]
-            norm_val = (risk - vmin) / (vmax - vmin) if vmax > vmin else 0.5
-            rgba = cmap(norm_val)
-            color = f"#{int(rgba[0]*255):02x}{int(rgba[1]*255):02x}{int(rgba[2]*255):02x}"
+        # Vectorized color computation
+        norm_vals = (risk_values - vmin) / (vmax - vmin) if vmax > vmin else np.full_like(risk_values, 0.5)
+        colors = [cmap(nv) for nv in norm_vals]
+        hex_colors = [f"#{int(c[0]*255):02x}{int(c[1]*255):02x}{int(c[2]*255):02x}" for c in colors]
 
+        for i, (_, row) in enumerate(props.iterrows()):
             folium.CircleMarker(
                 location=[row["_lat"], row["_lon"]],
                 radius=6,
                 fill=True,
                 fill_opacity=0.9,
                 weight=2,
-                fill_color=color,
+                fill_color=hex_colors[i],
                 color="black",
-                popup=f"{risk_column}: {risk:.2f}",
+                popup=f"{risk_column}: {risk_values[i]:.2f}",
             ).add_to(prop_group)
     else:
         for _, row in props.iterrows():

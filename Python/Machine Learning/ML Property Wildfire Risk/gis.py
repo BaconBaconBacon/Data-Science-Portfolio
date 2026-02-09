@@ -3,9 +3,13 @@
 Standalone utility functions that compute spatial proximity features
 between property locations and wildfire detection points. All functions
 expect GeoDataFrames in a projected CRS (meters), e.g. EPSG:5070.
+
+Implements caching for calc_all_features() to avoid recomputation on re-runs.
 """
 
+import hashlib
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -17,6 +21,7 @@ from settings import (
     GIS_SCORING_DEFAULT_POWER,
     GIS_SCORING_DEFAULT_BANDWIDTH_M,
     GIS_SCORING_DEFAULT_RINGS_M,
+    PATH_DATA,
 )
 
 
@@ -278,6 +283,36 @@ def calc_nearest_fire(
     return pd.Series(distances_km, index=properties.index, name="nearest_fire_km")
 
 
+def _generate_cache_key(
+    properties: gpd.GeoDataFrame,
+    fires: gpd.GeoDataFrame,
+    radius_m: float,
+    power: float,
+    bandwidth: float,
+    rings_m: list[float] | None,
+    weight_col: str | None,
+) -> str:
+    """Generate a hash key for caching based on inputs and parameters."""
+    # Use property count + bounds + fire count as a fingerprint
+    # (Full geometry hashing would be too slow for large datasets)
+    prop_bounds = properties.total_bounds
+    fire_bounds = fires.total_bounds
+
+    key_parts = [
+        f"props_{len(properties)}",
+        f"prop_bounds_{prop_bounds[0]:.2f}_{prop_bounds[1]:.2f}_{prop_bounds[2]:.2f}_{prop_bounds[3]:.2f}",
+        f"fires_{len(fires)}",
+        f"fire_bounds_{fire_bounds[0]:.2f}_{fire_bounds[1]:.2f}_{fire_bounds[2]:.2f}_{fire_bounds[3]:.2f}",
+        f"radius_{radius_m}",
+        f"power_{power}",
+        f"bandwidth_{bandwidth}",
+        f"rings_{rings_m}",
+        f"weight_{weight_col}",
+    ]
+    key_string = "_".join(key_parts)
+    return hashlib.md5(key_string.encode()).hexdigest()[:12]
+
+
 def calc_all_features(
     properties: gpd.GeoDataFrame,
     fires: gpd.GeoDataFrame,
@@ -286,13 +321,48 @@ def calc_all_features(
     bandwidth: float = GIS_SCORING_DEFAULT_BANDWIDTH_M,
     rings_m: list[float] | None = None,
     weight_col: str | None = "FRP",
+    use_cache: bool = True,
 ) -> pd.DataFrame:
     """Compute all proximity features in one call.
 
     Returns a DataFrame combining IDW, KDE, exponential decay,
     buffer ring counts, and nearest-fire distance.
+
+    Parameters
+    ----------
+    properties : GeoDataFrame of property points.
+    fires : GeoDataFrame of fire points.
+    radius_m : Search radius in meters for IDW and decay.
+    power : Distance exponent for IDW.
+    bandwidth : Bandwidth for KDE and decay.
+    rings_m : Ring boundaries for buffer features.
+    weight_col : Column in fires to weight by.
+    use_cache : If True, cache results to disk and load on re-runs.
+
+    Returns
+    -------
+    pd.DataFrame with all proximity features.
     """
     _validate_inputs(properties, fires)
+
+    # Check cache
+    cache_dir = PATH_DATA / "cache"
+    cache_dir.mkdir(exist_ok=True)
+    cache_key = _generate_cache_key(
+        properties, fires, radius_m, power, bandwidth, rings_m, weight_col
+    )
+    cache_file = cache_dir / f"gis_features_{cache_key}.parquet"
+
+    if use_cache and cache_file.exists():
+        print(f"Loading cached GIS features from {cache_file.name}")
+        cached = pd.read_parquet(cache_file)
+        # Verify row count matches (sanity check)
+        if len(cached) == len(properties):
+            return cached.set_index(properties.index)
+        else:
+            print("Cache size mismatch, recomputing...")
+
+    print(f"Computing GIS features for {len(properties)} properties...")
 
     idw = calc_idw(properties, fires, radius_m, power, weight_col)
     kde = calc_kde(properties, fires, bandwidth)
@@ -300,4 +370,11 @@ def calc_all_features(
     rings = calc_buffer_ring_features(properties, fires, rings_m, weight_col)
     nearest = calc_nearest_fire(properties, fires)
 
-    return pd.concat([idw, kde, decay, rings, nearest], axis=1)
+    result = pd.concat([idw, kde, decay, rings, nearest], axis=1)
+
+    # Save to cache
+    if use_cache:
+        result.reset_index(drop=True).to_parquet(cache_file)
+        print(f"Cached GIS features to {cache_file.name}")
+
+    return result

@@ -75,7 +75,8 @@ class CensusData:
     """
 
     def __init__(
-        self, sql_obj: SQL, year: int, granularity: str = "tract", sparse: bool = True
+        self, sql_obj: SQL, year: int, granularity: str = "tract", sparse: bool = True,
+        verbose: bool = True
     ):
         if granularity not in CENSUS_VALID_GRANULARITY_LEVELS:
             raise ValueError(
@@ -84,6 +85,7 @@ class CensusData:
         self.granularity = granularity
         self.leafs_only = sparse
         self.year = year
+        self.verbose = verbose
 
         self.census = census.Census(
             os.environ.get("US_CENSUS_API_KEY"), year=self.year
@@ -101,7 +103,8 @@ class CensusData:
         self.test_mode = self.sql_obj.test_mode
 
         if self.test_mode:
-            print("starting in test mode")
+            if self.verbose:
+                print("starting in test mode")
             self.table_name = TABLE_NAME_CENSUS_TEST
             self.sql_obj.drop_table(TABLE_NAME_CENSUS_TEST, confirm=True)
             # self.data = None
@@ -122,11 +125,28 @@ class CensusData:
 
         # Check existing data
         merge_cols = self._get_merge_columns()
+        initial_count = len(properties_gpd)
 
         existing_wide = self._get_existing_wide(merge_cols)
-        existing_wide = self._handle_missing_geos(
+        existing_wide, failed_geos = self._handle_missing_geos(
             properties_gpd, existing_wide, merge_cols
         )
+
+        # Drop properties in failed geos (e.g., Virginia independent cities)
+        if failed_geos:
+            failed_df = pd.DataFrame(failed_geos)
+            # Mark rows to drop
+            properties_gpd = properties_gpd.merge(
+                failed_df, on=merge_cols, how="left", indicator="_failed"
+            )
+            properties_gpd = properties_gpd[properties_gpd["_failed"] == "left_only"]
+            properties_gpd = properties_gpd.drop(columns=["_failed"])
+            dropped = initial_count - len(properties_gpd)
+            if self.verbose:
+                print(
+                    f"Dropped {dropped} properties in {len(failed_geos)} geographies "
+                    "with no census data (e.g., Virginia independent cities)."
+                )
 
         # Merge wide census data onto all properties
         result = properties_gpd.merge(existing_wide, on=merge_cols, how="left")
@@ -149,7 +169,7 @@ class CensusData:
         wide: pd.DataFrame,
         merge_cols: list,
         missing_geos,
-    ) -> pd.DataFrame:
+    ) -> tuple[pd.DataFrame, list[dict]]:
         variables = (
             self._get_leaf_variables() if self.leafs_only else self._get_all_variables()
         )
@@ -157,26 +177,30 @@ class CensusData:
 
         missing_props = gdf.merge(missing_geos, on=merge_cols, how="inner")
 
-        new_census_df = self._extract_from_geoid(missing_props, variables)
+        new_census_df, failed_geos = self._extract_from_geoid(missing_props, variables)
 
-        new_cleaned = self._transform_and_clean(new_census_df)
-        self._load_to_sql(new_cleaned)
+        if not new_census_df.empty:
+            new_cleaned = self._transform_and_clean(new_census_df)
+            self._load_to_sql(new_cleaned)
 
-        new_wide = self._wide_from_cleaned(new_cleaned, merge_cols)
-        existing_wide = (
-            pd.concat([wide, new_wide], ignore_index=True)
-            if not wide.empty
-            else new_wide
-        )
-        self.data = self._read_from_sql()
+            new_wide = self._wide_from_cleaned(new_cleaned, merge_cols)
+            existing_wide = (
+                pd.concat([wide, new_wide], ignore_index=True)
+                if not wide.empty
+                else new_wide
+            )
+            self.data = self._read_from_sql()
+        else:
+            existing_wide = wide
 
-        return existing_wide
+        return existing_wide, failed_geos
 
     def _handle_missing_geos(
         self, gdf: gpd.GeoDataFrame, wide, merge_cols: list
-    ) -> pd.DataFrame:
+    ) -> tuple[pd.DataFrame, list[dict]]:
 
         required_geos = gdf[merge_cols].drop_duplicates()
+        failed_geos = []
 
         if not wide.empty:
             check = required_geos.merge(
@@ -191,15 +215,16 @@ class CensusData:
         else:
             missing_geos = required_geos
 
-        print(
-            f"{len(required_geos)} geographies needed, "
-            f"{len(required_geos) - len(missing_geos)} cached, "
-            f"{len(missing_geos)} to fetch."
-        )
+        if self.verbose:
+            print(
+                f"{len(required_geos)} geographies needed, "
+                f"{len(required_geos) - len(missing_geos)} cached, "
+                f"{len(missing_geos)} to fetch."
+            )
         if not missing_geos.empty:
-            wide = self._add_missing_geos(gdf, wide, merge_cols, missing_geos)
+            wide, failed_geos = self._add_missing_geos(gdf, wide, merge_cols, missing_geos)
 
-        return wide
+        return wide, failed_geos
 
     def _get_existing_wide(self, merge_cols: list) -> pd.DataFrame:
 
@@ -293,6 +318,7 @@ class CensusData:
         cache_hits = 0
 
         results = []
+        failed_geos = []  # Track geos that couldn't be fetched
         for i, (idx, row) in enumerate(unique_geos.iterrows()):
             completed = i + 1
 
@@ -332,9 +358,13 @@ class CensusData:
                         for col in merge_cols:
                             combined_result[col] = row[col]
                         results.append(combined_result)
+                    else:
+                        # API returned no data for this geo
+                        failed_geos.append(row[merge_cols].to_dict())
 
                 except Exception as e:
                     print(f"Skipped! Error for {geo_id}: {e}")
+                    failed_geos.append(row[merge_cols].to_dict())
 
             # Show initial time estimate after sample completes
             if completed == estimate_sample and not estimate_shown:
@@ -371,9 +401,14 @@ class CensusData:
         if len(results) > 0:
             return properties_data.merge(
                 pd.DataFrame(results), on=merge_cols, how="left"
-            )
+            ), failed_geos
         else:
-            raise RuntimeError("Length of results is zero!")
+            # All geos failed - return empty dataframe with correct columns
+            print(
+                f"Warning: No census data available for any of the {total_geos} "
+                "geographies (e.g., Virginia independent cities)."
+            )
+            return properties_data.iloc[:0], failed_geos
 
     def _cache_results(self, row, merge_cols, result_dict):
         """Save results to cache table."""

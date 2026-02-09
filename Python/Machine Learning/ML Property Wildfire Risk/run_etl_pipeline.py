@@ -8,7 +8,7 @@ This parallelism significantly reduces total runtime compared to sequential exec
 
 Usage:
     # Full parallel pipeline: add 300k properties + census merge
-    python run_etl_pipeline.py --num-properties 300000 --workers 10 --granularity county
+    python run_etl_pipeline.py --num-properties 300000 --workers 50 --granularity county
 
     # Census merge only (use existing properties)
     python run_etl_pipeline.py --granularity county
@@ -38,9 +38,11 @@ def run_properties_thread(
     sql_obj = None
     try:
         sql_obj = SQL(test=args.test)
-        props = Properties(sql_obj=sql_obj)
+        props = Properties(sql_obj=sql_obj, verbose=False)
+        print(f"[PROPERTIES] Starting with {props.num_properties} existing")
 
         if args.num_properties > 0:
+            print(f"[PROPERTIES] Adding {args.num_properties} with {args.workers} workers...")
             props.add_random_properties(
                 args.num_properties,
                 parallel=True,
@@ -72,7 +74,9 @@ def run_census_thread(
             sql_obj=sql_obj,
             year=args.year,
             granularity=args.granularity,
+            verbose=False,
         )
+        print(f"[CENSUS] Initialized (year={args.year}, granularity={args.granularity})")
 
         processed_count = 0
         iteration = 0
@@ -81,9 +85,7 @@ def run_census_thread(
             iteration += 1
 
             # Load current properties from PostGIS
-            from load_properties import Properties
-
-            props = Properties(sql_obj=sql_obj)
+            props = Properties(sql_obj=sql_obj, verbose=False)
             properties_gdf = props.get_properties_gpd()
 
             if len(properties_gdf) == 0:
@@ -95,22 +97,18 @@ def run_census_thread(
                 continue
 
             # Run census merge (handles missing geos internally)
-            print(
-                f"[CENSUS] Processing {len(properties_gdf)} properties (poll {iteration})..."
-            )
+            print(f"[CENSUS] Poll {iteration}: {len(properties_gdf)} properties")
             result = census.merge_census_info(properties_gdf)
             new_count = len(result)
 
             if new_count > processed_count:
-                print(
-                    f"[CENSUS] Merged {new_count} properties (+{new_count - processed_count} new)"
-                )
+                print(f"[CENSUS] Merged {new_count} (+{new_count - processed_count} new)")
                 processed_count = new_count
 
             # Check if producer is done
             if properties_done.is_set():
                 # Do one final pass to catch any stragglers
-                props = Properties(sql_obj=sql_obj)
+                props = Properties(sql_obj=sql_obj, verbose=False)
                 properties_gdf = props.get_properties_gpd()
                 if len(properties_gdf) > processed_count:
                     print(f"[CENSUS] Final pass: {len(properties_gdf)} properties...")

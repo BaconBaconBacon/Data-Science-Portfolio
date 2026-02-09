@@ -8,9 +8,9 @@ block group) and persists to PostGIS.
 Supports both sequential and parallel property generation for speed.
 Test mode generates properties near known wildfire locations for validation.
 
-Note: ~30-40% of random CONUS points will successfully geocode (the rest
-fall in water, forests, or unpopulated areas). To get N properties,
-request approximately 3*N points.
+The code automatically retries failed geocodes (points landing in water,
+forests, or unpopulated areas) until exactly N properties are obtained,
+with a safety cap of 5*N total attempts.
 
 """
 
@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from shapely.geometry import Point
 from sql_funcs import SQL
 from settings import (
@@ -75,17 +75,20 @@ class Properties:
     def __init__(
         self,
         sql_obj: SQL,
+        verbose: bool = True,
     ):
 
         self.sql_obj = sql_obj
         self.test_mode = sql_obj.test_mode
+        self.verbose = verbose
 
         if not self.test_mode:
             self.table_name = PROP_TABLE_NAME
         else:
             self.table_name = PROP_TABLE_NAME_TEST
         self._read_from_sql()
-        print(f"{self.num_properties} many properties found.")
+        if self.verbose:
+            print(f"{self.num_properties} properties loaded.")
 
     def add_random_properties(
         self, quantity: int, verbose=True, parallel=False, max_workers=10
@@ -115,13 +118,17 @@ class Properties:
 
         print(f"Adding {quantity} properties...")
 
-        temp_lst = [None] * quantity
-        last_added = 0
+        temp_lst = []
+        num_added = 0
+        attempts = 0
+        max_attempts = quantity * 5  # Safety cap
+        last_saved = 0
         start_time = time.time()
         estimate_sample = min(PROP_ESTIMATE_SAMPLE, quantity)
         estimate_shown = False
 
-        for i in range(quantity):
+        while num_added < quantity and attempts < max_attempts:
+            attempts += 1
 
             # Generate random coordinates within Continental US bounds
             lat = random.uniform(USA_MIN_LAT, USA_MAX_LAT)
@@ -130,9 +137,9 @@ class Properties:
             try:
                 block = cg.coordinates(x=long, y=lat)["2020 Census Blocks"][0]
             except Exception:
-                continue  # Skip points that fail geocoding (water, unpopulated areas)
+                continue  # Retry with new point
 
-            temp_lst[i] = {
+            prop = {
                 key: (
                     block[PROP_LABELS_KEYS_MAP[key]]
                     if key == "geoid"
@@ -140,38 +147,40 @@ class Properties:
                 )
                 for key in PROP_LABELS_KEYS_MAP.keys()
             }
-            temp_lst[i][HEADER_GEOM] = Point(long, lat)
+            prop[HEADER_GEOM] = Point(long, lat)
+            temp_lst.append(prop)
+            num_added += 1
 
             # Show time estimate after first N properties
-            if (i + 1) == estimate_sample and not estimate_shown and verbose:
+            if num_added == estimate_sample and not estimate_shown and verbose:
                 elapsed = time.time() - start_time
                 per_property = elapsed / estimate_sample
                 remaining = quantity - estimate_sample
                 est_remaining_sec = remaining * per_property
-                est_total_sec = quantity * per_property
+                success_rate = num_added / attempts * 100 if attempts > 0 else 0
                 print(
-                    f"  Time estimate: {self._format_duration(est_total_sec)} total "
-                    f"({per_property:.2f}s per property, "
-                    f"{self._format_duration(est_remaining_sec)} remaining)"
+                    f"  Time estimate: {self._format_duration(est_remaining_sec)} remaining "
+                    f"({per_property:.2f}s per property, {success_rate:.1f}% success rate)"
                 )
                 estimate_shown = True
 
-            if not (i + 1) % PROP_PROGRESS_INTERVAL:
+            if num_added % PROP_PROGRESS_INTERVAL == 0:
                 if verbose:
                     elapsed = time.time() - start_time
-                    remaining_count = quantity - (i + 1)
-                    per_property = elapsed / (i + 1)
+                    remaining_count = quantity - num_added
+                    per_property = elapsed / num_added
                     est_remaining = remaining_count * per_property
+                    success_rate = num_added / attempts * 100 if attempts > 0 else 0
                     print(
-                        f"  {i+1}/{quantity} properties... "
-                        f"({self._format_duration(est_remaining)} remaining)"
+                        f"  {num_added}/{quantity} properties "
+                        f"({attempts} attempts, {success_rate:.1f}% success) "
+                        f"- {self._format_duration(est_remaining)} remaining"
                     )
-                self._update_gpd_and_sql(temp_lst[: i + 1])
-                last_added = i + 1
+                self._update_gpd_and_sql(temp_lst[last_saved:])
+                last_saved = len(temp_lst)
 
-        if last_added < quantity:
-            remaining = [x for x in temp_lst[last_added:] if x is not None]
-            self._update_gpd_and_sql(remaining)
+        if last_saved < len(temp_lst):
+            self._update_gpd_and_sql(temp_lst[last_saved:])
 
         self.sql_obj.drop_duplicates_from_table(self.table_name)
         # Reload from SQL to get auto-generated property_ids
@@ -180,7 +189,16 @@ class Properties:
 
         total_time = time.time() - start_time
         if verbose:
-            print(f"Completed in {self._format_duration(total_time)}")
+            success_rate = num_added / attempts * 100 if attempts > 0 else 0
+            print(
+                f"Completed in {self._format_duration(total_time)} "
+                f"({num_added} added from {attempts} attempts, {success_rate:.1f}% success)"
+            )
+
+        if num_added < quantity:
+            print(
+                f"Warning: Only added {num_added}/{quantity} after {max_attempts} attempts."
+            )
 
         return
 
@@ -228,43 +246,94 @@ class Properties:
         except Exception:
             return None
 
+    @staticmethod
+    def _fetch_single_property_with_retry(max_retries: int = 10) -> dict | None:
+        """
+        Keep generating random points until one successfully geocodes.
+
+        Parameters
+        ----------
+        max_retries : int
+            Maximum attempts before giving up on this slot.
+
+        Returns
+        -------
+        dict or None
+            Property dict if successful, None if all retries exhausted.
+        """
+        for _ in range(max_retries):
+            result = Properties._fetch_single_property()
+            if result is not None:
+                return result
+        return None
+
     def _add_random_properties_parallel(
         self, quantity: int, verbose: bool, max_workers: int
     ) -> None:
         """
         Parallel version of add_random_properties using ThreadPoolExecutor.
+
+        Retries failed geocodes by submitting new tasks until exactly 'quantity'
+        properties are obtained, or max_total_attempts is reached.
         """
         print(f"Adding {quantity} properties with {max_workers} parallel workers...")
 
         results = []
-        failed = 0
+        total_attempts = 0
+        max_total_attempts = quantity * 5  # Safety cap
         start_time = time.time()
         estimate_shown = False
         estimate_sample = min(PROP_ESTIMATE_SAMPLE * max_workers, quantity)
         last_saved = 0
         save_interval = PROP_SAVE_INTERVAL
+        last_progress_count = 0
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(self._fetch_single_property): i for i in range(quantity)
-            }
+            # Start with a pool of tasks (2x workers to keep queue full)
+            pending = set()
+            initial_batch = min(quantity, max_workers * 2)
+            for _ in range(initial_batch):
+                pending.add(executor.submit(self._fetch_single_property))
+                total_attempts += 1
 
-            for future in as_completed(futures):
-                try:
-                    prop = future.result()
-                    if prop is not None:
-                        results.append(prop)
-                except Exception as e:
-                    print(f"Property fetch failed: {e}")
-                    failed += 1
+            while len(results) < quantity and total_attempts < max_total_attempts:
+                if not pending:
+                    # No pending tasks but still need results - submit more
+                    needed = quantity - len(results)
+                    batch = min(needed, max_workers * 2)
+                    for _ in range(batch):
+                        if total_attempts < max_total_attempts:
+                            pending.add(executor.submit(self._fetch_single_property))
+                            total_attempts += 1
+                    if not pending:
+                        break
 
-                completed = len(results) + failed
+                # Wait for at least one task to complete
+                done, pending = wait(pending, return_when=FIRST_COMPLETED)
+
+                for future in done:
+                    try:
+                        prop = future.result()
+                        if prop is not None:
+                            results.append(prop)
+                        else:
+                            # Failed geocode - submit replacement if we still need more
+                            if len(results) < quantity and total_attempts < max_total_attempts:
+                                pending.add(executor.submit(self._fetch_single_property))
+                                total_attempts += 1
+                    except Exception as e:
+                        if verbose:
+                            print(f"Property fetch exception: {e}")
+                        # Submit replacement on exception too
+                        if len(results) < quantity and total_attempts < max_total_attempts:
+                            pending.add(executor.submit(self._fetch_single_property))
+                            total_attempts += 1
 
                 # Time estimate after initial sample
-                if completed == estimate_sample and not estimate_shown and verbose:
+                if len(results) >= estimate_sample and not estimate_shown and verbose:
                     elapsed = time.time() - start_time
                     rate = len(results) / elapsed if elapsed > 0 else 0
-                    remaining = quantity - completed
+                    remaining = quantity - len(results)
                     est_remaining_sec = remaining / rate if rate > 0 else 0
                     print(
                         f"  Time estimate: {self._format_duration(est_remaining_sec)} remaining "
@@ -272,16 +341,19 @@ class Properties:
                     )
                     estimate_shown = True
 
-                # Progress every 500
-                if completed % 500 == 0 and completed > 0 and verbose:
+                # Progress every 500 successful properties
+                if len(results) >= last_progress_count + 500 and verbose:
                     elapsed = time.time() - start_time
                     rate = len(results) / elapsed if elapsed > 0 else 0
-                    remaining = quantity - completed
+                    remaining = quantity - len(results)
                     est_remaining = remaining / rate if rate > 0 else 0
+                    success_rate = len(results) / total_attempts * 100 if total_attempts > 0 else 0
                     print(
-                        f"  {completed}/{quantity} fetched ({len(results)} success, {failed} failed) "
+                        f"  {len(results)}/{quantity} properties "
+                        f"({total_attempts} attempts, {success_rate:.1f}% success) "
                         f"- {self._format_duration(est_remaining)} remaining"
                     )
+                    last_progress_count = (len(results) // 500) * 500
 
                 # Periodic save to SQL
                 if len(results) - last_saved >= save_interval:
@@ -306,9 +378,17 @@ class Properties:
         total_time = time.time() - start_time
         if verbose:
             rate = len(results) / total_time if total_time > 0 else 0
+            success_rate = len(results) / total_attempts * 100 if total_attempts > 0 else 0
             print(
                 f"Completed in {self._format_duration(total_time)} "
-                f"({len(results)} added, {failed} failed, {rate:.2f}/sec)"
+                f"({len(results)} added from {total_attempts} attempts, "
+                f"{success_rate:.1f}% success, {rate:.2f}/sec)"
+            )
+
+        if len(results) < quantity:
+            print(
+                f"Warning: Only added {len(results)}/{quantity} after "
+                f"{max_total_attempts} attempts."
             )
 
     def _add_properties_near_fires(
@@ -429,20 +509,21 @@ class Properties:
 
         # check if properties table exists, and connect
         if self.sql_obj.check_table_exists(self.table_name):
-            print(f"{self.table_name} found")
             self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)
-            print(f"'{self.table_name}' table loaded.")
         else:
-            print(
-                f"Initializing table '{self.table_name}' with {PROPERTIES_INIT_COUNT} properties."
-            )
+            if self.verbose:
+                print(
+                    f"Initializing table '{self.table_name}' with {PROPERTIES_INIT_COUNT} properties."
+                )
             self.properties_gpd = self.sql_obj.initialize_properties_table(
                 self.table_name
             )
             if self.test_mode:
-                print("Next call _populate_test_props()...")
+                if self.verbose:
+                    print("Next call _populate_test_props()...")
             else:
-                print(f"Adding {PROPERTIES_INIT_COUNT} new properties to table...")
+                if self.verbose:
+                    print(f"Adding {PROPERTIES_INIT_COUNT} new properties to table...")
                 self.add_random_properties(PROPERTIES_INIT_COUNT, verbose=False)
             # Reload from SQL to get auto-generated property_ids
             self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)

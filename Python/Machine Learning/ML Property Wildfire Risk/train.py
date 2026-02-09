@@ -132,6 +132,7 @@ def train_xgboost(
         param_distributions=param_dist,
         n_iter=n_iter,
         scoring="neg_mean_squared_error",
+        device="cuda",
         cv=cv,
         random_state=random_state,
         n_jobs=-1,
