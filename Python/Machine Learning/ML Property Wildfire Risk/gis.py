@@ -9,7 +9,10 @@ Uses scipy.spatial.cKDTree for fast vectorized distance calculations.
 """
 
 import hashlib
+import multiprocessing as mp
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -367,6 +370,144 @@ def calc_all_features(
     print(f"  Total: {time.time() - start:.1f}s")
 
     result = pd.concat([idw, kde, decay, rings, nearest], axis=1)
+
+    # Save to cache
+    if use_cache:
+        result.reset_index(drop=True).to_parquet(cache_file)
+        print(f"Cached GIS features to {cache_file.name}")
+
+    return result
+
+
+def _process_chunk(
+    chunk_props: gpd.GeoDataFrame,
+    fires: gpd.GeoDataFrame,
+    radius_m: float,
+    power: float,
+    bandwidth: float,
+    rings_m: list[float],
+    weight_col: str | None,
+) -> pd.DataFrame:
+    """Process all features for a chunk of properties (used by parallel version)."""
+    # Run all 5 feature calculations in parallel using threads
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {
+            executor.submit(calc_nearest_fire, chunk_props, fires): "nearest",
+            executor.submit(calc_kde, chunk_props, fires, bandwidth): "kde",
+            executor.submit(calc_idw, chunk_props, fires, radius_m, power, weight_col): "idw",
+            executor.submit(
+                calc_exponential_decay, chunk_props, fires, radius_m, bandwidth, weight_col
+            ): "decay",
+            executor.submit(
+                calc_buffer_ring_features, chunk_props, fires, rings_m, weight_col
+            ): "rings",
+        }
+        results = {}
+        for future in as_completed(futures):
+            name = futures[future]
+            results[name] = future.result()
+
+    return pd.concat(
+        [results["idw"], results["kde"], results["decay"], results["rings"], results["nearest"]],
+        axis=1,
+    )
+
+
+def calc_all_features_parallel(
+    properties: gpd.GeoDataFrame,
+    fires: gpd.GeoDataFrame,
+    radius_m: float = GIS_SCORING_DEFAULT_RADIUS_M,
+    power: float = GIS_SCORING_DEFAULT_POWER,
+    bandwidth: float = GIS_SCORING_DEFAULT_BANDWIDTH_M,
+    rings_m: list[float] | None = None,
+    weight_col: str | None = "FRP",
+    use_cache: bool = True,
+    n_jobs: int = -1,
+) -> pd.DataFrame:
+    """Compute all proximity features in parallel.
+
+    Parallelizes at two levels:
+    1. Splits properties into chunks processed in parallel
+    2. Within each chunk, runs all 5 feature calculations concurrently
+
+    Parameters
+    ----------
+    properties : GeoDataFrame of property points.
+    fires : GeoDataFrame of fire points.
+    radius_m : Search radius in meters for IDW and decay.
+    power : Distance exponent for IDW.
+    bandwidth : Bandwidth for KDE and decay.
+    rings_m : Ring boundaries for buffer features.
+    weight_col : Column in fires to weight by.
+    use_cache : If True, cache results to disk and load on re-runs.
+    n_jobs : Number of parallel jobs. -1 = all CPU cores.
+
+    Returns
+    -------
+    pd.DataFrame with all proximity features.
+    """
+    _validate_inputs(properties, fires)
+
+    if rings_m is None:
+        rings_m = GIS_SCORING_DEFAULT_RINGS_M
+
+    # Check cache (same logic as sequential version)
+    cache_dir = PATH_DATA / "cache"
+    cache_dir.mkdir(exist_ok=True)
+    cache_key = _generate_cache_key(
+        properties, fires, radius_m, power, bandwidth, rings_m, weight_col
+    )
+    cache_file = cache_dir / f"gis_features_{cache_key}.parquet"
+
+    if use_cache and cache_file.exists():
+        print(f"Loading cached GIS features from {cache_file.name}")
+        cached = pd.read_parquet(cache_file)
+        if len(cached) == len(properties):
+            return cached.set_index(properties.index)
+        else:
+            print("Cache size mismatch, recomputing...")
+
+    import time
+
+    if n_jobs == -1:
+        n_jobs = mp.cpu_count()
+
+    print(f"Computing GIS features for {len(properties)} properties ({n_jobs} parallel jobs)...")
+    start = time.time()
+
+    # Split properties into chunks
+    n_chunks = min(n_jobs, len(properties))
+    if n_chunks <= 1:
+        # Fall back to sequential with parallel features
+        result = _process_chunk(
+            properties, fires, radius_m, power, bandwidth, rings_m, weight_col
+        )
+    else:
+        # Process chunks in parallel using threads (GeoDataFrames don't pickle well)
+        # Use iloc slicing instead of np.array_split to avoid GeoDataFrame.swapaxes deprecation
+        chunk_size = len(properties) // n_chunks
+        chunks = [
+            properties.iloc[i * chunk_size : (i + 1) * chunk_size if i < n_chunks - 1 else None]
+            for i in range(n_chunks)
+        ]
+
+        # Create partial function with fixed parameters
+        process_fn = partial(
+            _process_chunk,
+            fires=fires,
+            radius_m=radius_m,
+            power=power,
+            bandwidth=bandwidth,
+            rings_m=rings_m,
+            weight_col=weight_col,
+        )
+
+        with ThreadPoolExecutor(max_workers=n_chunks) as executor:
+            chunk_results = list(executor.map(process_fn, chunks))
+
+        result = pd.concat(chunk_results)
+
+    print(f"  Total: {time.time() - start:.1f}s")
 
     # Save to cache
     if use_cache:
