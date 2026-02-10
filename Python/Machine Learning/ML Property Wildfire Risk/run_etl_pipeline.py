@@ -10,6 +10,9 @@ Usage:
     # Full parallel pipeline: add 300k properties + census merge
     python run_etl_pipeline.py --num-properties 300000 --granularity county
 
+    # Load properties from GPS coordinates file
+    python run_etl_pipeline.py --coords-file my_properties.csv --granularity county
+
     # Census merge only (use existing properties)
     python run_etl_pipeline.py --granularity county
 
@@ -26,6 +29,7 @@ Usage:
 import argparse
 import threading
 import time
+import pandas as pd
 from queue import Queue
 from sql_funcs import SQL
 from load_properties import Properties
@@ -50,20 +54,30 @@ def run_properties_thread(
 
         print(f"[PROPERTIES] Starting with {props.num_properties} existing")
 
-        if args.num_properties > 0:
+        added_properties = False
+        if args.coords_file:
+            # Load from CSV file
+            print(f"[PROPERTIES] Loading coordinates from {args.coords_file}...")
+            df = pd.read_csv(args.coords_file)
+            coords = list(zip(df["latitude"], df["longitude"]))
+            props.add_properties_from_coordinates(coords)
+            added_properties = True
+        elif args.num_properties > 0:
             print(f"[PROPERTIES] Adding {args.num_properties} using geography-first approach...")
             props.add_random_properties_geo_first(
                 args.num_properties,
                 granularity=args.granularity,
                 skip_final_cleanup=True,  # Don't block on slow cleanup
             )
+            added_properties = True
 
         # Signal census thread IMMEDIATELY - properties are saved to DB
         properties_done.set()
 
         # Now do cleanup (census thread can finish in parallel)
-        if args.num_properties > 0:
-            print(f"[PROPERTIES] Running deduplication on ~{props.num_properties} rows...")
+        if added_properties and args.num_properties > 0:
+            # Only need extra cleanup for geo_first (coords method does its own)
+            print(f"[PROPERTIES] Running deduplication...")
             cleanup_start = time.time()
             sql_obj.drop_duplicates_from_table(props.table_name)
             props.refresh()
@@ -221,7 +235,13 @@ def run_sequential(args):
         sql_obj.filter_properties_to_conus(props.table_name)
         props.refresh()  # Reload after filtering
 
-        if args.num_properties > 0:
+        if args.coords_file:
+            # Load from CSV file
+            print(f"Loading coordinates from {args.coords_file}...")
+            df = pd.read_csv(args.coords_file)
+            coords = list(zip(df["latitude"], df["longitude"]))
+            props.add_properties_from_coordinates(coords)
+        elif args.num_properties > 0:
             props.add_random_properties_geo_first(
                 args.num_properties,
                 granularity=args.granularity,
@@ -274,6 +294,12 @@ def main():
         help="Number of new properties to add (0 = use existing only)",
     )
     parser.add_argument(
+        "--coords-file",
+        type=str,
+        default=None,
+        help="CSV file with latitude,longitude columns to load as properties",
+    )
+    parser.add_argument(
         "--year",
         type=int,
         default=2023,
@@ -324,7 +350,8 @@ def main():
     start_time = time.time()
 
     # Choose execution mode
-    if args.skip_census or args.sequential or args.num_properties == 0:
+    has_new_properties = args.num_properties > 0 or args.coords_file
+    if args.skip_census or args.sequential or not has_new_properties:
         # Sequential for: skip-census, explicit sequential, or census-only runs
         success = run_sequential(args)
     else:

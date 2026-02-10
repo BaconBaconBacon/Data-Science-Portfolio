@@ -462,6 +462,92 @@ class Properties:
                 f"({quantity} added, {rate:.1f}/sec, 100% success)"
             )
 
+    def add_properties_from_coordinates(
+        self,
+        coordinates: list[tuple[float, float]],
+        verbose: bool = True,
+    ) -> None:
+        """
+        Add properties from a list of (latitude, longitude) tuples.
+
+        Reverse-geocodes each coordinate via Census API to get census
+        block/tract/county IDs, then saves to PostGIS.
+
+        Parameters
+        ----------
+        coordinates : list of (lat, lon) tuples
+            GPS coordinates in WGS84 (EPSG:4326). Each tuple is (latitude, longitude).
+        verbose : bool
+            Print progress updates.
+        """
+        if self.test_mode:
+            print("Test mode, cannot add more properties.")
+            return
+
+        quantity = len(coordinates)
+        print(f"Adding {quantity} properties from coordinates...")
+        start_time = time.time()
+
+        results = []
+        failed = 0
+        last_saved = 0
+        save_interval = PROP_SAVE_INTERVAL
+
+        for i, (lat, lon) in enumerate(coordinates):
+            try:
+                block = cg.coordinates(x=lon, y=lat)["2020 Census Blocks"][0]
+
+                prop = {
+                    key: (
+                        block[PROP_LABELS_KEYS_MAP[key]]
+                        if key == "geoid"
+                        else int(block[PROP_LABELS_KEYS_MAP[key]])
+                    )
+                    for key in PROP_LABELS_KEYS_MAP.keys()
+                }
+                prop[HEADER_GEOM] = Point(lon, lat)
+                results.append(prop)
+
+            except Exception:
+                failed += 1
+                if verbose and failed <= 5:
+                    print(f"  Warning: Failed to geocode ({lat}, {lon})")
+
+            # Progress reporting
+            if verbose and (i + 1) % 100 == 0:
+                elapsed = time.time() - start_time
+                rate = (i + 1) / elapsed if elapsed > 0 else 0
+                remaining = (quantity - i - 1) / rate if rate > 0 else 0
+                print(
+                    f"  {i + 1}/{quantity} processed "
+                    f"({len(results)} success, {failed} failed, "
+                    f"{self._format_duration(remaining)} remaining)"
+                )
+
+            # Periodic save to SQL
+            if len(results) - last_saved >= save_interval:
+                self._update_gpd_and_sql(results[last_saved:])
+                last_saved = len(results)
+
+        # Save remaining
+        if len(results) > last_saved:
+            self._update_gpd_and_sql(results[last_saved:])
+            if verbose:
+                print(f"  Saved {len(results)} properties to database.")
+
+        self.sql_obj.drop_duplicates_from_table(self.table_name)
+        self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)
+        self._update_property_count()
+
+        total_time = time.time() - start_time
+        if verbose:
+            rate = len(results) / total_time if total_time > 0 else 0
+            success_rate = len(results) / quantity * 100 if quantity > 0 else 0
+            print(
+                f"Completed in {self._format_duration(total_time)} "
+                f"({len(results)} added, {failed} failed, {success_rate:.1f}% success)"
+            )
+
     @staticmethod
     def _fetch_single_property() -> dict | None:
         """
