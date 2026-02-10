@@ -292,6 +292,111 @@ class SQL:
             return pd.Series(result["value"].values, index=result["variable"].values)
         return None
 
+    def is_cached_failure(
+        self, cols, row: pd.Series, granularity: str, year: int
+    ) -> bool:
+        """Check if geography is a known failure (no census data available)."""
+        conditions = " AND ".join([f"{col} = :{col}" for col in cols])
+        q = s.text(
+            f"""
+            SELECT 1 FROM {TABLE_NAME_CACHE}
+            WHERE {conditions}
+            AND granularity = :granularity
+            AND year = :year
+            AND variable = '_FAILED_'
+            LIMIT 1
+            """
+        )
+        params: dict[str, int | str] = {col: int(row[col]) for col in cols}
+        params["granularity"] = granularity
+        params["year"] = year
+        result = self.connection.execute(q, params).fetchone()
+        return result is not None
+
+    def filter_properties_to_conus(self, table_name: str) -> int:
+        """
+        Delete properties outside contiguous US (AK, HI, PR, territories).
+
+        Removes properties with state_id not in the 48 contiguous states + DC.
+        CONUS state FIPS: 01-56 excluding 02 (AK) and 15 (HI).
+
+        Parameters
+        ----------
+        table_name : str
+            Name of the properties table to filter.
+
+        Returns
+        -------
+        int
+            Number of rows deleted.
+        """
+        table_name = self._sanitize_string(table_name)
+        q = s.text(
+            f"""
+            DELETE FROM {table_name}
+            WHERE state_id NOT BETWEEN 1 AND 56
+               OR state_id IN (2, 15)
+            """
+        )
+        result = self.connection.execute(q)
+        self.connection.commit()
+        deleted = result.rowcount
+        if deleted > 0:
+            print(f"Removed {deleted} properties outside contiguous US")
+        return deleted
+
+    def delete_properties_in_failed_geos(
+        self, properties_table: str, granularity: str, year: int
+    ) -> int:
+        """
+        Delete properties in geographies known to have no census data.
+
+        Uses the census_cache table to find geographies marked as failed,
+        then deletes matching properties.
+
+        Parameters
+        ----------
+        properties_table : str
+            Name of the properties table.
+        granularity : str
+            Geographic level ('county', 'tract', 'block_group').
+        year : int
+            Census year.
+
+        Returns
+        -------
+        int
+            Number of properties deleted.
+        """
+        properties_table = self._sanitize_string(properties_table)
+
+        # Build join conditions based on granularity
+        if granularity == "county":
+            join_cond = "p.state_id = c.state_id AND p.county_id = c.county_id"
+        elif granularity == "tract":
+            join_cond = "p.state_id = c.state_id AND p.county_id = c.county_id AND p.tract_id = c.tract_id"
+        else:  # block_group
+            join_cond = "p.state_id = c.state_id AND p.county_id = c.county_id AND p.tract_id = c.tract_id AND p.block_grp = c.block_grp"
+
+        q = s.text(
+            f"""
+            DELETE FROM {properties_table} p
+            USING {TABLE_NAME_CACHE} c
+            WHERE {join_cond}
+              AND c.granularity = :granularity
+              AND c.year = :year
+              AND c.variable = '_FAILED_'
+            """
+        )
+        result = self.connection.execute(
+            q, {"granularity": granularity, "year": year}
+        )
+        self.connection.commit()
+        deleted = result.rowcount
+        if deleted > 0:
+            print(f"Removed {deleted} properties in failed geographies")
+        return deleted
+
     def save_df_to_sql(self, table_name: str, df: pd.DataFrame) -> None:
         df.to_sql(table_name, self.connection, if_exists="append", index=False)
         self.connection.commit()
@@ -411,12 +516,17 @@ class SQL:
         q = f"SELECT * FROM {prop_name}"
         return gpd.read_postgis(q, con=self.engine, geom_col=HEADER_GEOM)
 
-    def drop_duplicates_from_table(self, table_name) -> None:
-        """Remove exact duplicate properties (same geoid and geometry).
+    def drop_duplicates_from_table(self, table_name) -> int:
+        """Remove duplicate properties with the same geoid AND coordinates.
 
-        Uses geoid (full census identifier) and ST_AsText(geometry) for exact
-        string matching to avoid floating-point comparison issues. Keeps the
-        row with the lowest property_id for each duplicate set.
+        Uses ROW_NUMBER() window function for O(n log n) performance instead
+        of the slower NOT IN pattern. Keeps the row with the lowest property_id
+        for each unique (geoid, geometry) combination.
+
+        Returns
+        -------
+        int
+            Number of duplicate rows removed.
         """
         table_name = self._sanitize_string(table_name)
 
@@ -425,14 +535,21 @@ class SQL:
             s.text(f"SELECT COUNT(*) FROM {table_name}")
         ).scalar()
 
-        # Group by geoid + geometry text representation for exact matching
-        # Keep only the row with the smallest property_id in each group
+        # Use ROW_NUMBER() to efficiently identify duplicates
+        # Partition by geoid + geometry text for exact coordinate matching
+        # Still faster than NOT IN pattern - O(n log n) vs O(n²)
         q = f"""
         DELETE FROM {table_name}
-        WHERE property_id NOT IN (
-            SELECT MIN(property_id)
-            FROM {table_name}
-            GROUP BY geoid, ST_AsText({HEADER_GEOM})
+        WHERE property_id IN (
+            SELECT property_id FROM (
+                SELECT property_id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY geoid, ST_AsText({HEADER_GEOM})
+                           ORDER BY property_id
+                       ) as rn
+                FROM {table_name}
+            ) sub
+            WHERE rn > 1
         );
         """
 
@@ -446,6 +563,7 @@ class SQL:
         removed = count_before - count_after
         if removed > 0:
             print(f"Removed {removed} duplicate rows from '{table_name}'.")
+        return removed
 
     def _rename_column(self, table_name: str, old_name: str, new_name: str) -> None:
         self.connection.execute(

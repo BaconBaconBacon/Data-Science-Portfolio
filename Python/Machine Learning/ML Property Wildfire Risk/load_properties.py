@@ -15,15 +15,18 @@ with a safety cap of 5*N total attempts.
 """
 
 import censusgeocode as cg
+import io
 import random
+import requests
 import sys
 import time
+import zipfile
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
-from shapely.geometry import Point
+from shapely.geometry import Point, Polygon, MultiPolygon
 from sql_funcs import SQL
 from settings import (
     GIS_DEFAULT_CRS,
@@ -40,7 +43,154 @@ from settings import (
     PROP_ESTIMATE_SAMPLE,
     PROP_PROGRESS_INTERVAL,
     PROP_SAVE_INTERVAL,
+    PATH_DATA_CENSUS,
+    TIGER_YEAR,
+    STATE_FIPS_CODES,
+    CONUS_STATE_FIPS,
+    CENSUS_VALID_GRANULARITY_LEVELS,
 )
+
+
+def download_tiger_shapefile(granularity: str, year: int = TIGER_YEAR) -> gpd.GeoDataFrame:
+    """
+    Download Census TIGER shapefile for the specified granularity.
+
+    Downloads shapefiles from Census Bureau, caches locally as parquet.
+    County is a single national file; tract/block_group require per-state downloads.
+
+    Parameters
+    ----------
+    granularity : str
+        One of: 'county', 'tract', 'block_group'
+    year : int
+        TIGER year (default: from settings)
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Shapefile with geography boundaries and identifiers
+    """
+    if granularity not in CENSUS_VALID_GRANULARITY_LEVELS:
+        raise ValueError(f"granularity must be one of {CENSUS_VALID_GRANULARITY_LEVELS}")
+
+    cache_path = PATH_DATA_CENSUS / f"tiger_{granularity}_{year}.parquet"
+    PATH_DATA_CENSUS.mkdir(parents=True, exist_ok=True)
+
+    if cache_path.exists():
+        print(f"Loading cached TIGER {granularity} shapefile...")
+        return gpd.read_parquet(cache_path)
+
+    print(f"Downloading TIGER {granularity} shapefile (year={year})...")
+
+    if granularity == "county":
+        # Single national file
+        url = f"https://www2.census.gov/geo/tiger/TIGER{year}/COUNTY/tl_{year}_us_county.zip"
+        gdf = _download_shapefile_from_url(url)
+    else:
+        # Per-state files for tract and block_group
+        folder = "TRACT" if granularity == "tract" else "BG"
+        suffix = "tract" if granularity == "tract" else "bg"
+
+        gdfs = []
+        for i, fips in enumerate(CONUS_STATE_FIPS):
+            url = f"https://www2.census.gov/geo/tiger/TIGER{year}/{folder}/tl_{year}_{fips}_{suffix}.zip"
+            print(f"  [{i+1}/{len(CONUS_STATE_FIPS)}] Downloading state {fips}...")
+            try:
+                state_gdf = _download_shapefile_from_url(url)
+                gdfs.append(state_gdf)
+            except Exception as e:
+                print(f"    Warning: Failed to download state {fips}: {e}")
+
+        gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True))
+
+    # Standardize column names for consistency
+    gdf = _standardize_tiger_columns(gdf, granularity)
+
+    # Filter to contiguous US only (exclude AK, HI, PR, territories)
+    conus_fips_int = [int(f) for f in CONUS_STATE_FIPS]
+    before_count = len(gdf)
+    gdf = gdf[gdf["state_id"].isin(conus_fips_int)]
+    print(f"  Filtered to CONUS: {before_count} -> {len(gdf)} geographies")
+
+    # Cache to parquet
+    print(f"Caching to {cache_path}...")
+    gdf.to_parquet(cache_path)
+
+    return gdf
+
+
+def _download_shapefile_from_url(url: str) -> gpd.GeoDataFrame:
+    """Download and extract shapefile from URL."""
+    response = requests.get(url, timeout=60)
+    response.raise_for_status()
+
+    with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
+        # Find the .shp file
+        shp_name = [n for n in zf.namelist() if n.endswith('.shp')][0]
+        # Extract to temp and read
+        with zf.open(shp_name.replace('.shp', '.shp')) as shp_file:
+            # GeoPandas can read from zip directly
+            pass
+
+    # Read directly from zip in memory
+    return gpd.read_file(io.BytesIO(response.content))
+
+
+def _standardize_tiger_columns(gdf: gpd.GeoDataFrame, granularity: str) -> gpd.GeoDataFrame:
+    """Standardize TIGER column names to match our schema."""
+    # TIGER uses: STATEFP, COUNTYFP, TRACTCE, BLKGRPCE, GEOID
+    rename_map = {
+        "STATEFP": "state_id",
+        "COUNTYFP": "county_id",
+        "TRACTCE": "tract_id",
+        "BLKGRPCE": "block_grp",
+        "GEOID": "geoid",
+    }
+
+    # Only rename columns that exist
+    rename_map = {k: v for k, v in rename_map.items() if k in gdf.columns}
+    gdf = gdf.rename(columns=rename_map)
+
+    # Convert ID columns to int where possible
+    for col in ["state_id", "county_id", "tract_id", "block_grp"]:
+        if col in gdf.columns:
+            gdf[col] = pd.to_numeric(gdf[col], errors="coerce").fillna(0).astype(int)
+
+    return gdf
+
+
+def random_point_in_polygon(geom) -> Point:
+    """
+    Generate a random point uniformly within a polygon or multipolygon.
+
+    Uses rejection sampling: generates points within bounding box until
+    one falls inside the polygon.
+    """
+    if isinstance(geom, MultiPolygon):
+        # Pick a polygon weighted by area
+        areas = [p.area for p in geom.geoms]
+        total = sum(areas)
+        r = random.random() * total
+        cumulative = 0
+        for p, a in zip(geom.geoms, areas):
+            cumulative += a
+            if r <= cumulative:
+                geom = p
+                break
+
+    minx, miny, maxx, maxy = geom.bounds
+    max_attempts = 1000
+
+    for _ in range(max_attempts):
+        point = Point(
+            random.uniform(minx, maxx),
+            random.uniform(miny, maxy)
+        )
+        if geom.contains(point):
+            return point
+
+    # Fallback: return centroid if rejection sampling fails (very concave shapes)
+    return geom.centroid
 
 
 class Properties:
@@ -215,6 +365,102 @@ class Properties:
             hours = int(seconds // 3600)
             mins = int((seconds % 3600) // 60)
             return f"{hours}h {mins}m"
+
+    def add_random_properties_geo_first(
+        self,
+        quantity: int,
+        granularity: str = "tract",
+        verbose: bool = True,
+        skip_final_cleanup: bool = False,
+    ) -> None:
+        """
+        Add random properties using geography-first approach.
+
+        Downloads TIGER shapefiles, randomly selects geographies, then generates
+        random points within those geometries. Guarantees 100% success rate
+        since all points fall within valid census geographies.
+
+        Parameters
+        ----------
+        quantity : int
+            Number of properties to add.
+        granularity : str
+            Geographic level: 'county', 'tract', or 'block_group'.
+        verbose : bool
+            Print progress updates.
+        skip_final_cleanup : bool
+            If True, skip slow cleanup operations (drop_duplicates, reload from SQL).
+            Useful when caller needs to signal completion before cleanup.
+        """
+        if self.test_mode:
+            print("Test mode, cannot add more properties.")
+            return
+
+        print(f"Adding {quantity} properties using geography-first approach...")
+        start_time = time.time()
+
+        # Load TIGER shapefile (downloads if not cached)
+        tiger_gdf = download_tiger_shapefile(granularity)
+        n_geos = len(tiger_gdf)
+        print(f"  Loaded {n_geos} {granularity} geographies")
+
+        results = []
+        last_saved = 0
+        save_interval = PROP_SAVE_INTERVAL
+
+        for i in range(quantity):
+            # 1. Randomly select a geography
+            idx = random.randint(0, n_geos - 1)
+            geo = tiger_gdf.iloc[idx]
+
+            # 2. Generate random point within that geography
+            point = random_point_in_polygon(geo.geometry)
+
+            # 3. Build property dict with census IDs from shapefile
+            prop = {
+                "geoid": geo["geoid"],
+                "state_id": int(geo["state_id"]),
+                "county_id": int(geo["county_id"]),
+                "tract_id": int(geo.get("tract_id", 0)),
+                "block_grp": int(geo.get("block_grp", 0)),
+                "block_id": 0,  # Not available at tract/county level
+                HEADER_GEOM: point,
+            }
+            results.append(prop)
+
+            # Progress reporting
+            if verbose and (i + 1) % 1000 == 0:
+                elapsed = time.time() - start_time
+                rate = (i + 1) / elapsed
+                remaining = (quantity - i - 1) / rate if rate > 0 else 0
+                print(
+                    f"  {i + 1}/{quantity} properties "
+                    f"({rate:.1f}/sec, {self._format_duration(remaining)} remaining)"
+                )
+
+            # Periodic save to SQL
+            if len(results) - last_saved >= save_interval:
+                self._update_gpd_and_sql(results[last_saved:])
+                last_saved = len(results)
+
+        # Save remaining
+        if len(results) > last_saved:
+            self._update_gpd_and_sql(results[last_saved:])
+            if verbose:
+                print(f"  Saved final {len(results) - last_saved} properties to database.")
+
+        if not skip_final_cleanup:
+            self.sql_obj.drop_duplicates_from_table(self.table_name)
+            self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)
+            self._update_property_count()
+
+        total_time = time.time() - start_time
+        if verbose:
+            rate = quantity / total_time if total_time > 0 else 0
+            print(
+                f"Completed in {self._format_duration(total_time)} "
+                f"({quantity} added, {rate:.1f}/sec, 100% success)"
+            )
 
     @staticmethod
     def _fetch_single_property() -> dict | None:
@@ -504,6 +750,14 @@ class Properties:
         self.sql_obj.save_gpd_to_sql(self.table_name, tmp)
 
         return
+
+    def refresh(self) -> None:
+        """Reload properties from the database.
+
+        Use this after external modifications to the properties table
+        (e.g., filtering, deletion) to sync the in-memory GeoDataFrame.
+        """
+        self._read_from_sql()
 
     def _read_from_sql(self) -> None:
 

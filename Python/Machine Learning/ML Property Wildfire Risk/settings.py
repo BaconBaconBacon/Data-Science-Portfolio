@@ -156,3 +156,34 @@ GIS_SCORING_DEFAULT_BANDWIDTH_M = 25000  # 25km
 GIS_SCORING_DEFAULT_RINGS_M = [10_000, 25_000, 50_000, 100_000]
 
 CENSUS_CHUNK_SIZE = 50
+
+# TIGER shapefile configuration
+TIGER_YEAR = 2023
+TIGER_BASE_URL = "https://www2.census.gov/geo/tiger/TIGER{year}"
+TIGER_COUNTY_URL = f"{TIGER_BASE_URL}/COUNTY/tl_{{year}}_us_county.zip"
+TIGER_TRACT_URL = f"{TIGER_BASE_URL}/TRACT/tl_{{year}}_{{fips}}_tract.zip"
+TIGER_BG_URL = f"{TIGER_BASE_URL}/BG/tl_{{year}}_{{fips}}_bg.zip"
+
+# US State FIPS codes (50 states + DC + PR)
+STATE_FIPS_CODES = [
+    "01", "02", "04", "05", "06", "08", "09", "10", "11", "12",  # AL-FL
+    "13", "15", "16", "17", "18", "19", "20", "21", "22", "23",  # GA-ME
+    "24", "25", "26", "27", "28", "29", "30", "31", "32", "33",  # MD-NH
+    "34", "35", "36", "37", "38", "39", "40", "41", "42", "44",  # NJ-RI
+    "45", "46", "47", "48", "49", "50", "51", "53", "54", "55",  # SC-WI
+    "56",  # WY
+    # "60",  # American Samoa (uncomment if needed)
+    # "66",  # Guam
+    # "69",  # Northern Mariana Islands
+    "72",  # Puerto Rico
+    # "78",  # US Virgin Islands
+]
+
+# Contiguous US (48 states + DC) - excludes AK (02), HI (15), PR (72), territories
+CONUS_STATE_FIPS = [
+    "01", "04", "05", "06", "08", "09", "10", "11", "12",  # AL, AZ, AR, CA, CO, CT, DE, DC, FL
+    "13", "16", "17", "18", "19", "20", "21", "22", "23",  # GA, ID, IL, IN, IA, KS, KY, LA, ME
+    "24", "25", "26", "27", "28", "29", "30", "31", "32", "33",  # MD-NH
+    "34", "35", "36", "37", "38", "39", "40", "41", "42", "44",  # NJ-RI
+    "45", "46", "47", "48", "49", "50", "51", "53", "54", "55", "56",  # SC-WY
+]

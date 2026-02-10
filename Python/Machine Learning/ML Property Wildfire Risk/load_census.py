@@ -35,6 +35,44 @@ from settings import (
 )
 
 from sql_funcs import SQL
+from functools import lru_cache
+
+
+@lru_cache(maxsize=4)
+def _fetch_census_labels(year: int) -> dict:
+    """Fetch and cache census variable labels from API."""
+    url = f"https://api.census.gov/data/{year}/acs/acs5/variables.json"
+    r = requests.get(url)
+    vars_data = r.json()["variables"]
+    return {k: v.get("label", "") for k, v in vars_data.items()}
+
+
+def census_code_to_label(code: str, year: int = 2023) -> str:
+    """
+    Convert census variable code to human-readable label.
+
+    Standalone function that fetches from Census API.
+    Results are cached for the session.
+
+    Parameters
+    ----------
+    code : str
+        Census variable code (e.g., 'B25031_003E')
+    year : int
+        ACS5 year (default: 2023)
+
+    Returns
+    -------
+    str
+        Human-readable label
+
+    Example
+    -------
+    >>> census_code_to_label('B25031_003E')
+    'Estimate!!Median gross rent!!2 bedrooms'
+    """
+    labels = _fetch_census_labels(year)
+    return labels.get(code, f"Unknown: {code}")
 
 
 class CensusData:
@@ -322,7 +360,15 @@ class CensusData:
         for i, (idx, row) in enumerate(unique_geos.iterrows()):
             completed = i + 1
 
-            # Check cache first
+            # Check if this is a known failed geography
+            if self.sql_obj.is_cached_failure(
+                merge_cols, row, self.granularity, self.year
+            ):
+                print(f"[{completed}/{total_geos}] Skipping known failed geography")
+                failed_geos.append(row[merge_cols].to_dict())
+                continue
+
+            # Check cache for successful results
             cached = self.sql_obj.get_cached_census_results(
                 merge_cols, row, self.granularity, self.year
             )
@@ -359,11 +405,13 @@ class CensusData:
                             combined_result[col] = row[col]
                         results.append(combined_result)
                     else:
-                        # API returned no data for this geo
+                        # API returned no data - cache the failure
+                        self._cache_failed_geo(row, merge_cols)
                         failed_geos.append(row[merge_cols].to_dict())
 
                 except Exception as e:
                     print(f"Skipped! Error for {geo_id}: {e}")
+                    self._cache_failed_geo(row, merge_cols)
                     failed_geos.append(row[merge_cols].to_dict())
 
             # Show initial time estimate after sample completes
@@ -434,6 +482,22 @@ class CensusData:
             self.sql_obj.save_df_to_sql(
                 table_name=TABLE_NAME_CACHE, df=pd.DataFrame(records)
             )
+
+    def _cache_failed_geo(self, row: pd.Series, merge_cols: list) -> None:
+        """Cache a failed geography with sentinel marker to prevent re-querying."""
+        record = {
+            "state_id": row.get("state_id", 0),
+            "county_id": row.get("county_id", 0),
+            "tract_id": row.get("tract_id", 0),
+            "block_grp": row.get("block_grp", 0),
+            "granularity": self.granularity,
+            "year": self.year,
+            "variable": "_FAILED_",
+            "value": None,
+        }
+        self.sql_obj.save_df_to_sql(
+            table_name=TABLE_NAME_CACHE, df=pd.DataFrame([record])
+        )
 
     def _transform_and_clean(self, df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
@@ -597,9 +661,21 @@ class CensusData:
         return all_vars
 
     def _get_variable_name_from_code(self, code: str) -> str:
-        """Get human-readable label from census variable code."""
-        # TODO: Implement lookup from Census API metadata
-        raise NotImplementedError("Census variable name lookup not yet implemented")
+        """
+        Get human-readable label from census variable code.
+
+        Parameters
+        ----------
+        code : str
+            Census variable code (e.g., 'B25031_003E')
+
+        Returns
+        -------
+        str
+            Human-readable label from Census API
+        """
+        labels = self.get_acs5_fields_with_labels(year=self.year)
+        return labels.get(code, f"Unknown: {code}")
 
 
 if __name__ == "__main__":

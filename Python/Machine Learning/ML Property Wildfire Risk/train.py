@@ -16,10 +16,16 @@ import os
 import pickle
 import tempfile
 import time
+import warnings
 
 import boto3
 import numpy as np
 import pandas as pd
+
+# Suppress XGBoost device mismatch warning (model on CUDA, inference data on CPU)
+warnings.filterwarnings(
+    "ignore", message=".*Falling back to prediction using DMatrix.*"
+)
 
 from pathlib import Path
 from scipy.stats import randint, uniform
@@ -341,8 +347,14 @@ def drop_correlated_features(
     Remove redundant highly-correlated features.
 
     For each pair of features with absolute correlation above threshold,
-    drops the second feature. Computed on training data only.
+    drops the second feature. Computed on training data only. Also removes
+    zero-variance columns to avoid division-by-zero in correlation.
     """
+    # Filter out zero-variance columns first (prevents NaN in correlation)
+    non_constant = X_train.columns[X_train.std() > 0]
+    X_train = X_train[non_constant]
+    X_test = X_test[non_constant]
+
     corr = X_train.corr().abs()
     upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
     to_drop = [col for col in upper.columns if any(upper[col] > threshold)]
@@ -428,62 +440,63 @@ def train_xgboost(
         scoring="neg_mean_squared_error",
         cv=cv,
         random_state=random_state,
-        n_jobs=3,
+        n_jobs=1,
         verbose=1,
     )
     search.fit(X_train, y_train)
     return search
 
 
-def train_random_forest(
-    X_train: pd.DataFrame,
-    y_train: pd.Series,
-    n_iter: int = 20,
-    cv: int = 5,
-    random_state: int = 77,
-) -> RandomizedSearchCV:
-    """
-    Train RandomForest regressor with randomized hyperparameter search.
-
-    Parameters
-    ----------
-    X_train
-        Training features (preprocessed).
-    y_train
-        Training target values.
-    n_iter
-        Number of random hyperparameter combinations to try.
-    cv
-        Number of cross-validation folds.
-    random_state
-        Random seed for reproducibility.
-
-    Returns
-    -------
-    RandomizedSearchCV
-        Fitted search object with best_estimator_ and cv_results_.
-    """
-    from sklearn.ensemble import RandomForestRegressor
-
-    param_dist = {
-        "n_estimators": randint(100, 1000),
-        "max_depth": randint(5, 50),
-        "min_samples_split": randint(2, 11),
-        "min_samples_leaf": randint(1, 5),
-        "max_features": ["sqrt", "log2"],
-    }
-    search = RandomizedSearchCV(
-        estimator=RandomForestRegressor(random_state=random_state, n_jobs=-1),
-        param_distributions=param_dist,
-        n_iter=n_iter,
-        scoring="neg_mean_squared_error",
-        cv=cv,
-        random_state=random_state,
-        n_jobs=-1,
-        verbose=1,
-    )
-    search.fit(X_train, y_train)
-    return search
+#
+# def train_random_forest(
+#     X_train: pd.DataFrame,
+#     y_train: pd.Series,
+#     n_iter: int = 20,
+#     cv: int = 5,
+#     random_state: int = 77,
+# ) -> RandomizedSearchCV:
+#     """
+#     Train RandomForest regressor with randomized hyperparameter search.
+#
+#     Parameters
+#     ----------
+#     X_train
+#         Training features (preprocessed).
+#     y_train
+#         Training target values.
+#     n_iter
+#         Number of random hyperparameter combinations to try.
+#     cv
+#         Number of cross-validation folds.
+#     random_state
+#         Random seed for reproducibility.
+#
+#     Returns
+#     -------
+#     RandomizedSearchCV
+#         Fitted search object with best_estimator_ and cv_results_.
+#     """
+#     from sklearn.ensemble import RandomForestRegressor
+#
+#     param_dist = {
+#         "n_estimators": randint(100, 1000),
+#         "max_depth": randint(5, 50),
+#         "min_samples_split": randint(2, 11),
+#         "min_samples_leaf": randint(1, 5),
+#         "max_features": ["sqrt", "log2"],
+#     }
+#     search = RandomizedSearchCV(
+#         estimator=RandomForestRegressor(random_state=random_state, n_jobs=-1),
+#         param_distributions=param_dist,
+#         n_iter=n_iter,
+#         scoring="neg_mean_squared_error",
+#         cv=cv,
+#         random_state=random_state,
+#         n_jobs=-1,
+#         verbose=1,
+#     )
+#     search.fit(X_train, y_train)
+#     return search
 
 
 def evaluate_model(

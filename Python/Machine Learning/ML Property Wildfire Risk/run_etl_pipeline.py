@@ -8,7 +8,7 @@ This parallelism significantly reduces total runtime compared to sequential exec
 
 Usage:
     # Full parallel pipeline: add 300k properties + census merge
-    python run_etl_pipeline.py --num-properties 300000 --workers 50 --granularity county
+    python run_etl_pipeline.py --num-properties 300000 --granularity county
 
     # Census merge only (use existing properties)
     python run_etl_pipeline.py --granularity county
@@ -18,44 +18,65 @@ Usage:
 
     # Sequential mode (disable parallelism)
     python run_etl_pipeline.py --num-properties 1000 --sequential
+
+    # Custom poll settings
+    python run_etl_pipeline.py --num-properties 1000 --poll-interval 10 --max-polls 50
 """
 
 import argparse
 import threading
 import time
+from queue import Queue
 from sql_funcs import SQL
 from load_properties import Properties
 from load_census import CensusData
-from settings import TABLE_NAME_CENSUS_PROPS
+from settings import TABLE_NAME_CENSUS_PROPS, PROP_TABLE_NAME, PROP_TABLE_NAME_TEST
 
 
 def run_properties_thread(
     args,
     properties_done: threading.Event,
-    properties_error: list,
+    properties_error: Queue,
 ):
     """Producer thread: generates properties and saves to PostGIS."""
     sql_obj = None
     try:
         sql_obj = SQL(test=args.test)
         props = Properties(sql_obj=sql_obj, verbose=False)
+
+        # Filter existing properties to CONUS only
+        sql_obj.filter_properties_to_conus(props.table_name)
+        props.refresh()  # Reload after filtering
+
         print(f"[PROPERTIES] Starting with {props.num_properties} existing")
 
         if args.num_properties > 0:
-            print(f"[PROPERTIES] Adding {args.num_properties} with {args.workers} workers...")
-            props.add_random_properties(
+            print(f"[PROPERTIES] Adding {args.num_properties} using geography-first approach...")
+            props.add_random_properties_geo_first(
                 args.num_properties,
-                parallel=True,
-                max_workers=args.workers,
+                granularity=args.granularity,
+                skip_final_cleanup=True,  # Don't block on slow cleanup
             )
+
+        # Signal census thread IMMEDIATELY - properties are saved to DB
+        properties_done.set()
+
+        # Now do cleanup (census thread can finish in parallel)
+        if args.num_properties > 0:
+            print(f"[PROPERTIES] Running deduplication on ~{props.num_properties} rows...")
+            cleanup_start = time.time()
+            sql_obj.drop_duplicates_from_table(props.table_name)
+            props.refresh()
+            cleanup_time = time.time() - cleanup_start
+            print(f"[PROPERTIES] Cleanup complete ({cleanup_time:.1f}s)")
 
         print(f"[PROPERTIES] Complete. Total: {props.num_properties}")
 
     except Exception as e:
-        properties_error.append(str(e))
+        properties_error.put(str(e))
         print(f"[PROPERTIES] ERROR: {e}")
+        properties_done.set()  # Still signal on error so census thread can exit
     finally:
-        properties_done.set()
         if sql_obj:
             sql_obj.disconnect_and_close()
 
@@ -63,8 +84,9 @@ def run_properties_thread(
 def run_census_thread(
     args,
     properties_done: threading.Event,
-    census_error: list,
+    census_error: Queue,
     poll_interval: float = 30.0,
+    max_polls: int = 100,
 ):
     """Consumer thread: polls for new geographies and merges census data."""
     sql_obj = None
@@ -78,10 +100,14 @@ def run_census_thread(
         )
         print(f"[CENSUS] Initialized (year={args.year}, granularity={args.granularity})")
 
+        # Delete properties in known-failed geographies (e.g., VA independent cities)
+        prop_table = PROP_TABLE_NAME_TEST if args.test else PROP_TABLE_NAME
+        sql_obj.delete_properties_in_failed_geos(prop_table, args.granularity, args.year)
+
         processed_count = 0
         iteration = 0
 
-        while True:
+        while iteration < max_polls:
             iteration += 1
 
             # Load current properties from PostGIS
@@ -107,22 +133,21 @@ def run_census_thread(
 
             # Check if producer is done
             if properties_done.is_set():
-                # Do one final pass to catch any stragglers
-                props = Properties(sql_obj=sql_obj, verbose=False)
-                properties_gdf = props.get_properties_gpd()
-                if len(properties_gdf) > processed_count:
-                    print(f"[CENSUS] Final pass: {len(properties_gdf)} properties...")
-                    result = census.merge_census_info(properties_gdf)
-                    print(f"[CENSUS] Final merge complete: {len(result)} properties")
+                # Do one final pass - always run merge to catch any new geographies
+                print(f"[CENSUS] Final pass: {len(properties_gdf)} properties...")
+                result = census.merge_census_info(properties_gdf)
+                print(f"[CENSUS] Final merge complete: {len(result)} properties")
                 break
 
             # Wait before next poll
             time.sleep(poll_interval)
+        else:
+            print(f"[CENSUS] WARNING: Reached max polls ({max_polls}). Exiting.")
 
         print(f"[CENSUS] Complete. Results in '{TABLE_NAME_CENSUS_PROPS}' table.")
 
     except Exception as e:
-        census_error.append(str(e))
+        census_error.put(str(e))
         print(f"[CENSUS] ERROR: {e}")
     finally:
         if sql_obj:
@@ -134,15 +159,15 @@ def run_parallel(args):
     print("\n[PARALLEL MODE]")
     print("-" * 40)
 
-    # Coordination events
+    # Coordination events and thread-safe error queues
     properties_done = threading.Event()
-    properties_error = []
-    census_error = []
+    properties_error = Queue()
+    census_error = Queue()
 
     # Start census thread first (it will wait for properties)
     census_thread = threading.Thread(
         target=run_census_thread,
-        args=(args, properties_done, census_error, args.poll_interval),
+        args=(args, properties_done, census_error, args.poll_interval, args.max_polls),
         name="CensusThread",
     )
     census_thread.start()
@@ -166,12 +191,15 @@ def run_parallel(args):
     print("[MAIN] Census thread finished.")
 
     # Report errors
-    if properties_error:
-        print(f"[ERROR] Properties failed: {properties_error[0]}")
-    if census_error:
-        print(f"[ERROR] Census failed: {census_error[0]}")
+    prop_err = properties_error.get() if not properties_error.empty() else None
+    census_err = census_error.get() if not census_error.empty() else None
 
-    return not (properties_error or census_error)
+    if prop_err:
+        print(f"[ERROR] Properties failed: {prop_err}")
+    if census_err:
+        print(f"[ERROR] Census failed: {census_err}")
+
+    return not (prop_err or census_err)
 
 
 def run_sequential(args):
@@ -181,6 +209,7 @@ def run_sequential(args):
 
     SQL.kill_idle(args.test)
     sql_obj = SQL(test=args.test)
+    success = True
 
     try:
         # Step 1: Properties
@@ -188,11 +217,14 @@ def run_sequential(args):
         print("-" * 40)
         props = Properties(sql_obj=sql_obj)
 
+        # Filter existing properties to CONUS only
+        sql_obj.filter_properties_to_conus(props.table_name)
+        props.refresh()  # Reload after filtering
+
         if args.num_properties > 0:
-            props.add_random_properties(
+            props.add_random_properties_geo_first(
                 args.num_properties,
-                parallel=True,
-                max_workers=args.workers,
+                granularity=args.granularity,
             )
 
         properties_gdf = props.get_properties_gpd()
@@ -202,6 +234,14 @@ def run_sequential(args):
         if not args.skip_census:
             print("\n[2/2] CENSUS MERGE")
             print("-" * 40)
+
+            # Delete properties in known-failed geographies
+            sql_obj.delete_properties_in_failed_geos(
+                props.table_name, args.granularity, args.year
+            )
+            props.refresh()  # Reload after deletion
+            properties_gdf = props.get_properties_gpd()
+
             census = CensusData(
                 sql_obj=sql_obj,
                 year=args.year,
@@ -213,10 +253,14 @@ def run_sequential(args):
         else:
             print("\n[2/2] CENSUS MERGE - SKIPPED")
 
-        return True
+    except Exception as e:
+        print(f"[ERROR] Sequential pipeline failed: {e}")
+        success = False
 
     finally:
         sql_obj.disconnect_and_close()
+
+    return success
 
 
 def main():
@@ -228,12 +272,6 @@ def main():
         type=int,
         default=0,
         help="Number of new properties to add (0 = use existing only)",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=10,
-        help="Parallel workers for property generation (default: 10)",
     )
     parser.add_argument(
         "--year",
@@ -262,6 +300,12 @@ def main():
         type=float,
         default=30.0,
         help="Seconds between census polling iterations (default: 30)",
+    )
+    parser.add_argument(
+        "--max-polls",
+        type=int,
+        default=100,
+        help="Maximum census polling iterations before timeout (default: 100)",
     )
     parser.add_argument(
         "--test",
