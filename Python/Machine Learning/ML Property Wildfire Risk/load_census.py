@@ -222,6 +222,7 @@ class CensusData:
         wide: pd.DataFrame,
         merge_cols: list,
         missing_geos,
+        use_bulk: bool = True,
     ) -> tuple[pd.DataFrame, list[dict]]:
         variables = (
             self._get_leaf_variables() if self.leafs_only else self._get_all_variables()
@@ -230,7 +231,15 @@ class CensusData:
 
         missing_props = gdf.merge(missing_geos, on=merge_cols, how="inner")
 
-        new_census_df, failed_geos = self._extract_from_geoid(missing_props, variables)
+        # Use bulk fetch (by state) for speed, or per-geo for debugging
+        if use_bulk:
+            new_census_df, failed_geos = self._bulk_fetch_missing_geos(
+                missing_props, variables
+            )
+        else:
+            new_census_df, failed_geos = self._extract_from_geoid(
+                missing_props, variables
+            )
 
         if not new_census_df.empty:
             new_cleaned = self._transform_and_clean(new_census_df)
@@ -350,6 +359,159 @@ class CensusData:
             query_for = f"block group:{blkgrp}"
             query_in = f"state:{state} county:{county} tract:{tract}"
         return geo_id, query_for, query_in
+
+    def _fetch_bulk_by_state(
+        self, state_id: str, variables: list, var_chunks: list
+    ) -> list[dict]:
+        """
+        Fetch ALL geographies in a state with one API call per variable chunk.
+
+        Instead of querying each block group individually, this queries all
+        block groups in a state at once using the Census API wildcard syntax.
+        """
+        results = []
+
+        # Build the query based on granularity
+        # Block groups require full hierarchy: state -> county -> tract -> block group
+        state_str = str(state_id).zfill(2)
+        if self.granularity == "block_group":
+            query = {"for": "block group:*", "in": f"state:{state_str} county:* tract:*"}
+        elif self.granularity == "tract":
+            query = {"for": "tract:*", "in": f"state:{state_str}"}
+        else:  # county
+            query = {"for": "county:*", "in": f"state:{state_str}"}
+
+        # Accumulate results across variable chunks
+        combined_by_geo = {}  # geo_key -> {var: value, ...}
+
+        for chunk in var_chunks:
+            try:
+                chunk_results = self.census.get(chunk, query)
+                if chunk_results:
+                    for row in chunk_results:
+                        # Build geo key based on granularity
+                        if self.granularity == "block_group":
+                            geo_key = (
+                                row.get("state", ""),
+                                row.get("county", ""),
+                                row.get("tract", ""),
+                                row.get("block group", ""),
+                            )
+                        elif self.granularity == "tract":
+                            geo_key = (
+                                row.get("state", ""),
+                                row.get("county", ""),
+                                row.get("tract", ""),
+                            )
+                        else:  # county
+                            geo_key = (
+                                row.get("state", ""),
+                                row.get("county", ""),
+                            )
+
+                        if geo_key not in combined_by_geo:
+                            combined_by_geo[geo_key] = {}
+                        combined_by_geo[geo_key].update(row)
+            except Exception as e:
+                print(f"  Error fetching chunk for state {state_str}: {e}")
+                continue
+
+        # Convert to list of dicts with proper column names
+        for geo_key, data in combined_by_geo.items():
+            record = {}
+            if self.granularity == "block_group":
+                record["state_id"] = int(geo_key[0]) if geo_key[0] else 0
+                record["county_id"] = int(geo_key[1]) if geo_key[1] else 0
+                record["tract_id"] = int(geo_key[2]) if geo_key[2] else 0
+                record["block_grp"] = int(geo_key[3]) if geo_key[3] else 0
+            elif self.granularity == "tract":
+                record["state_id"] = int(geo_key[0]) if geo_key[0] else 0
+                record["county_id"] = int(geo_key[1]) if geo_key[1] else 0
+                record["tract_id"] = int(geo_key[2]) if geo_key[2] else 0
+            else:  # county
+                record["state_id"] = int(geo_key[0]) if geo_key[0] else 0
+                record["county_id"] = int(geo_key[1]) if geo_key[1] else 0
+
+            # Add census variables (skip geo columns)
+            skip_cols = {"state", "county", "tract", "block group", "GEO_ID", "NAME"}
+            for var, val in data.items():
+                if var not in skip_cols:
+                    record[var] = val
+            results.append(record)
+
+        return results
+
+    def _bulk_fetch_missing_geos(
+        self, properties_data: pd.DataFrame, variables: list
+    ) -> tuple[pd.DataFrame, list[dict]]:
+        """
+        Bulk fetch census data for all missing geographies by state.
+
+        Much faster than per-geography queries: ~50 state calls vs ~50k geo calls.
+        """
+        merge_cols = self._get_merge_columns()
+        unique_states = properties_data["state_id"].unique()
+        total_states = len(unique_states)
+
+        var_chunks = [
+            variables[i : i + CENSUS_CHUNK_SIZE]
+            for i in range(0, len(variables), CENSUS_CHUNK_SIZE)
+        ]
+
+        print(
+            f"Bulk fetching {self.granularity} data for {total_states} states "
+            f"({len(var_chunks)} variable chunks each)..."
+        )
+
+        start_time = time.time()
+        all_results = []
+        failed_geos = []
+
+        for i, state_id in enumerate(unique_states):
+            completed = i + 1
+            state_str = str(state_id).zfill(2)
+            print(f"[{completed}/{total_states}] Fetching state {state_str}...")
+
+            state_results = self._fetch_bulk_by_state(state_id, variables, var_chunks)
+
+            if state_results:
+                all_results.extend(state_results)
+                print(f"  Got {len(state_results)} {self.granularity}s")
+            else:
+                print(f"  No data for state {state_str}")
+
+            # Progress estimate
+            if completed == min(3, total_states):
+                elapsed = time.time() - start_time
+                per_state = elapsed / completed
+                remaining = (total_states - completed) * per_state
+                print(
+                    f"  Time estimate: {self._format_duration(remaining)} remaining "
+                    f"({per_state:.1f}s per state)"
+                )
+
+        total_time = time.time() - start_time
+        print(
+            f"Bulk fetch complete in {self._format_duration(total_time)} "
+            f"({len(all_results)} total {self.granularity}s)"
+        )
+
+        if all_results:
+            results_df = pd.DataFrame(all_results)
+            # Merge with properties to get only the ones we need
+            merged = properties_data.merge(results_df, on=merge_cols, how="left")
+
+            # Identify geos that had no data (all census cols are NaN)
+            census_cols = [c for c in results_df.columns if c.startswith("B")]
+            if census_cols:
+                missing_mask = merged[census_cols[0]].isna()
+                if missing_mask.any():
+                    failed_rows = merged[missing_mask][merge_cols].drop_duplicates()
+                    failed_geos = failed_rows.to_dict("records")
+
+            return merged, failed_geos
+        else:
+            return properties_data.iloc[:0], []
 
     def _extract_from_geoid(self, properties_data, variables):
 
