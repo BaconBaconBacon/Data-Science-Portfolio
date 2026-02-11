@@ -394,16 +394,15 @@ def prepare_split(
 def train_xgboost(
     X_train: pd.DataFrame,
     y_train: pd.Series,
-    n_iter: int = 20,
+    n_iter: int = 50,
     cv: int = 5,
     random_state: int = 77,
-    early_stopping_rounds: int = 50,
 ) -> RandomizedSearchCV:
     """
     Train XGBoost regressor with randomized hyperparameter search.
 
-    Uses CUDA GPU acceleration with early stopping. Searches over tree depth,
-    learning rate, regularization, and subsampling parameters.
+    Uses CUDA GPU acceleration. Searches over tree depth, learning rate,
+    regularization, and subsampling parameters.
 
     Parameters
     ----------
@@ -417,9 +416,6 @@ def train_xgboost(
         Number of cross-validation folds.
     random_state
         Random seed for reproducibility.
-    early_stopping_rounds
-        Stop training if validation metric doesn't improve for this many
-        consecutive boosting rounds. Set to None to disable.
 
     Returns
     -------
@@ -427,7 +423,7 @@ def train_xgboost(
         Fitted search object with best_estimator_ and cv_results_.
     """
     param_dist = {
-        "n_estimators": [1000],  # Fixed high value - early stopping will cut short
+        "n_estimators": randint(100, 1000),
         "learning_rate": uniform(0.01, 0.29),
         "max_depth": randint(3, 12),
         "min_child_weight": randint(1, 10),
@@ -436,7 +432,6 @@ def train_xgboost(
         "gamma": uniform(0, 0.5),
         "reg_alpha": uniform(0, 1),
         "reg_lambda": uniform(0, 1),
-        "early_stopping_rounds": [early_stopping_rounds],
     }
     search = RandomizedSearchCV(
         estimator=XGBRegressor(random_state=random_state, device="cuda"),
@@ -456,7 +451,7 @@ def train_xgboost(
 # def train_random_forest(
 #     X_train: pd.DataFrame,
 #     y_train: pd.Series,
-#     n_iter: int = 20,
+#     n_iter: int = 50,
 #     cv: int = 5,
 #     random_state: int = 77,
 # ) -> RandomizedSearchCV:
