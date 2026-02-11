@@ -40,16 +40,19 @@ from functools import lru_cache
 
 @lru_cache(maxsize=4)
 def _fetch_census_labels(year: int) -> dict:
-    """Fetch and cache census variable labels from API."""
+    """Fetch and cache census variable labels and concepts from API."""
     url = f"https://api.census.gov/data/{year}/acs/acs5/variables.json"
     r = requests.get(url)
     vars_data = r.json()["variables"]
-    return {k: v.get("label", "") for k, v in vars_data.items()}
+    return {
+        k: {"label": v.get("label", ""), "concept": v.get("concept", "")}
+        for k, v in vars_data.items()
+    }
 
 
 def census_code_to_label(code: str, year: int = 2023) -> str:
     """
-    Convert census variable code to human-readable label.
+    Convert census variable code to human-readable label with topic.
 
     Standalone function that fetches from Census API.
     Results are cached for the session.
@@ -57,22 +60,34 @@ def census_code_to_label(code: str, year: int = 2023) -> str:
     Parameters
     ----------
     code : str
-        Census variable code (e.g., 'B25031_003E')
+        Census variable code (e.g., 'B25040_004E')
     year : int
         ACS5 year (default: 2023)
 
     Returns
     -------
     str
-        Human-readable label
+        Human-readable label with topic prefix
 
     Example
     -------
-    >>> census_code_to_label('B25031_003E')
-    'Estimate!!Median gross rent!!2 bedrooms'
+    >>> census_code_to_label('B25040_004E')
+    'House Heating Fuel: Fuel oil, kerosene, etc.'
     """
     labels = _fetch_census_labels(year)
-    return labels.get(code, f"Unknown: {code}")
+    info = labels.get(code)
+    if not info:
+        return f"Unknown: {code}"
+
+    concept = info.get("concept", "")
+    label = info.get("label", "")
+
+    # Clean up label - remove "Estimate!!Total:!!" prefix
+    clean_label = label.replace("Estimate!!Total:!!", "").replace("Estimate!!", "")
+
+    if concept:
+        return f"{concept}: {clean_label}"
+    return clean_label
 
 
 class CensusData:

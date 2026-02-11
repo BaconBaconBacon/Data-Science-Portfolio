@@ -440,7 +440,7 @@ def train_xgboost(
         scoring="neg_mean_squared_error",
         cv=cv,
         random_state=random_state,
-        n_jobs=1,
+        n_jobs=2,
         verbose=1,
     )
     search.fit(X_train, y_train)
