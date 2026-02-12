@@ -202,6 +202,13 @@ class CensusData:
                     "with no census data (e.g., Virginia independent cities)."
                 )
 
+        # Ensure properties have correct dtypes for merge
+        for col in merge_cols:
+            if col in properties_gpd.columns:
+                properties_gpd[col] = properties_gpd[col].astype('int64')
+            if col in existing_wide.columns:
+                existing_wide[col] = existing_wide[col].astype('int64')
+
         # Merge wide census data onto all properties
         result = properties_gpd.merge(existing_wide, on=merge_cols, how="left")
 
@@ -278,6 +285,11 @@ class CensusData:
                     aggfunc="first",
                 ).reset_index()
                 new_wide.columns.name = None
+
+                # Ensure merge_cols have consistent dtypes
+                for col in merge_cols:
+                    new_wide[col] = new_wide[col].astype('int64')
+
                 existing_wide = (
                     pd.concat([wide, new_wide], ignore_index=True).drop_duplicates(merge_cols)
                     if not wide.empty
@@ -862,7 +874,7 @@ class CensusData:
                 continue
 
             # Reconstruct total from leaves (no extra API call needed)
-            total = df[table_cols].sum(axis=1).replace(0, np.nan)
+            total = df[table_cols].sum(axis=1).replace(0, np.nan).infer_objects(copy=False)
             for col in table_cols:
                 df[col] = df[col] / total
 
@@ -899,6 +911,22 @@ class CensusData:
 
         merge_cols = self._get_merge_columns()
         census_cols = [c for c in clean_data.columns if c.startswith("B")]
+
+        # Ensure merge_cols exist and have correct dtypes
+        for col in merge_cols:
+            if col not in clean_data.columns:
+                raise ValueError(
+                    f"Missing merge column '{col}' in clean_data. "
+                    f"Columns: {clean_data.columns.tolist()}"
+                )
+            clean_data[col] = clean_data[col].astype('int64')
+
+        # Ensure geoid exists
+        if 'geoid' not in clean_data.columns:
+            raise ValueError(
+                f"Missing 'geoid' column in clean_data. "
+                f"Columns: {clean_data.columns.tolist()}"
+            )
 
         # Melt wide format to narrow: one row per (geography, variable)
         # gets past row size limits

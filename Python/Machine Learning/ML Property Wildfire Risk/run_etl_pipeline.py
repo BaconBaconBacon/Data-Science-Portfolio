@@ -1,10 +1,11 @@
 """Pipeline orchestration: properties -> census merge -> PostGIS persistence.
 
-Runs property generation and census merging in parallel:
-- Thread 1 (Producer): Generates properties, saves to PostGIS in batches
-- Thread 2 (Consumer): Polls for new geographies, fetches census data as they appear
+Automatically selects optimal execution mode:
+- Full pipeline: Parallel threads (Producer generates properties, Consumer fetches census)
+- Census-only: Single-threaded merge for existing properties
+- Properties-only: Single-threaded generation without census
 
-This parallelism significantly reduces total runtime compared to sequential execution.
+Parallel mode significantly reduces runtime for full pipeline runs.
 
 Usage:
     # Full parallel pipeline: add 300k properties + census merge
@@ -19,10 +20,7 @@ Usage:
     # Properties only (skip census)
     python run_etl_pipeline.py --num-properties 50000 --skip-census
 
-    # Sequential mode (disable parallelism)
-    python run_etl_pipeline.py --num-properties 1000 --sequential
-
-    # Custom poll settings
+    # Custom poll settings (full pipeline only)
     python run_etl_pipeline.py --num-properties 1000 --poll-interval 10 --max-polls 50
 """
 
@@ -63,7 +61,9 @@ def run_properties_thread(
             props.add_properties_from_coordinates(coords)
             added_properties = True
         elif args.num_properties > 0:
-            print(f"[PROPERTIES] Adding {args.num_properties} using geography-first approach...")
+            print(
+                f"[PROPERTIES] Adding {args.num_properties} using geography-first approach..."
+            )
             props.add_random_properties_geo_first(
                 args.num_properties,
                 granularity=args.granularity,
@@ -71,10 +71,7 @@ def run_properties_thread(
             )
             added_properties = True
 
-        # Signal census thread IMMEDIATELY - properties are saved to DB
-        properties_done.set()
-
-        # Now do cleanup (census thread can finish in parallel)
+        # Do cleanup FIRST (before signaling census thread)
         if added_properties and args.num_properties > 0:
             # Only need extra cleanup for geo_first (coords method does its own)
             print(f"[PROPERTIES] Running deduplication...")
@@ -83,6 +80,9 @@ def run_properties_thread(
             props.refresh()
             cleanup_time = time.time() - cleanup_start
             print(f"[PROPERTIES] Cleanup complete ({cleanup_time:.1f}s)")
+
+        # Signal census thread AFTER cleanup - properties are deduplicated
+        properties_done.set()
 
         print(f"[PROPERTIES] Complete. Total: {props.num_properties}")
 
@@ -112,11 +112,15 @@ def run_census_thread(
             granularity=args.granularity,
             verbose=False,
         )
-        print(f"[CENSUS] Initialized (year={args.year}, granularity={args.granularity})")
+        print(
+            f"[CENSUS] Initialized (year={args.year}, granularity={args.granularity})"
+        )
 
         # Delete properties in known-failed geographies (e.g., VA independent cities)
         prop_table = PROP_TABLE_NAME_TEST if args.test else PROP_TABLE_NAME
-        sql_obj.delete_properties_in_failed_geos(prop_table, args.granularity, args.year)
+        sql_obj.delete_properties_in_failed_geos(
+            prop_table, args.granularity, args.year
+        )
 
         processed_count = 0
         iteration = 0
@@ -142,7 +146,9 @@ def run_census_thread(
             new_count = len(result)
 
             if new_count > processed_count:
-                print(f"[CENSUS] Merged {new_count} (+{new_count - processed_count} new)")
+                print(
+                    f"[CENSUS] Merged {new_count} (+{new_count - processed_count} new)"
+                )
                 processed_count = new_count
 
             # Check if producer is done
@@ -169,7 +175,80 @@ def run_census_thread(
 
 
 def run_parallel(args):
-    """Run properties and census threads in parallel."""
+    """Run properties and census threads in parallel (or single-mode for special cases)."""
+    has_new_properties = args.num_properties > 0 or args.coords_file
+
+    # Special case: Census-only mode (no properties to add)
+    if not has_new_properties and not args.skip_census:
+        print("\n[CENSUS-ONLY MODE]")
+        print("-" * 40)
+        print("Enriching existing properties with census data...")
+
+        SQL.kill_idle(args.test)
+        sql_obj = SQL(test=args.test)
+
+        try:
+            props = Properties(sql_obj=sql_obj)
+            properties_gdf = props.get_properties_gpd()
+
+            if len(properties_gdf) == 0:
+                print("No properties found in database. Exiting.")
+                return True
+
+            print(f"Found {len(properties_gdf)} existing properties")
+
+            # Run census merge once
+            census = CensusData(
+                sql_obj=sql_obj,
+                year=args.year,
+                granularity=args.granularity,
+            )
+            result = census.merge_census_info(properties_gdf)
+            print(f"Merged {len(result)} properties with census data.")
+            print(f"Results saved to '{TABLE_NAME_CENSUS_PROPS}' table.")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Census-only mode failed: {e}")
+            return False
+        finally:
+            sql_obj.disconnect_and_close()
+
+    # Special case: Properties-only mode (skip census)
+    if args.skip_census:
+        print("\n[PROPERTIES-ONLY MODE]")
+        print("-" * 40)
+        print("Generating properties without census enrichment...")
+
+        SQL.kill_idle(args.test)
+        sql_obj = SQL(test=args.test)
+
+        try:
+            props = Properties(sql_obj=sql_obj)
+            sql_obj.filter_properties_to_conus(props.table_name)
+            props.refresh()
+
+            print(f"Starting with {props.num_properties} existing properties")
+
+            if args.coords_file:
+                print(f"Loading coordinates from {args.coords_file}...")
+                df = pd.read_csv(args.coords_file)
+                coords = list(zip(df["latitude"], df["longitude"]))
+                props.add_properties_from_coordinates(coords)
+            elif args.num_properties > 0:
+                props.add_random_properties_geo_first(
+                    args.num_properties,
+                    granularity=args.granularity,
+                )
+
+            print(f"Total properties: {props.num_properties}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Properties-only mode failed: {e}")
+            return False
+        finally:
+            sql_obj.disconnect_and_close()
+
+    # Full parallel mode (properties + census)
     print("\n[PARALLEL MODE]")
     print("-" * 40)
 
@@ -216,73 +295,6 @@ def run_parallel(args):
     return not (prop_err or census_err)
 
 
-def run_sequential(args):
-    """Run properties then census sequentially (original behavior)."""
-    print("\n[SEQUENTIAL MODE]")
-    print("-" * 40)
-
-    SQL.kill_idle(args.test)
-    sql_obj = SQL(test=args.test)
-    success = True
-
-    try:
-        # Step 1: Properties
-        print("\n[1/2] PROPERTIES")
-        print("-" * 40)
-        props = Properties(sql_obj=sql_obj)
-
-        # Filter existing properties to CONUS only
-        sql_obj.filter_properties_to_conus(props.table_name)
-        props.refresh()  # Reload after filtering
-
-        if args.coords_file:
-            # Load from CSV file
-            print(f"Loading coordinates from {args.coords_file}...")
-            df = pd.read_csv(args.coords_file)
-            coords = list(zip(df["latitude"], df["longitude"]))
-            props.add_properties_from_coordinates(coords)
-        elif args.num_properties > 0:
-            props.add_random_properties_geo_first(
-                args.num_properties,
-                granularity=args.granularity,
-            )
-
-        properties_gdf = props.get_properties_gpd()
-        print(f"Total properties: {len(properties_gdf)}")
-
-        # Step 2: Census merge
-        if not args.skip_census:
-            print("\n[2/2] CENSUS MERGE")
-            print("-" * 40)
-
-            # Delete properties in known-failed geographies
-            sql_obj.delete_properties_in_failed_geos(
-                props.table_name, args.granularity, args.year
-            )
-            props.refresh()  # Reload after deletion
-            properties_gdf = props.get_properties_gpd()
-
-            census = CensusData(
-                sql_obj=sql_obj,
-                year=args.year,
-                granularity=args.granularity,
-            )
-            result = census.merge_census_info(properties_gdf)
-            print(f"Merged {len(result)} properties with census data.")
-            print(f"Results saved to '{TABLE_NAME_CENSUS_PROPS}' table.")
-        else:
-            print("\n[2/2] CENSUS MERGE - SKIPPED")
-
-    except Exception as e:
-        print(f"[ERROR] Sequential pipeline failed: {e}")
-        success = False
-
-    finally:
-        sql_obj.disconnect_and_close()
-
-    return success
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Run the full data pipeline: properties -> census merge"
@@ -316,11 +328,7 @@ def main():
         action="store_true",
         help="Only run property generation, skip census merge",
     )
-    parser.add_argument(
-        "--sequential",
-        action="store_true",
-        help="Run sequentially instead of parallel (original behavior)",
-    )
+
     parser.add_argument(
         "--poll-interval",
         type=float,
@@ -349,14 +357,8 @@ def main():
 
     start_time = time.time()
 
-    # Choose execution mode
-    has_new_properties = args.num_properties > 0 or args.coords_file
-    if args.skip_census or args.sequential or not has_new_properties:
-        # Sequential for: skip-census, explicit sequential, or census-only runs
-        success = run_sequential(args)
-    else:
-        # Parallel for full pipeline with new properties
-        success = run_parallel(args)
+    # run_parallel() handles all modes internally (parallel, census-only, properties-only)
+    success = run_parallel(args)
 
     elapsed = time.time() - start_time
     elapsed_str = f"{elapsed/3600:.1f}h" if elapsed > 3600 else f"{elapsed/60:.1f}m"
