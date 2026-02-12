@@ -569,6 +569,24 @@ class SQL:
         cols = [c for c in gdf.columns if c != "property_id"]
         col_str = ", ".join(cols)
 
+        # Auto-create table if it doesn't exist
+        if not self.check_table_exists(table_name):
+            col_types = {}
+            for col in cols:
+                if col == HEADER_GEOM:
+                    col_types[col] = f"geometry(Geometry, {GIS_DEFAULT_CRS})"
+                else:
+                    dtype = gdf[col].dtype
+                    if pd.api.types.is_integer_dtype(dtype):
+                        col_types[col] = "BIGINT"
+                    elif pd.api.types.is_float_dtype(dtype):
+                        col_types[col] = "DOUBLE PRECISION"
+                    elif pd.api.types.is_datetime64_any_dtype(dtype):
+                        col_types[col] = "TIMESTAMP"
+                    else:
+                        col_types[col] = "TEXT"
+            self.create_table(table_name, col_types)
+
         # Insert row by row using raw SQL to ensure DEFAULT/trigger works
         for _, row in gdf.iterrows():
             values = []
@@ -579,12 +597,16 @@ class SQL:
                     values.append(f"ST_GeomFromText('{val.wkt}', {GIS_DEFAULT_CRS})")
                 elif pd.isna(val):
                     values.append("NULL")
+                elif isinstance(val, (int, float)):
+                    values.append(str(val))
                 elif isinstance(val, str):
                     # Escape single quotes
                     escaped = val.replace("'", "''")
                     values.append(f"'{escaped}'")
                 else:
-                    values.append(str(val))
+                    # Datetime, Timestamp, and other types need quoting
+                    escaped = str(val).replace("'", "''")
+                    values.append(f"'{escaped}'")
 
             val_str = ", ".join(values)
             q = f"INSERT INTO {table_name} ({col_str}) VALUES ({val_str});"

@@ -78,7 +78,8 @@ def analyze_missingness(
 
             # Skip zero-variance columns (would cause division by zero in correlation)
             other_values = df[other_feat][mask]
-            if other_values.std() < 1e-10:
+            indicator_subset = missing_indicator[mask]
+            if other_values.std() < 1e-10 or indicator_subset.std() < 1e-10:
                 continue
 
             try:

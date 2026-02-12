@@ -32,7 +32,17 @@ from queue import Queue
 from sql_funcs import SQL
 from load_properties import Properties
 from load_census import CensusData
-from settings import TABLE_NAME_CENSUS_PROPS, PROP_TABLE_NAME, PROP_TABLE_NAME_TEST
+from settings import TABLE_NAME_CENSUS_PROPS, PROP_TABLE_NAME, PROP_TABLE_NAME_TEST, PATH_DATA
+
+MERGED_PARQUET_PATH = PATH_DATA / "merged_properties_census.parquet"
+
+
+def _save_merged_result(result, label=""):
+    """Save merged properties+census GeoDataFrame to geoparquet."""
+    if result is not None and len(result) > 0:
+        MERGED_PARQUET_PATH.parent.mkdir(parents=True, exist_ok=True)
+        result.to_parquet(MERGED_PARQUET_PATH)
+        print(f"{label}Saved {len(result)} rows to {MERGED_PARQUET_PATH}")
 
 
 def run_properties_thread(
@@ -157,6 +167,7 @@ def run_census_thread(
                 print(f"[CENSUS] Final pass: {len(properties_gdf)} properties...")
                 result = census.merge_census_info(properties_gdf)
                 print(f"[CENSUS] Final merge complete: {len(result)} properties")
+                _save_merged_result(result, "[CENSUS] ")
                 break
 
             # Wait before next poll
@@ -205,7 +216,7 @@ def run_parallel(args):
             )
             result = census.merge_census_info(properties_gdf)
             print(f"Merged {len(result)} properties with census data.")
-            print(f"Results saved to '{TABLE_NAME_CENSUS_PROPS}' table.")
+            _save_merged_result(result, "[CENSUS-ONLY] ")
             return True
         except Exception as e:
             print(f"[ERROR] Census-only mode failed: {e}")
@@ -320,8 +331,8 @@ def main():
     parser.add_argument(
         "--granularity",
         choices=["block_group", "tract", "county"],
-        default="tract",
-        help="Census geographic level (default: tract)",
+        default="county",
+        help="Census geographic level (default: county)",
     )
     parser.add_argument(
         "--skip-census",
