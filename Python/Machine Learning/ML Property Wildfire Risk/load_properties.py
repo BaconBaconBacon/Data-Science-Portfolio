@@ -51,13 +51,18 @@ from settings import (
 )
 
 
+# Module-level cache for TIGER shapefiles (in-memory only, not persisted to disk)
+_TIGER_CACHE = {}
+
+
 def download_tiger_shapefile(
     granularity: str, year: int = TIGER_YEAR
 ) -> gpd.GeoDataFrame:
     """
     Download Census TIGER shapefile for the specified granularity.
 
-    Downloads fresh shapefiles from Census Bureau on each call (no caching).
+    Downloads fresh shapefiles from Census Bureau and caches in memory for the
+    duration of the process. Does not persist to disk.
     County is a single national file; tract/block_group require per-state downloads.
 
     Parameters
@@ -77,8 +82,11 @@ def download_tiger_shapefile(
             f"granularity must be one of {CENSUS_VALID_GRANULARITY_LEVELS}"
         )
 
-    cache_path = PATH_DATA_CENSUS / f"tiger_{granularity}_{year}.parquet"
-    PATH_DATA_CENSUS.mkdir(parents=True, exist_ok=True)
+    # Check in-memory cache first
+    cache_key = (granularity, year)
+    if cache_key in _TIGER_CACHE:
+        print(f"Using cached TIGER {granularity} shapefile from memory")
+        return _TIGER_CACHE[cache_key]
 
     print(f"Downloading TIGER {granularity} shapefile (year={year})...")
 
@@ -111,6 +119,9 @@ def download_tiger_shapefile(
     before_count = len(gdf)
     gdf = gdf[gdf["state_id"].isin(conus_fips_int)]
     print(f"  Filtered to CONUS: {before_count} -> {len(gdf)} geographies")
+
+    # Cache in memory before returning
+    _TIGER_CACHE[cache_key] = gdf
 
     return gdf
 
