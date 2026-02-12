@@ -25,6 +25,7 @@ Usage:
 """
 
 import argparse
+import geopandas as gpd
 import threading
 import time
 import pandas as pd
@@ -32,9 +33,12 @@ from queue import Queue
 from sql_funcs import SQL
 from load_properties import Properties
 from load_census import CensusData
+import load_wildfires
+import gis
 from settings import TABLE_NAME_CENSUS_PROPS, PROP_TABLE_NAME, PROP_TABLE_NAME_TEST, PATH_DATA
 
 MERGED_PARQUET_PATH = PATH_DATA / "merged_properties_census.parquet"
+TARGETS_PARQUET_PATH = PATH_DATA / "targets_features.parquet"
 
 
 def _save_merged_result(result, label=""):
@@ -306,6 +310,28 @@ def run_parallel(args):
     return not (prop_err or census_err)
 
 
+def run_wildfires_and_proximity(sql_obj, combined_gdf, n_jobs=5):
+    """Load wildfire data and compute proximity features for all properties."""
+    print("\n[WILDFIRES + PROXIMITY]")
+    print("-" * 40)
+
+    wildfires = load_wildfires.WildfireData(sql_obj=sql_obj)
+    print(f"Wildfire detections: {len(wildfires.data)}")
+
+    print(f"Computing proximity features ({n_jobs} jobs)...")
+    proximity_features = gis.calc_all_features_parallel(
+        combined_gdf, wildfires.data, n_jobs=n_jobs
+    )
+
+    targets_features = pd.concat([combined_gdf, proximity_features], axis=1)
+
+    TARGETS_PARQUET_PATH.parent.mkdir(parents=True, exist_ok=True)
+    targets_features.to_parquet(TARGETS_PARQUET_PATH)
+    print(f"Saved {len(targets_features)} rows x {targets_features.shape[1]} cols to {TARGETS_PARQUET_PATH}")
+
+    return targets_features
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Run the full data pipeline: properties -> census merge"
@@ -357,6 +383,17 @@ def main():
         action="store_true",
         help="Use test tables",
     )
+    parser.add_argument(
+        "--skip-wildfires",
+        action="store_true",
+        help="Skip wildfire loading and proximity feature computation",
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=5,
+        help="Number of parallel jobs for proximity computation (default: 5)",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -370,6 +407,21 @@ def main():
 
     # run_parallel() handles all modes internally (parallel, census-only, properties-only)
     success = run_parallel(args)
+
+    # Wildfire + proximity features step
+    if success and not args.skip_wildfires and not args.skip_census:
+        if MERGED_PARQUET_PATH.exists():
+            combined_gdf = gpd.read_parquet(MERGED_PARQUET_PATH)
+            sql_obj = SQL(test=args.test)
+            try:
+                run_wildfires_and_proximity(sql_obj, combined_gdf, n_jobs=args.n_jobs)
+            except Exception as e:
+                print(f"[ERROR] Wildfires/proximity failed: {e}")
+                success = False
+            finally:
+                sql_obj.disconnect_and_close()
+        else:
+            print(f"[WARNING] {MERGED_PARQUET_PATH} not found, skipping wildfire step.")
 
     elapsed = time.time() - start_time
     elapsed_str = f"{elapsed/3600:.1f}h" if elapsed > 3600 else f"{elapsed/60:.1f}m"

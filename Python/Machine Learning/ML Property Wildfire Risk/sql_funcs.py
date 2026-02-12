@@ -264,7 +264,7 @@ class SQL:
         """
         if not columns:
             raise ValueError("columns dict must not be empty.")
-        col_defs = ", ".join(f"{name} {dtype}" for name, dtype in columns.items())
+        col_defs = ", ".join(f'"{name}" {dtype}' for name, dtype in columns.items())
         q = f"CREATE TABLE IF NOT EXISTS {table_name} ({col_defs});"
         self.connection.execute(s.text(q))
         self.connection.commit()
@@ -567,7 +567,7 @@ class SQL:
 
         # Build column list (excluding property_id which is auto-generated)
         cols = [c for c in gdf.columns if c != "property_id"]
-        col_str = ", ".join(cols)
+        col_str = ", ".join(f'"{c}"' for c in cols)
 
         # Auto-create table if it doesn't exist
         if not self.check_table_exists(table_name):

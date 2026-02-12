@@ -12,6 +12,7 @@ observed values).
 
 import numpy as np
 import pandas as pd
+import load_census
 
 
 def analyze_missingness(
@@ -91,13 +92,13 @@ def analyze_missingness(
                 continue
 
         # Classify mechanism based on correlation threshold
-        mechanism = 'MAR' if max_corr > threshold else 'MCAR'
+        mechanism = "MAR" if max_corr > threshold else "MCAR"
 
         results[feat] = {
-            'mechanism': mechanism,
-            'max_corr': max_corr,
-            'corr_with': max_corr_feat,
-            'missing_pct': df[feat].isna().mean() * 100,
+            "mechanism": mechanism,
+            "max_corr": max_corr,
+            "corr_with": max_corr_feat,
+            "missing_pct": df[feat].isna().mean() * 100,
         }
 
     return results
@@ -118,8 +119,8 @@ def print_missingness_report(analysis: dict, top_n: int = 5) -> None:
         print("\nNo features with missing values found.")
         return
 
-    mcar = [f for f, v in analysis.items() if v['mechanism'] == 'MCAR']
-    mar = [f for f, v in analysis.items() if v['mechanism'] == 'MAR']
+    mcar = [f for f, v in analysis.items() if v["mechanism"] == "MCAR"]
+    mar = [f for f, v in analysis.items() if v["mechanism"] == "MAR"]
 
     print(f"\nMissingness Analysis Report:")
     print(f"  MCAR features: {len(mcar)} (will use median imputation)")
@@ -127,20 +128,32 @@ def print_missingness_report(analysis: dict, top_n: int = 5) -> None:
 
     # Summary statistics
     if analysis:
-        missing_pcts = [v['missing_pct'] for v in analysis.values()]
+        missing_pcts = [v["missing_pct"] for v in analysis.values()]
         print(f"\n  Missing data summary:")
         print(f"    Features with missing: {len(analysis)}")
         print(f"    Avg missing %: {np.mean(missing_pcts):.1f}%")
         print(f"    Max missing %: {np.max(missing_pcts):.1f}%")
 
     if mar:
-        print(f"\n  Top {min(top_n, len(mar))} MAR features (missingness correlates with other features):")
-        sorted_mar = sorted(mar, key=lambda f: analysis[f]['max_corr'], reverse=True)[:top_n]
+        print(
+            f"\n  Top {min(top_n, len(mar))} MAR features (missingness correlates with other features):"
+        )
+        sorted_mar = sorted(mar, key=lambda f: analysis[f]["max_corr"], reverse=True)[
+            :top_n
+        ]
         for f in sorted_mar:
             v = analysis[f]
-            corr_with = v['corr_with'] or 'N/A'
-            print(f"    {f}: {v['missing_pct']:.1f}% missing, "
-                  f"corr={v['max_corr']:.3f} with {corr_with}")
+            corr_with = v["corr_with"] or "N/A"
+            readable_f = load_census.census_code_to_label(f)
+            readable_corr = (
+                load_census.census_code_to_label(corr_with)
+                if corr_with != "N/A"
+                else "N/A"
+            )
+            print(
+                f"    {readable_f}: {v['missing_pct']:.1f}% missing, "
+                f"corr={v['max_corr']:.3f} with {readable_corr}"
+            )
 
 
 def get_column_lists(
@@ -162,8 +175,8 @@ def get_column_lists(
     tuple[list[str], list[str], list[str]]
         (mcar_cols, mar_cols, complete_cols)
     """
-    mcar_cols = [f for f, v in analysis.items() if v['mechanism'] == 'MCAR']
-    mar_cols = [f for f, v in analysis.items() if v['mechanism'] == 'MAR']
+    mcar_cols = [f for f, v in analysis.items() if v["mechanism"] == "MCAR"]
+    mar_cols = [f for f, v in analysis.items() if v["mechanism"] == "MAR"]
     missing_cols = set(mcar_cols + mar_cols)
     complete_cols = [c for c in all_columns if c not in missing_cols]
 
