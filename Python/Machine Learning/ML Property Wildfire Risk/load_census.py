@@ -129,8 +129,12 @@ class CensusData:
     """
 
     def __init__(
-        self, sql_obj: SQL, year: int, granularity: str = "tract", sparse: bool = True,
-        verbose: bool = True
+        self,
+        sql_obj: SQL,
+        year: int,
+        granularity: str = "tract",
+        sparse: bool = True,
+        verbose: bool = True,
     ):
         if granularity not in CENSUS_VALID_GRANULARITY_LEVELS:
             raise ValueError(
@@ -205,9 +209,9 @@ class CensusData:
         # Ensure properties have correct dtypes for merge
         for col in merge_cols:
             if col in properties_gpd.columns:
-                properties_gpd[col] = properties_gpd[col].astype('int64')
+                properties_gpd[col] = properties_gpd[col].astype("int64")
             if col in existing_wide.columns:
-                existing_wide[col] = existing_wide[col].astype('int64')
+                existing_wide[col] = existing_wide[col].astype("int64")
 
         # Merge wide census data onto all properties
         result = properties_gpd.merge(existing_wide, on=merge_cols, how="left")
@@ -242,15 +246,19 @@ class CensusData:
         # Auto-detect bulk vs individual based on dataset sparsity
         if use_bulk is None:
             unique_geos = len(missing_geos)
-            num_states = missing_geos['state_id'].nunique()
+            num_states = missing_geos["state_id"].nunique()
 
             # Threshold: use individual if unique_geos < num_states * 50
-            threshold = num_states * 50
+            threshold = num_states * 10
             use_bulk = unique_geos >= threshold
 
             if self.verbose:
-                print(f"Census fetch: {unique_geos} unique geos across {num_states} states")
-                print(f"Using {'BULK' if use_bulk else 'INDIVIDUAL'} fetch (threshold: {threshold})")
+                print(
+                    f"Census fetch: {unique_geos} unique geos across {num_states} states"
+                )
+                print(
+                    f"Using {'BULK' if use_bulk else 'INDIVIDUAL'} fetch (threshold: {threshold})"
+                )
 
         # Use bulk fetch (by state) for speed, or per-geo for individual
         # Note: _bulk_fetch_missing_geos now processes state-by-state and saves directly to SQL
@@ -271,10 +279,28 @@ class CensusData:
         self.data = self._read_from_sql()
 
         # Build wide format from census table (geography-level, not property-level)
+        # CRITICAL FIX: Only read the missing geographies we just fetched, not entire table
         census_table = TABLE_NAME_CENSUS_TEST if self.test_mode else TABLE_NAME_CENSUS
-        if self.sql_obj.check_table_exists(census_table):
+        if self.sql_obj.check_table_exists(census_table) and not missing_geos.empty:
+            # Build WHERE clause to filter to only missing geographies
+            where_clauses = []
+            for _, row in missing_geos.iterrows():
+                clause_parts = [f"state_id = {int(row['state_id'])}"]
+                if "county_id" in row and pd.notna(row.get("county_id")):
+                    clause_parts.append(f"county_id = {int(row['county_id'])}")
+                if "tract_id" in row and pd.notna(row.get("tract_id")):
+                    clause_parts.append(f"tract_id = {int(row['tract_id'])}")
+                if "block_grp" in row and pd.notna(row.get("block_grp")):
+                    clause_parts.append(f"block_grp = {int(row['block_grp'])}")
+                where_clauses.append("(" + " AND ".join(clause_parts) + ")")
+
+            missing_filter = " OR ".join(where_clauses)
+
             census_long = self.sql_obj.read_df_from_sql(
-                f"SELECT * FROM {census_table} WHERE granularity = '{self.granularity}' AND year = {self.year}"
+                f"""SELECT * FROM {census_table}
+                WHERE granularity = '{self.granularity}'
+                AND year = {self.year}
+                AND ({missing_filter})"""
             )
             if not census_long.empty:
                 # Pivot back to wide format
@@ -288,10 +314,12 @@ class CensusData:
 
                 # Ensure merge_cols have consistent dtypes
                 for col in merge_cols:
-                    new_wide[col] = new_wide[col].astype('int64')
+                    new_wide[col] = new_wide[col].astype("int64")
 
                 existing_wide = (
-                    pd.concat([wide, new_wide], ignore_index=True).drop_duplicates(merge_cols)
+                    pd.concat([wide, new_wide], ignore_index=True).drop_duplicates(
+                        merge_cols
+                    )
                     if not wide.empty
                     else new_wide
                 )
@@ -422,7 +450,10 @@ class CensusData:
         # Block groups require full hierarchy: state -> county -> tract -> block group
         state_str = str(state_id).zfill(2)
         if self.granularity == "block_group":
-            query = {"for": "block group:*", "in": f"state:{state_str} county:* tract:*"}
+            query = {
+                "for": "block group:*",
+                "in": f"state:{state_str} county:* tract:*",
+            }
         elif self.granularity == "tract":
             query = {"for": "tract:*", "in": f"state:{state_str}"}
         else:  # county
@@ -518,7 +549,7 @@ class CensusData:
         """
         self.sql_obj.connection.execute(
             s.text(delete_q),
-            {"state_id": state_id, "granularity": self.granularity, "year": self.year}
+            {"state_id": state_id, "granularity": self.granularity, "year": self.year},
         )
         self.sql_obj.connection.commit()
 
@@ -527,16 +558,18 @@ class CensusData:
             for var, val in row.items():
                 if var in merge_cols or not var.startswith("B"):
                     continue
-                records.append({
-                    "state_id": row.get("state_id", 0),
-                    "county_id": row.get("county_id", 0),
-                    "tract_id": row.get("tract_id", 0),
-                    "block_grp": row.get("block_grp", 0),
-                    "granularity": self.granularity,
-                    "year": self.year,
-                    "variable": var,
-                    "value": val,
-                })
+                records.append(
+                    {
+                        "state_id": row.get("state_id", 0),
+                        "county_id": row.get("county_id", 0),
+                        "tract_id": row.get("tract_id", 0),
+                        "block_grp": row.get("block_grp", 0),
+                        "granularity": self.granularity,
+                        "year": self.year,
+                        "variable": var,
+                        "value": val,
+                    }
+                )
 
         if records:
             df = pd.DataFrame(records)
@@ -554,7 +587,9 @@ class CensusData:
                 elapsed = time.time() - start_time
                 avg_per_state = elapsed / i
                 remaining = avg_per_state * (len(state_ids) - i)
-                print(f"  Loading state {i}/{len(state_ids)}... ({remaining:.0f}s remaining)")
+                print(
+                    f"  Loading state {i}/{len(state_ids)}... ({remaining:.0f}s remaining)"
+                )
 
             q = f"""
             SELECT state_id, county_id, tract_id, block_grp, variable, value
@@ -619,12 +654,18 @@ class CensusData:
             for i, state_id in enumerate(states_to_fetch):
                 completed = i + 1
                 state_str = str(state_id).zfill(2)
-                print(f"[{completed}/{len(states_to_fetch)}] Fetching state {state_str}...")
+                print(
+                    f"[{completed}/{len(states_to_fetch)}] Fetching state {state_str}..."
+                )
 
-                state_results = self._fetch_bulk_by_state(state_id, variables, var_chunks)
+                state_results = self._fetch_bulk_by_state(
+                    state_id, variables, var_chunks
+                )
 
                 if state_results:
-                    print(f"  Got {len(state_results)} {self.granularity}s, saving to cache...")
+                    print(
+                        f"  Got {len(state_results)} {self.granularity}s, saving to cache..."
+                    )
                     self._save_state_to_cache(state_results, merge_cols)
                 else:
                     print(f"  No data for state {state_str}")
@@ -656,7 +697,9 @@ class CensusData:
             if i > 1:
                 elapsed = time.time() - start_time
                 remaining = (elapsed / (i - 1)) * (len(unique_states) - i + 1)
-                print(f"  Processing state {i}/{len(unique_states)}... ({remaining:.0f}s remaining)")
+                print(
+                    f"  Processing state {i}/{len(unique_states)}... ({remaining:.0f}s remaining)"
+                )
             else:
                 print(f"  Processing state {i}/{len(unique_states)}...")
 
@@ -805,9 +848,10 @@ class CensusData:
         )
 
         if len(results) > 0:
-            return properties_data.merge(
-                pd.DataFrame(results), on=merge_cols, how="left"
-            ), failed_geos
+            return (
+                properties_data.merge(pd.DataFrame(results), on=merge_cols, how="left"),
+                failed_geos,
+            )
         else:
             # All geos failed - return empty dataframe with correct columns
             print(
@@ -874,7 +918,9 @@ class CensusData:
                 continue
 
             # Reconstruct total from leaves (no extra API call needed)
-            total = df[table_cols].sum(axis=1).replace(0, np.nan).infer_objects(copy=False)
+            total = (
+                df[table_cols].sum(axis=1).replace(0, np.nan).infer_objects(copy=False)
+            )
             for col in table_cols:
                 df[col] = df[col] / total
 
@@ -898,9 +944,15 @@ class CensusData:
             if not existing.empty:
                 existing_gran = existing["granularity"].iloc[0]
                 if existing_gran != self.granularity:
-                    print(f"\nTable '{props_table}' exists with granularity '{existing_gran}'.")
+                    print(
+                        f"\nTable '{props_table}' exists with granularity '{existing_gran}'."
+                    )
                     print(f"Current run uses granularity '{self.granularity}'.")
-                    response = input("Drop existing table and continue? [y/N]: ").strip().lower()
+                    response = (
+                        input("Drop existing table and continue? [y/N]: ")
+                        .strip()
+                        .lower()
+                    )
                     if response == "y":
                         self.sql_obj.drop_table(props_table, confirm=True)
                     else:
@@ -919,10 +971,10 @@ class CensusData:
                     f"Missing merge column '{col}' in clean_data. "
                     f"Columns: {clean_data.columns.tolist()}"
                 )
-            clean_data[col] = clean_data[col].astype('int64')
+            clean_data[col] = clean_data[col].astype("int64")
 
         # Ensure geoid exists
-        if 'geoid' not in clean_data.columns:
+        if "geoid" not in clean_data.columns:
             raise ValueError(
                 f"Missing 'geoid' column in clean_data. "
                 f"Columns: {clean_data.columns.tolist()}"
@@ -973,9 +1025,15 @@ class CensusData:
             if not existing.empty:
                 existing_gran = existing["granularity"].iloc[0]
                 if existing_gran != self.granularity:
-                    print(f"\nTable '{census_table}' exists with granularity '{existing_gran}'.")
+                    print(
+                        f"\nTable '{census_table}' exists with granularity '{existing_gran}'."
+                    )
                     print(f"Current run uses granularity '{self.granularity}'.")
-                    response = input("Drop existing table and continue? [y/N]: ").strip().lower()
+                    response = (
+                        input("Drop existing table and continue? [y/N]: ")
+                        .strip()
+                        .lower()
+                    )
                     if response == "y":
                         self.sql_obj.drop_table(census_table, confirm=True)
                     else:
@@ -1000,7 +1058,9 @@ class CensusData:
         if existing_gran != self.granularity:
             print(f"\nTable '{table_name}' exists with granularity '{existing_gran}'.")
             print(f"Current run uses granularity '{self.granularity}'.")
-            response = input("Drop existing table and continue? [y/N]: ").strip().lower()
+            response = (
+                input("Drop existing table and continue? [y/N]: ").strip().lower()
+            )
             if response == "y":
                 self.sql_obj.drop_table(table_name, confirm=True)
             else:
