@@ -397,6 +397,7 @@ def train_xgboost(
     n_iter: int = 50,
     cv: int = 5,
     random_state: int = 77,
+    n_jobs: int = 2,
 ) -> RandomizedSearchCV:
     """
     Train XGBoost regressor with randomized hyperparameter search.
@@ -440,7 +441,7 @@ def train_xgboost(
         scoring="neg_mean_squared_error",
         cv=cv,
         random_state=random_state,
-        n_jobs=2,
+        n_jobs=n_jobs,
         verbose=1,
     )
     search.fit(X_train, y_train)
@@ -453,6 +454,7 @@ def train_random_forest(
     n_iter: int = 50,
     cv: int = 5,
     random_state: int = 77,
+    n_jobs: int = 2,
 ) -> RandomizedSearchCV:
     """
     Train RandomForest regressor with randomized hyperparameter search.
@@ -491,7 +493,7 @@ def train_random_forest(
         scoring="neg_mean_squared_error",
         cv=cv,
         random_state=random_state,
-        n_jobs=2,
+        n_jobs=n_jobs,
         verbose=1,
     )
     search.fit(X_train, y_train)

@@ -4,9 +4,15 @@ Predicts wildfire risk for US properties using satellite fire detections and cen
 
 Built as a portfolio project to demonstrate GIS data pipelines, ML workflows, and AWS deployment.
 
-## What it does
+## How it works
 
-1. **Properties** — Generates random US property locations OR accepts GPS coordinates from a CSV file
+The goal is to predict a property's wildfire risk from its location alone. Given a set of GPS coordinates (e.g., a real estate portfolio), the trained model estimates each property's proximity to wildfire activity using neighborhood characteristics as features.
+
+**Training data generation** uses randomly sampled US property locations to build a large, geographically diverse dataset. **Inference** takes real GPS coordinates and runs them through the same pipeline.
+
+### Pipeline stages
+
+1. **Properties** — Generates random US locations for training data, or accepts real GPS coordinates via CSV for inference
 2. **Wildfires** — Loads NASA FIRMS satellite fire detections, clusters nearby points into discrete fire events
 3. **Census** — Pulls ACS5 socioeconomic data (income, housing age, heating fuel, etc.) for each property's neighborhood
 4. **Proximity** — Calculates distance-based features: nearest fire, fire counts in distance rings, inverse-distance-weighted scores
@@ -38,10 +44,10 @@ Download VIIRS fire data from [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/
 The Jupyter notebook `fire_risk_ML.ipynb` walks through the full pipeline. Or use the ETL pipeline CLI:
 
 ```bash
-# Generate random properties and merge with census data
+# Build training data: generate random properties + census + wildfires + proximity
 python run_etl_pipeline.py --num-properties 10000 --granularity county
 
-# Load properties from your own GPS coordinates
+# Score real properties: load GPS coordinates and run them through the pipeline
 python run_etl_pipeline.py --coords-file my_properties.csv --granularity county
 
 # Census merge only (use existing properties in database)
@@ -87,14 +93,16 @@ python train.py \
 
 ```
 ├── fire_risk_ML.ipynb    # Main notebook — run this
-├── run_etl_pipeline.py   # CLI for property generation + census merge
+├── run_etl_pipeline.py   # CLI for ETL: properties → census → wildfires → proximity
 ├── train.py              # Standalone training script (local or AWS)
+├── test_pipeline.py      # Automated tests (pytest)
 ├── load_properties.py    # Property generation + geocoding
 ├── load_wildfires.py     # NASA FIRMS data ETL
 ├── load_census.py        # Census ACS5 API wrapper
 ├── gis.py                # Proximity scoring functions
 ├── visualize.py          # Folium maps + matplotlib charts
 ├── sql_funcs.py          # PostgreSQL/PostGIS interface
+├── missing_analysis.py   # MCAR/MAR missingness detection for imputation
 ├── settings.py           # Config: paths, table names, parameters
 ├── aws/
 │   ├── deploy.ps1        # Upload to S3 + launch EC2
