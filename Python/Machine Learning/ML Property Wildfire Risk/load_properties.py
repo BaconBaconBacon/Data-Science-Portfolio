@@ -51,11 +51,13 @@ from settings import (
 )
 
 
-def download_tiger_shapefile(granularity: str, year: int = TIGER_YEAR) -> gpd.GeoDataFrame:
+def download_tiger_shapefile(
+    granularity: str, year: int = TIGER_YEAR
+) -> gpd.GeoDataFrame:
     """
     Download Census TIGER shapefile for the specified granularity.
 
-    Downloads shapefiles from Census Bureau, caches locally as parquet.
+    Downloads fresh shapefiles from Census Bureau on each call (no caching).
     County is a single national file; tract/block_group require per-state downloads.
 
     Parameters
@@ -71,14 +73,12 @@ def download_tiger_shapefile(granularity: str, year: int = TIGER_YEAR) -> gpd.Ge
         Shapefile with geography boundaries and identifiers
     """
     if granularity not in CENSUS_VALID_GRANULARITY_LEVELS:
-        raise ValueError(f"granularity must be one of {CENSUS_VALID_GRANULARITY_LEVELS}")
+        raise ValueError(
+            f"granularity must be one of {CENSUS_VALID_GRANULARITY_LEVELS}"
+        )
 
     cache_path = PATH_DATA_CENSUS / f"tiger_{granularity}_{year}.parquet"
     PATH_DATA_CENSUS.mkdir(parents=True, exist_ok=True)
-
-    if cache_path.exists():
-        print(f"Loading cached TIGER {granularity} shapefile...")
-        return gpd.read_parquet(cache_path)
 
     print(f"Downloading TIGER {granularity} shapefile (year={year})...")
 
@@ -112,10 +112,6 @@ def download_tiger_shapefile(granularity: str, year: int = TIGER_YEAR) -> gpd.Ge
     gdf = gdf[gdf["state_id"].isin(conus_fips_int)]
     print(f"  Filtered to CONUS: {before_count} -> {len(gdf)} geographies")
 
-    # Cache to parquet
-    print(f"Caching to {cache_path}...")
-    gdf.to_parquet(cache_path)
-
     return gdf
 
 
@@ -126,9 +122,9 @@ def _download_shapefile_from_url(url: str) -> gpd.GeoDataFrame:
 
     with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
         # Find the .shp file
-        shp_name = [n for n in zf.namelist() if n.endswith('.shp')][0]
+        shp_name = [n for n in zf.namelist() if n.endswith(".shp")][0]
         # Extract to temp and read
-        with zf.open(shp_name.replace('.shp', '.shp')) as shp_file:
+        with zf.open(shp_name.replace(".shp", ".shp")) as shp_file:
             # GeoPandas can read from zip directly
             pass
 
@@ -136,7 +132,9 @@ def _download_shapefile_from_url(url: str) -> gpd.GeoDataFrame:
     return gpd.read_file(io.BytesIO(response.content))
 
 
-def _standardize_tiger_columns(gdf: gpd.GeoDataFrame, granularity: str) -> gpd.GeoDataFrame:
+def _standardize_tiger_columns(
+    gdf: gpd.GeoDataFrame, granularity: str
+) -> gpd.GeoDataFrame:
     """Standardize TIGER column names to match our schema."""
     # TIGER uses: STATEFP, COUNTYFP, TRACTCE, BLKGRPCE, GEOID
     rename_map = {
@@ -182,10 +180,7 @@ def random_point_in_polygon(geom) -> Point:
     max_attempts = 1000
 
     for _ in range(max_attempts):
-        point = Point(
-            random.uniform(minx, maxx),
-            random.uniform(miny, maxy)
-        )
+        point = Point(random.uniform(minx, maxx), random.uniform(miny, maxy))
         if geom.contains(point):
             return point
 
@@ -257,9 +252,8 @@ class Properties:
         max_workers : int
             Number of parallel threads (only used if parallel=True).
         """
-        if self.test_mode:
-            # TODO: Check if there arent any in the test property table
-            print("Test mode, cannot add more properties.")
+        if self.test_mode and self.num_properties > 0:
+            print(f"Test mode: {self.num_properties} properties already exist. Skipping generation.")
             return
 
         # Route to parallel version if requested
@@ -392,8 +386,8 @@ class Properties:
             If True, skip slow cleanup operations (drop_duplicates, reload from SQL).
             Useful when caller needs to signal completion before cleanup.
         """
-        if self.test_mode:
-            print("Test mode, cannot add more properties.")
+        if self.test_mode and self.num_properties > 0:
+            print(f"Test mode: {self.num_properties} properties already exist. Skipping generation.")
             return
 
         print(f"Adding {quantity} properties using geography-first approach...")
@@ -447,7 +441,9 @@ class Properties:
         if len(results) > last_saved:
             self._update_gpd_and_sql(results[last_saved:])
             if verbose:
-                print(f"  Saved final {len(results) - last_saved} properties to database.")
+                print(
+                    f"  Saved final {len(results) - last_saved} properties to database."
+                )
 
         if not skip_final_cleanup:
             self.sql_obj.drop_duplicates_from_table(self.table_name)
@@ -480,8 +476,8 @@ class Properties:
         verbose : bool
             Print progress updates.
         """
-        if self.test_mode:
-            print("Test mode, cannot add more properties.")
+        if self.test_mode and self.num_properties > 0:
+            print(f"Test mode: {self.num_properties} properties already exist. Skipping generation.")
             return
 
         quantity = len(coordinates)
@@ -650,14 +646,22 @@ class Properties:
                             results.append(prop)
                         else:
                             # Failed geocode - submit replacement if we still need more
-                            if len(results) < quantity and total_attempts < max_total_attempts:
-                                pending.add(executor.submit(self._fetch_single_property))
+                            if (
+                                len(results) < quantity
+                                and total_attempts < max_total_attempts
+                            ):
+                                pending.add(
+                                    executor.submit(self._fetch_single_property)
+                                )
                                 total_attempts += 1
                     except Exception as e:
                         if verbose:
                             print(f"Property fetch exception: {e}")
                         # Submit replacement on exception too
-                        if len(results) < quantity and total_attempts < max_total_attempts:
+                        if (
+                            len(results) < quantity
+                            and total_attempts < max_total_attempts
+                        ):
                             pending.add(executor.submit(self._fetch_single_property))
                             total_attempts += 1
 
@@ -679,7 +683,9 @@ class Properties:
                     rate = len(results) / elapsed if elapsed > 0 else 0
                     remaining = quantity - len(results)
                     est_remaining = remaining / rate if rate > 0 else 0
-                    success_rate = len(results) / total_attempts * 100 if total_attempts > 0 else 0
+                    success_rate = (
+                        len(results) / total_attempts * 100 if total_attempts > 0 else 0
+                    )
                     print(
                         f"  {len(results)}/{quantity} properties "
                         f"({total_attempts} attempts, {success_rate:.1f}% success) "
@@ -710,7 +716,9 @@ class Properties:
         total_time = time.time() - start_time
         if verbose:
             rate = len(results) / total_time if total_time > 0 else 0
-            success_rate = len(results) / total_attempts * 100 if total_attempts > 0 else 0
+            success_rate = (
+                len(results) / total_attempts * 100 if total_attempts > 0 else 0
+            )
             print(
                 f"Completed in {self._format_duration(total_time)} "
                 f"({len(results)} added from {total_attempts} attempts, "
@@ -858,13 +866,13 @@ class Properties:
             self.properties_gpd = self.sql_obj.initialize_properties_table(
                 self.table_name
             )
-            if self.test_mode:
-                if self.verbose:
-                    print("Next call _populate_test_props()...")
-            else:
-                if self.verbose:
-                    print(f"Adding {PROPERTIES_INIT_COUNT} new properties to table...")
-                self.add_random_properties(PROPERTIES_INIT_COUNT, verbose=False)
+            if self.verbose:
+                print(f"Adding {PROPERTIES_INIT_COUNT} new properties to table...")
+            self.add_random_properties_geo_first(
+                PROPERTIES_INIT_COUNT,
+                granularity="tract",
+                verbose=False
+            )
             # Reload from SQL to get auto-generated property_ids
             self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)
         self._update_property_count()

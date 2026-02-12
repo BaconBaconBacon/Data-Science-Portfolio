@@ -66,9 +66,153 @@ class SQL:
 
         self._connect_to_sql()
 
+    @staticmethod
+    def _create_database(database_name: str) -> bool:
+        """Create the target PostgreSQL database if it doesn't exist.
+
+        Handles corrupted databases where catalog entry exists but data directory
+        is missing. Automatically drops and recreates in this case.
+
+        Connects to the 'postgres' system database to execute CREATE DATABASE.
+        Uses autocommit mode as required by PostgreSQL for CREATE DATABASE.
+
+        Parameters
+        ----------
+        database_name : str
+            Name of the database to create.
+
+        Returns
+        -------
+        bool
+            True if database created or already exists, False on failure.
+        """
+        # First, try to connect to the database to verify it's actually usable
+        test_conn_str = f"postgresql+psycopg2://postgres:postgres@localhost:5432/{database_name}"
+
+        try:
+            test_engine = s.create_engine(test_conn_str)
+            test_conn = test_engine.connect()
+
+            # Database exists and is usable - check if PostGIS is installed
+            result = test_conn.execute(s.text(
+                "SELECT 1 FROM pg_extension WHERE extname = 'postgis'"
+            ))
+            postgis_installed = result.fetchone() is not None
+            test_conn.close()
+            test_engine.dispose()
+
+            # If PostGIS is not installed, install it now
+            if not postgis_installed:
+                print(f"PostGIS not found in '{database_name}', installing...")
+                try:
+                    db_engine = s.create_engine(test_conn_str)
+                    with db_engine.connect() as conn:
+                        conn.execute(s.text("CREATE EXTENSION IF NOT EXISTS postgis"))
+                        conn.commit()
+                    db_engine.dispose()
+                    print(f"Installed PostGIS extension in '{database_name}'")
+                except Exception as postgis_error:
+                    print(f"Error: Failed to install PostGIS extension: {postgis_error}")
+                    return False
+
+            return True
+        except s.exc.OperationalError as e:
+            error_str = str(e)
+
+            # Check if this is a "missing directory" corruption error
+            if "does not exist" in error_str and "subdirectory" in error_str:
+                print(f"Detected corrupted database '{database_name}' (missing data directory)")
+                print(f"Cleaning up and recreating...")
+
+                # Drop the corrupted database entry
+                try:
+                    system_engine = s.create_engine(
+                        "postgresql+psycopg2://postgres:postgres@localhost:5432/postgres"
+                    )
+                    with system_engine.connect() as conn:
+                        conn.connection.connection.set_isolation_level(0)  # Autocommit
+                        # Force disconnect any stale connections
+                        conn.execute(s.text(
+                            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                            f"WHERE datname = '{database_name}' AND pid <> pg_backend_pid()"
+                        ))
+                        # Drop the corrupted database
+                        conn.execute(s.text(f"DROP DATABASE IF EXISTS {database_name}"))
+                    system_engine.dispose()
+                    print(f"Dropped corrupted database entry for '{database_name}'")
+                except Exception as drop_error:
+                    print(f"Error dropping corrupted database: {drop_error}")
+                    return False
+
+            elif "does not exist" in error_str:
+                # Database simply doesn't exist (normal case)
+                pass
+            else:
+                # Some other connection error
+                print(f"Error connecting to database '{database_name}': {e}")
+                return False
+
+        # At this point, database either doesn't exist or was just dropped
+        # Create it fresh
+        try:
+            system_engine = s.create_engine(
+                "postgresql+psycopg2://postgres:postgres@localhost:5432/postgres"
+            )
+            # Use raw connection with autocommit (CREATE DATABASE cannot run in transaction)
+            with system_engine.connect() as conn:
+                conn.connection.connection.set_isolation_level(0)  # Autocommit mode
+                conn.execute(s.text(f"CREATE DATABASE {database_name}"))
+            system_engine.dispose()
+            print(f"Created database '{database_name}'")
+        except Exception as e:
+            print(f"Error: Failed to create database '{database_name}': {e}")
+            return False
+
+        # Install PostGIS extension in the new database
+        try:
+            db_engine = s.create_engine(
+                f"postgresql+psycopg2://postgres:postgres@localhost:5432/{database_name}"
+            )
+            with db_engine.connect() as conn:
+                conn.execute(s.text("CREATE EXTENSION IF NOT EXISTS postgis"))
+                conn.commit()
+            db_engine.dispose()
+            print(f"Installed PostGIS extension in '{database_name}'")
+            return True
+        except Exception as e:
+            print(f"Error: Failed to install PostGIS extension: {e}")
+            return False
+
     def _connect_to_sql(self):
-        self.engine = s.create_engine(self.engine_string)
-        self.connection = self.engine.connect()
+        """Connect to PostgreSQL database, creating it if necessary.
+
+        Extracts database name from connection string, ensures it exists,
+        then establishes connection.
+
+        Raises
+        ------
+        RuntimeError
+            If database cannot be created or connection fails.
+        """
+        # Extract database name from connection string
+        # Format: postgresql+psycopg2://user:password@host:port/database
+        db_name = self.engine_string.split("/")[-1]
+
+        # Ensure database exists (create if necessary)
+        if not self._create_database(db_name):
+            raise RuntimeError(
+                f"Failed to create or access database '{db_name}'. "
+                f"Check PostgreSQL permissions and connection settings."
+            )
+
+        # Establish connection to target database
+        try:
+            self.engine = s.create_engine(self.engine_string)
+            self.connection = self.engine.connect()
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to connect to database '{db_name}': {e}"
+            )
 
     def disconnect_and_close(self) -> None:
         if self.connection is not None:
@@ -370,6 +514,11 @@ class SQL:
         """
         properties_table = self._sanitize_string(properties_table)
 
+        # Check if census_cache table exists
+        if not self.check_table_exists(TABLE_NAME_CACHE):
+            # Census cache doesn't exist yet - no failed geos to delete
+            return 0
+
         # Build join conditions based on granularity
         if granularity == "county":
             join_cond = "p.state_id = c.state_id AND p.county_id = c.county_id"
@@ -397,8 +546,9 @@ class SQL:
             print(f"Removed {deleted} properties in failed geographies")
         return deleted
 
-    def save_df_to_sql(self, table_name: str, df: pd.DataFrame) -> None:
-        df.to_sql(table_name, self.connection, if_exists="append", index=False)
+    def save_df_to_sql(self, table_name: str, df: pd.DataFrame, chunksize: int = 10000) -> None:
+        """Save DataFrame to SQL table with chunked inserts to avoid memory issues."""
+        df.to_sql(table_name, self.connection, if_exists="append", index=False, chunksize=chunksize)
         self.connection.commit()
 
     def read_df_from_sql(self, query: str):

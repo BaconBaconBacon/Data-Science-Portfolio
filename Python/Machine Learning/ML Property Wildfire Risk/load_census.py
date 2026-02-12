@@ -19,6 +19,7 @@ import time
 import os
 from pathlib import Path
 import pandas as pd
+import sqlalchemy as s
 
 from settings import (
     CENSUS_FEATURES,
@@ -160,7 +161,7 @@ class CensusData:
                 print("starting in test mode")
             self.table_name = TABLE_NAME_CENSUS_TEST
             self.sql_obj.drop_table(TABLE_NAME_CENSUS_TEST, confirm=True)
-            # self.data = None
+            self.sql_obj.drop_table(TABLE_NAME_CENSUS_PROPS_TEST, confirm=True)
         else:
             self.table_name = TABLE_NAME_CENSUS
         self.data = self._read_from_sql()
@@ -222,7 +223,7 @@ class CensusData:
         wide: pd.DataFrame,
         merge_cols: list,
         missing_geos,
-        use_bulk: bool = True,
+        use_bulk: bool = None,
     ) -> tuple[pd.DataFrame, list[dict]]:
         variables = (
             self._get_leaf_variables() if self.leafs_only else self._get_all_variables()
@@ -231,27 +232,59 @@ class CensusData:
 
         missing_props = gdf.merge(missing_geos, on=merge_cols, how="inner")
 
-        # Use bulk fetch (by state) for speed, or per-geo for debugging
+        # Auto-detect bulk vs individual based on dataset sparsity
+        if use_bulk is None:
+            unique_geos = len(missing_geos)
+            num_states = missing_geos['state_id'].nunique()
+
+            # Threshold: use individual if unique_geos < num_states * 50
+            threshold = num_states * 50
+            use_bulk = unique_geos >= threshold
+
+            if self.verbose:
+                print(f"Census fetch: {unique_geos} unique geos across {num_states} states")
+                print(f"Using {'BULK' if use_bulk else 'INDIVIDUAL'} fetch (threshold: {threshold})")
+
+        # Use bulk fetch (by state) for speed, or per-geo for individual
+        # Note: _bulk_fetch_missing_geos now processes state-by-state and saves directly to SQL
         if use_bulk:
-            new_census_df, failed_geos = self._bulk_fetch_missing_geos(
-                missing_props, variables
-            )
+            _, failed_geos = self._bulk_fetch_missing_geos(missing_props, variables)
         else:
             new_census_df, failed_geos = self._extract_from_geoid(
                 missing_props, variables
             )
+            # Non-bulk path still needs manual transform/save
+            if not new_census_df.empty:
+                print("Transforming data...")
+                new_cleaned = self._transform_and_clean(new_census_df)
+                print("Saving to database...")
+                self._load_to_sql(new_cleaned)
 
-        if not new_census_df.empty:
-            new_cleaned = self._transform_and_clean(new_census_df)
-            self._load_to_sql(new_cleaned)
+        # Refresh data from SQL (bulk path saves directly, non-bulk saves above)
+        self.data = self._read_from_sql()
 
-            new_wide = self._wide_from_cleaned(new_cleaned, merge_cols)
-            existing_wide = (
-                pd.concat([wide, new_wide], ignore_index=True)
-                if not wide.empty
-                else new_wide
+        # Build wide format from census table (geography-level, not property-level)
+        census_table = TABLE_NAME_CENSUS_TEST if self.test_mode else TABLE_NAME_CENSUS
+        if self.sql_obj.check_table_exists(census_table):
+            census_long = self.sql_obj.read_df_from_sql(
+                f"SELECT * FROM {census_table} WHERE granularity = '{self.granularity}' AND year = {self.year}"
             )
-            self.data = self._read_from_sql()
+            if not census_long.empty:
+                # Pivot back to wide format
+                new_wide = census_long.pivot_table(
+                    index=merge_cols,
+                    columns="variable",
+                    values="value",
+                    aggfunc="first",
+                ).reset_index()
+                new_wide.columns.name = None
+                existing_wide = (
+                    pd.concat([wide, new_wide], ignore_index=True).drop_duplicates(merge_cols)
+                    if not wide.empty
+                    else new_wide
+                )
+            else:
+                existing_wide = wide
         else:
             existing_wide = wide
 
@@ -284,7 +317,9 @@ class CensusData:
                 f"{len(missing_geos)} to fetch."
             )
         if not missing_geos.empty:
-            wide, failed_geos = self._add_missing_geos(gdf, wide, merge_cols, missing_geos)
+            wide, failed_geos = self._add_missing_geos(
+                gdf, wide, merge_cols, missing_geos, use_bulk=None  # Auto-detect
+            )
 
         return wide, failed_geos
 
@@ -441,77 +476,211 @@ class CensusData:
 
         return results
 
+    def _get_cached_states(self) -> set:
+        """Get set of state_ids that are already cached for this granularity/year."""
+        q = f"""
+        SELECT DISTINCT state_id FROM {TABLE_NAME_CACHE}
+        WHERE granularity = :granularity AND year = :year AND variable != '_FAILED_'
+        """
+        result = pd.read_sql(
+            s.text(q),
+            self.sql_obj.connection,
+            params={"granularity": self.granularity, "year": self.year},
+        )
+        return set(result["state_id"].tolist())
+
+    def _save_state_to_cache(self, state_results: list[dict], merge_cols: list) -> None:
+        """Save a state's census data to cache in long format."""
+        if not state_results:
+            return
+
+        # Get state_id from first result
+        state_id = state_results[0].get("state_id", 0)
+
+        # Delete existing cache for this state/granularity/year before inserting
+        delete_q = f"""
+            DELETE FROM {TABLE_NAME_CACHE}
+            WHERE state_id = :state_id
+              AND granularity = :granularity
+              AND year = :year
+        """
+        self.sql_obj.connection.execute(
+            s.text(delete_q),
+            {"state_id": state_id, "granularity": self.granularity, "year": self.year}
+        )
+        self.sql_obj.connection.commit()
+
+        records = []
+        for row in state_results:
+            for var, val in row.items():
+                if var in merge_cols or not var.startswith("B"):
+                    continue
+                records.append({
+                    "state_id": row.get("state_id", 0),
+                    "county_id": row.get("county_id", 0),
+                    "tract_id": row.get("tract_id", 0),
+                    "block_grp": row.get("block_grp", 0),
+                    "granularity": self.granularity,
+                    "year": self.year,
+                    "variable": var,
+                    "value": val,
+                })
+
+        if records:
+            df = pd.DataFrame(records)
+            self.sql_obj.save_df_to_sql(TABLE_NAME_CACHE, df)
+
+    def _load_cached_data_wide(self, state_ids: list, merge_cols: list) -> pd.DataFrame:
+        """Load cached census data for given states in wide format, chunked by state."""
+        if not state_ids:
+            return pd.DataFrame()
+
+        results = []
+        start_time = time.time()
+        for i, state_id in enumerate(state_ids, 1):
+            if len(state_ids) > 1 and (i % 10 == 0 or i == len(state_ids)):
+                elapsed = time.time() - start_time
+                avg_per_state = elapsed / i
+                remaining = avg_per_state * (len(state_ids) - i)
+                print(f"  Loading state {i}/{len(state_ids)}... ({remaining:.0f}s remaining)")
+
+            q = f"""
+            SELECT state_id, county_id, tract_id, block_grp, variable, value
+            FROM {TABLE_NAME_CACHE}
+            WHERE state_id = :state_id
+              AND granularity = :granularity
+              AND year = :year
+              AND variable != '_FAILED_'
+            """
+            df = pd.read_sql(
+                s.text(q),
+                self.sql_obj.connection,
+                params={
+                    "state_id": int(state_id),
+                    "granularity": self.granularity,
+                    "year": self.year,
+                },
+            )
+            if df.empty:
+                continue
+
+            wide = df.pivot_table(
+                index=merge_cols, columns="variable", values="value", aggfunc="first"
+            ).reset_index()
+            wide.columns.name = None
+            results.append(wide)
+
+            del df  # Free memory immediately
+
+        if not results:
+            return pd.DataFrame()
+
+        return pd.concat(results, ignore_index=True)
+
     def _bulk_fetch_missing_geos(
         self, properties_data: pd.DataFrame, variables: list
     ) -> tuple[pd.DataFrame, list[dict]]:
         """
         Bulk fetch census data for all missing geographies by state.
 
-        Much faster than per-geography queries: ~50 state calls vs ~50k geo calls.
+        Fetches and caches each state's data immediately to avoid memory issues.
+        On subsequent runs, cached states are loaded from SQL instead of API.
         """
         merge_cols = self._get_merge_columns()
-        unique_states = properties_data["state_id"].unique()
+        unique_states = list(properties_data["state_id"].unique())
         total_states = len(unique_states)
 
-        var_chunks = [
-            variables[i : i + CENSUS_CHUNK_SIZE]
-            for i in range(0, len(variables), CENSUS_CHUNK_SIZE)
-        ]
+        # properties_data is already filtered to MISSING geographies only
+        # If a state appears here, its cache is incomplete - must fetch
+        states_to_fetch = unique_states
 
-        print(
-            f"Bulk fetching {self.granularity} data for {total_states} states "
-            f"({len(var_chunks)} variable chunks each)..."
-        )
+        print(f"Fetching {len(states_to_fetch)} states with missing geographies...")
 
-        start_time = time.time()
-        all_results = []
+        # Fetch states with incomplete cache
+        if states_to_fetch:
+            var_chunks = [
+                variables[i : i + CENSUS_CHUNK_SIZE]
+                for i in range(0, len(variables), CENSUS_CHUNK_SIZE)
+            ]
+
+            start_time = time.time()
+            for i, state_id in enumerate(states_to_fetch):
+                completed = i + 1
+                state_str = str(state_id).zfill(2)
+                print(f"[{completed}/{len(states_to_fetch)}] Fetching state {state_str}...")
+
+                state_results = self._fetch_bulk_by_state(state_id, variables, var_chunks)
+
+                if state_results:
+                    print(f"  Got {len(state_results)} {self.granularity}s, saving to cache...")
+                    self._save_state_to_cache(state_results, merge_cols)
+                else:
+                    print(f"  No data for state {state_str}")
+
+                # Progress estimate after first 3 states
+                if completed == min(3, len(states_to_fetch)):
+                    elapsed = time.time() - start_time
+                    per_state = elapsed / completed
+                    remaining = (len(states_to_fetch) - completed) * per_state
+                    print(
+                        f"  Time estimate: {self._format_duration(remaining)} remaining "
+                        f"({per_state:.1f}s per state)"
+                    )
+
+            total_time = time.time() - start_time
+            print(f"Fetch complete in {self._format_duration(total_time)}")
+
+        # Check granularity BEFORE processing (only once)
+        print("Checking output tables...")
+        self._check_and_prepare_output_tables()
+
+        # Process state by state to reduce RAM usage
+        print("Processing states...")
         failed_geos = []
+        start_time = time.time()
 
-        for i, state_id in enumerate(unique_states):
-            completed = i + 1
-            state_str = str(state_id).zfill(2)
-            print(f"[{completed}/{total_states}] Fetching state {state_str}...")
-
-            state_results = self._fetch_bulk_by_state(state_id, variables, var_chunks)
-
-            if state_results:
-                all_results.extend(state_results)
-                print(f"  Got {len(state_results)} {self.granularity}s")
-            else:
-                print(f"  No data for state {state_str}")
-
+        for i, state_id in enumerate(unique_states, 1):
             # Progress estimate
-            if completed == min(3, total_states):
+            if i > 1:
                 elapsed = time.time() - start_time
-                per_state = elapsed / completed
-                remaining = (total_states - completed) * per_state
-                print(
-                    f"  Time estimate: {self._format_duration(remaining)} remaining "
-                    f"({per_state:.1f}s per state)"
-                )
+                remaining = (elapsed / (i - 1)) * (len(unique_states) - i + 1)
+                print(f"  Processing state {i}/{len(unique_states)}... ({remaining:.0f}s remaining)")
+            else:
+                print(f"  Processing state {i}/{len(unique_states)}...")
 
-        total_time = time.time() - start_time
-        print(
-            f"Bulk fetch complete in {self._format_duration(total_time)} "
-            f"({len(all_results)} total {self.granularity}s)"
-        )
+            # Load single state from cache
+            state_wide = self._load_cached_data_wide([state_id], merge_cols)
+            if state_wide.empty:
+                continue
 
-        if all_results:
-            results_df = pd.DataFrame(all_results)
-            # Merge with properties to get only the ones we need
-            merged = properties_data.merge(results_df, on=merge_cols, how="left")
+            # Filter properties to this state
+            state_props = properties_data[properties_data["state_id"] == state_id]
 
-            # Identify geos that had no data (all census cols are NaN)
-            census_cols = [c for c in results_df.columns if c.startswith("B")]
+            # Merge with census data
+            merged = state_props.merge(state_wide, on=merge_cols, how="left")
+
+            # Track failed geos
+            census_cols = [c for c in state_wide.columns if c.startswith("B")]
             if census_cols:
                 missing_mask = merged[census_cols[0]].isna()
                 if missing_mask.any():
                     failed_rows = merged[missing_mask][merge_cols].drop_duplicates()
-                    failed_geos = failed_rows.to_dict("records")
+                    failed_geos.extend(failed_rows.to_dict("records"))
 
-            return merged, failed_geos
-        else:
-            return properties_data.iloc[:0], []
+            # Transform and save (if has data)
+            if not merged.empty and census_cols:
+                cleaned = self._transform_and_clean(merged)
+                self._save_state_to_output(cleaned, merge_cols)
+                del cleaned
+
+            # Free memory
+            del state_wide, state_props, merged
+
+        total_time = time.time() - start_time
+        print(f"Processing complete in {self._format_duration(total_time)}")
+
+        # Return empty DF (data already saved to SQL), plus failed geos
+        return pd.DataFrame(), failed_geos
 
     def _extract_from_geoid(self, properties_data, variables):
 
@@ -706,6 +875,28 @@ class CensusData:
         """
         Save the data as a SQL db.?
         """
+        # Check for granularity mismatch in existing props_census table
+        props_table = (
+            TABLE_NAME_CENSUS_PROPS_TEST if self.test_mode else TABLE_NAME_CENSUS_PROPS
+        )
+        if self.sql_obj.check_table_exists(props_table):
+            existing = self.sql_obj.read_df_from_sql(
+                f"SELECT DISTINCT granularity FROM {props_table} LIMIT 1"
+            )
+            if not existing.empty:
+                existing_gran = existing["granularity"].iloc[0]
+                if existing_gran != self.granularity:
+                    print(f"\nTable '{props_table}' exists with granularity '{existing_gran}'.")
+                    print(f"Current run uses granularity '{self.granularity}'.")
+                    response = input("Drop existing table and continue? [y/N]: ").strip().lower()
+                    if response == "y":
+                        self.sql_obj.drop_table(props_table, confirm=True)
+                    else:
+                        raise RuntimeError(
+                            f"Cannot insert '{self.granularity}' data into table with '{existing_gran}' schema. "
+                            "Drop the table manually or run with matching granularity."
+                        )
+
         merge_cols = self._get_merge_columns()
         census_cols = [c for c in clean_data.columns if c.startswith("B")]
 
@@ -745,8 +936,100 @@ class CensusData:
         census_long["granularity"] = self.granularity
         census_long["year"] = self.year
 
-        table_name = TABLE_NAME_CENSUS_TEST if self.test_mode else TABLE_NAME_CENSUS
-        self.sql_obj.save_df_to_sql(table_name, census_long)
+        # Check for granularity mismatch in existing census table
+        census_table = TABLE_NAME_CENSUS_TEST if self.test_mode else TABLE_NAME_CENSUS
+        if self.sql_obj.check_table_exists(census_table):
+            existing = self.sql_obj.read_df_from_sql(
+                f"SELECT DISTINCT granularity FROM {census_table} LIMIT 1"
+            )
+            if not existing.empty:
+                existing_gran = existing["granularity"].iloc[0]
+                if existing_gran != self.granularity:
+                    print(f"\nTable '{census_table}' exists with granularity '{existing_gran}'.")
+                    print(f"Current run uses granularity '{self.granularity}'.")
+                    response = input("Drop existing table and continue? [y/N]: ").strip().lower()
+                    if response == "y":
+                        self.sql_obj.drop_table(census_table, confirm=True)
+                    else:
+                        raise RuntimeError(
+                            f"Cannot insert '{self.granularity}' data into table with '{existing_gran}' schema."
+                        )
+
+        self.sql_obj.save_df_to_sql(census_table, census_long)
+
+    def _check_table_granularity(self, table_name: str) -> None:
+        """Check if existing table has matching granularity, prompt to drop if not."""
+        if not self.sql_obj.check_table_exists(table_name):
+            return
+
+        existing = self.sql_obj.read_df_from_sql(
+            f"SELECT DISTINCT granularity FROM {table_name} LIMIT 1"
+        )
+        if existing.empty:
+            return
+
+        existing_gran = existing["granularity"].iloc[0]
+        if existing_gran != self.granularity:
+            print(f"\nTable '{table_name}' exists with granularity '{existing_gran}'.")
+            print(f"Current run uses granularity '{self.granularity}'.")
+            response = input("Drop existing table and continue? [y/N]: ").strip().lower()
+            if response == "y":
+                self.sql_obj.drop_table(table_name, confirm=True)
+            else:
+                raise RuntimeError(
+                    f"Cannot insert '{self.granularity}' data into table with '{existing_gran}' schema."
+                )
+
+    def _check_and_prepare_output_tables(self) -> None:
+        """Check granularity for both output tables before processing."""
+        props_table = (
+            TABLE_NAME_CENSUS_PROPS_TEST if self.test_mode else TABLE_NAME_CENSUS_PROPS
+        )
+        census_table = TABLE_NAME_CENSUS_TEST if self.test_mode else TABLE_NAME_CENSUS
+
+        self._check_table_granularity(props_table)
+        self._check_table_granularity(census_table)
+
+    def _save_state_to_output(self, clean_data: pd.DataFrame, merge_cols: list) -> None:
+        """Melt and insert one state's data to output tables (no granularity check)."""
+        census_cols = [c for c in clean_data.columns if c.startswith("B")]
+
+        # Save props joined with census
+        props_long = (
+            clean_data[["geoid"] + merge_cols + census_cols]
+            .copy()
+            .melt(
+                id_vars=["geoid"] + merge_cols,
+                var_name="variable",
+                value_name="value",
+            )
+        )
+        props_long["value"] = props_long["value"].astype(float)
+        props_long["granularity"] = self.granularity
+        props_long["year"] = self.year
+
+        props_table = (
+            TABLE_NAME_CENSUS_PROPS_TEST if self.test_mode else TABLE_NAME_CENSUS_PROPS
+        )
+        self.sql_obj.save_df_to_sql(props_table, props_long)
+
+        # Save just the census information
+        census_df = clean_data.drop_duplicates(merge_cols)
+        census_long = (
+            census_df[merge_cols + census_cols]
+            .copy()
+            .melt(
+                id_vars=merge_cols,
+                var_name="variable",
+                value_name="value",
+            )
+        )
+        census_long["value"] = census_long["value"].astype(float)
+        census_long["granularity"] = self.granularity
+        census_long["year"] = self.year
+
+        census_table = TABLE_NAME_CENSUS_TEST if self.test_mode else TABLE_NAME_CENSUS
+        self.sql_obj.save_df_to_sql(census_table, census_long)
 
     def _read_from_sql(self) -> pd.DataFrame | None:
         if self.sql_obj.check_table_exists(self.table_name):
