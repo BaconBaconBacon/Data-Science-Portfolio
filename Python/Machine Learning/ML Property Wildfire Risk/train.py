@@ -30,6 +30,7 @@ from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
 
 from missing_analysis import (
     analyze_missingness,
@@ -83,6 +84,17 @@ def _get_preprocess_cache_path(cache_key: str) -> Path:
     cache_dir = PATH_DATA / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / f"preprocess_{cache_key}.pkl"
+
+
+def full_metrics(model, X_train, X_test, y_train, y_test):
+    y_pred_train = model.predict(X_train)
+    y_pred_test = model.predict(X_test)
+    return {
+        "Train RMSE": np.sqrt(((y_train - y_pred_train) ** 2).mean()),
+        "Test RMSE": np.sqrt(((y_test - y_pred_test) ** 2).mean()),
+        "Test MAE": mean_absolute_error(y_test, y_pred_test),
+        "Test R²": r2_score(y_test, y_pred_test),
+    }
 
 
 def build_adaptive_pipeline(

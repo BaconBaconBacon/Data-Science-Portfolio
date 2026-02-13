@@ -68,8 +68,7 @@ class SQL:
 
         self._connect_to_sql()
 
-    @staticmethod
-    def _create_database(database_name: str) -> bool:
+    def _create_database(self, database_name: str) -> bool:
         """Create the target PostgreSQL database if it doesn't exist.
 
         Handles corrupted databases where catalog entry exists but data directory

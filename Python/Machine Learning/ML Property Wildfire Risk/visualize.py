@@ -19,9 +19,6 @@ from typing import Optional
 from settings import HEADER_GEOM
 
 
-# ─── Folium Maps ────────────────────────────────────────────────────────────────
-
-
 def create_wildfire_map(
     wildfire_gdf: gpd.GeoDataFrame,
     center: Optional[tuple[float, float]] = None,
@@ -164,7 +161,9 @@ def create_property_risk_map(
             # Normalize to 0-1
             norm_val = (risk - vmin) / (vmax - vmin) if vmax > vmin else 0.5
             rgba = cmap(norm_val)
-            color = f"#{int(rgba[0]*255):02x}{int(rgba[1]*255):02x}{int(rgba[2]*255):02x}"
+            color = (
+                f"#{int(rgba[0]*255):02x}{int(rgba[1]*255):02x}{int(rgba[2]*255):02x}"
+            )
 
         folium.CircleMarker(
             location=[row["_lat"], row["_lon"]],
@@ -274,9 +273,16 @@ def create_combined_map(
         cmap = plt.cm.get_cmap("RdYlGn").reversed()
 
         # Vectorized color computation
-        norm_vals = (risk_values - vmin) / (vmax - vmin) if vmax > vmin else np.full_like(risk_values, 0.5)
+        norm_vals = (
+            (risk_values - vmin) / (vmax - vmin)
+            if vmax > vmin
+            else np.full_like(risk_values, 0.5)
+        )
         colors = [cmap(nv) for nv in norm_vals]
-        hex_colors = [f"#{int(c[0]*255):02x}{int(c[1]*255):02x}{int(c[2]*255):02x}" for c in colors]
+        hex_colors = [
+            f"#{int(c[0]*255):02x}{int(c[1]*255):02x}{int(c[2]*255):02x}"
+            for c in colors
+        ]
 
         for i, (_, row) in enumerate(props.iterrows()):
             folium.CircleMarker(
@@ -315,6 +321,59 @@ def create_combined_map(
 
 
 # ─── Matplotlib Charts ──────────────────────────────────────────────────────────
+
+
+def eda(targets_features: pd.DataFrame):
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4))
+    axes = axes.flatten()
+    # 1. Target distribution
+    axes[0].hist(
+        targets_features["nearest_fire_km"], bins=30, edgecolor="black", alpha=0.7
+    )
+    axes[0].set_xlabel("Distance to Nearest Fire (km)")
+    axes[0].set_ylabel("Count")
+    axes[0].set_title("Target Distribution")
+
+    # 2. Missing data summary by feature group
+    census_cols_all = [c for c in targets_features.columns if c.startswith("B")]
+    missing_pct = targets_features[census_cols_all].isna().mean() * 100
+    axes[1].hist(
+        missing_pct[missing_pct > 0],
+        bins=20,
+        edgecolor="black",
+        alpha=0.7,
+        color="orange",
+    )
+    axes[1].set_xlabel("% Missing")
+    axes[1].set_ylabel("Number of Features")
+    axes[1].set_title(f"Missingness Across {len(census_cols_all)} Census Features")
+
+    # 3. Top 10 correlations with target
+    numeric_cols = targets_features.select_dtypes(include="number").columns
+    corrs = (
+        targets_features[numeric_cols]
+        .corrwith(targets_features["nearest_fire_km"])
+        .drop("nearest_fire_km", errors="ignore")
+    )
+    top_corrs = corrs.abs().nlargest(10)
+    top_corrs.sort_values().plot.barh(ax=axes[2], color="steelblue")
+    axes[2].set_xlabel("|Correlation| with Target")
+    axes[2].set_title("Top 10 Correlated Features")
+
+    plt.tight_layout()
+    plt.savefig("figures/eda_summary.png", dpi=150, bbox_inches="tight")
+    plt.show()
+
+    print(
+        f"\nDataset: {targets_features.shape[0]} properties, {targets_features.shape[1]} columns"
+    )
+    print(f"Census features: {len(census_cols_all)}")
+    print(f"Features with missing data: {(missing_pct > 0).sum()}")
+    print(
+        f"Target range: {targets_features['nearest_fire_km'].min():.1f} – {targets_features['nearest_fire_km'].max():.1f} km"
+    )
+    return fig
 
 
 def plot_feature_importance(
