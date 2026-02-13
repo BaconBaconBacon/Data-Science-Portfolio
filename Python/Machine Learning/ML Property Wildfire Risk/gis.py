@@ -10,6 +10,7 @@ Uses scipy.spatial.cKDTree for fast vectorized distance calculations.
 
 import hashlib
 import multiprocessing as mp
+import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
@@ -338,7 +339,7 @@ def calc_all_features(
         else:
             print("Cache size mismatch, recomputing...")
 
-    import time
+
     print(f"Computing GIS features for {len(properties)} properties...")
     start = time.time()
 
@@ -467,7 +468,7 @@ def calc_all_features_parallel(
         else:
             print("Cache size mismatch, recomputing...")
 
-    import time
+
 
     if n_jobs == -1:
         n_jobs = mp.cpu_count()

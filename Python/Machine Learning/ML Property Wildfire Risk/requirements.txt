@@ -1,0 +1,15 @@
+numpy>=2.0
+pandas>=2.0
+geopandas>=1.0
+scikit-learn>=1.5
+xgboost>=2.0
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+census>=0.8
+censusgeocode>=0.5
+folium>=0.18
+shapely>=2.0
+scipy>=1.14
+requests>=2.31
+joblib>=1.4
+matplotlib>=3.9

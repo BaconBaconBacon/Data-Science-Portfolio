@@ -587,7 +587,7 @@ if __name__ == "__main__":
         "--output",
         type=str,
         required=True,
-        help="Path for loacl output model",
+        help="Path for local output model",
     )
     parser.add_argument(
         "--target",

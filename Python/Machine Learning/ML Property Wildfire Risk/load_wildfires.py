@@ -161,8 +161,6 @@ class WildfireData:
                 {
                     HEADER_GEOM: lambda g: g.unary_union.centroid,
                     "ACQ_DATE": "min",  # earliest detection date
-                    # "LATITUDE": "mean",
-                    # "LONGITUDE": "mean",
                     "FRP": "mean",
                     HEADER_SAT_ID: lambda x: ",".join(x.unique()),
                     "CONFIDENCE": "first",

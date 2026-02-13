@@ -10,6 +10,7 @@ Contains:
     - Default parameters for proximity scoring functions
 """
 
+import os
 from pathlib import Path
 
 HEADER_GEOM = "geometry"
@@ -36,8 +37,9 @@ GIS_DESIRED_COLS = [
 # Set the coordinate system
 GIS_DEFAULT_CRS = 5070
 
-SQL_ENGINE_STR = (
-    "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project"
+SQL_ENGINE_STR = os.environ.get(
+    "DATABASE_URL",
+    "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project",
 )
 
 

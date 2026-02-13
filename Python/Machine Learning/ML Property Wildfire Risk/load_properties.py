@@ -135,10 +135,6 @@ def _download_shapefile_from_url(url: str) -> gpd.GeoDataFrame:
         # Find the .shp file
         shp_name = [n for n in zf.namelist() if n.endswith(".shp")][0]
         # Extract to temp and read
-        with zf.open(shp_name.replace(".shp", ".shp")) as shp_file:
-            # GeoPandas can read from zip directly
-            pass
-
     # Read directly from zip in memory
     return gpd.read_file(io.BytesIO(response.content))
 

@@ -219,7 +219,6 @@ class CensusData:
         if not self.metadata_filepath.exists():
             self._generate_variable_metadata()
         else:
-            # Connect and read metadata file?
             pass
 
         self.sql_obj = sql_obj
@@ -240,8 +239,6 @@ class CensusData:
 
     def merge_census_info(self, properties_gpd: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """check existing data, only fetch missing geoids"""
-
-        # TODO: *** Encapsulate this stuff for clarity ***
 
         if "geoid" not in properties_gpd.columns:
             raise ValueError("No geoid column in input.")
@@ -288,7 +285,7 @@ class CensusData:
         if self.test_mode:
             try:
                 _ = self._read_from_sql()
-                print("_read_from_sql() Sucessfully tested.")
+                print("_read_from_sql() Successfully tested.")
             except Exception as e:
                 print(f"_read_from_sql() failed with {e}")
         return result
@@ -996,7 +993,7 @@ class CensusData:
 
     def _load_to_sql(self, clean_data: pd.DataFrame) -> None:
         """
-        Save the data as a SQL db.?
+        Load cleaned census data into the SQL database.
         """
         # Check for granularity mismatch in existing props_census table
         props_table = (

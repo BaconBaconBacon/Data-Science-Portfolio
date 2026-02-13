@@ -500,15 +500,3 @@ def plot_residuals(
         print(f"Figure saved to {save_path}")
 
     return fig
-
-
-if __name__ == "__main__":
-    # Demo usage
-    print("Visualization module loaded.")
-    print("Available functions:")
-    print("  - create_wildfire_map(wildfire_gdf)")
-    print("  - create_property_risk_map(properties_gdf, risk_column)")
-    print("  - create_combined_map(properties_gdf, wildfire_gdf)")
-    print("  - plot_feature_importance(importances)")
-    print("  - plot_actual_vs_predicted(y_actual, y_predicted)")
-    print("  - plot_residuals(y_actual, y_predicted)")

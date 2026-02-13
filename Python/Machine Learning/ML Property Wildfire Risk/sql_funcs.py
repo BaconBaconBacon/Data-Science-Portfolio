@@ -63,6 +63,8 @@ class SQL:
         self.engine = None
 
         self.engine_string = SQL_ENGINE_STR
+        # Base connection string (without database name) for admin operations
+        self._base_conn_str = self.engine_string.rsplit("/", 1)[0]
 
         self._connect_to_sql()
 
@@ -87,7 +89,7 @@ class SQL:
             True if database created or already exists, False on failure.
         """
         # First, try to connect to the database to verify it's actually usable
-        test_conn_str = f"postgresql+psycopg2://postgres:postgres@localhost:5432/{database_name}"
+        test_conn_str = f"{self._base_conn_str}/{database_name}"
 
         try:
             test_engine = s.create_engine(test_conn_str)
@@ -127,7 +129,7 @@ class SQL:
                 # Drop the corrupted database entry
                 try:
                     system_engine = s.create_engine(
-                        "postgresql+psycopg2://postgres:postgres@localhost:5432/postgres"
+                        f"{self._base_conn_str}/postgres"
                     )
                     with system_engine.connect() as conn:
                         conn.connection.connection.set_isolation_level(0)  # Autocommit
@@ -156,7 +158,7 @@ class SQL:
         # Create it fresh
         try:
             system_engine = s.create_engine(
-                "postgresql+psycopg2://postgres:postgres@localhost:5432/postgres"
+                f"{self._base_conn_str}/postgres"
             )
             # Use raw connection with autocommit (CREATE DATABASE cannot run in transaction)
             with system_engine.connect() as conn:
@@ -171,7 +173,7 @@ class SQL:
         # Install PostGIS extension in the new database
         try:
             db_engine = s.create_engine(
-                f"postgresql+psycopg2://postgres:postgres@localhost:5432/{database_name}"
+                f"{self._base_conn_str}/{database_name}"
             )
             with db_engine.connect() as conn:
                 conn.execute(s.text("CREATE EXTENSION IF NOT EXISTS postgis"))
