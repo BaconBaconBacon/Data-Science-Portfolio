@@ -13,6 +13,7 @@ import census
 import geopandas as gpd
 import json
 import numpy as np
+import re
 import requests
 import time
 
@@ -51,9 +52,52 @@ def _fetch_census_labels(year: int) -> dict:
     }
 
 
+def _shorten_concept(concept: str) -> str:
+    """Shorten a Census concept string into a compact topic label.
+
+    Example: 'Place of Birth by Nativity and Citizenship Status' -> 'Birthplace/Citizenship'
+    """
+    short = concept
+
+    # Remove parenthetical qualifiers (inflation-adjusted, dollars, etc.)
+    short = re.sub(r"\s*\([^)]*\)", "", short)
+
+    # Remove common filler phrases
+    filler = [
+        "in the United States",
+        "for the Population",
+        "of the Population",
+        "of the Total",
+        "in the Past 12 Months",
+        "for Occupied Housing Units",
+        "for Housing Units",
+    ]
+    for f in filler:
+        short = short.replace(f, "")
+
+    # Collapse "X by Y by Z" -> keep first noun phrase from each
+    if " by " in short:
+        parts = short.split(" by ")
+        shortened = []
+        for p in parts:
+            words = p.strip().split()
+            skip = {"of", "the", "and", "in", "for", "a", "an", "or"}
+            core = [w for w in words if w.lower() not in skip]
+            shortened.append(" ".join(core[:2]) if core else p.strip())
+        short = "/".join(shortened)
+
+    # Clean up extra whitespace
+    short = re.sub(r"\s{2,}", " ", short).strip()
+
+    if len(short) > 45:
+        short = short[:42] + "..."
+
+    return short
+
+
 def census_code_to_label(code: str, year: int = 2023) -> str:
     """
-    Convert census variable code to human-readable label with topic.
+    Convert census variable code to a concise human-readable label.
 
     Standalone function that fetches from Census API.
     Results are cached for the session.
@@ -68,12 +112,12 @@ def census_code_to_label(code: str, year: int = 2023) -> str:
     Returns
     -------
     str
-        Human-readable label with topic prefix
+        Concise label: 'Topic: last hierarchy level(s)'
 
     Example
     -------
     >>> census_code_to_label('B25040_004E')
-    'House Heating Fuel: Fuel oil, kerosene, etc.'
+    'House Heating/Fuel: Fuel oil, kerosene, etc.'
     """
     labels = _fetch_census_labels(year)
     info = labels.get(code)
@@ -83,11 +127,32 @@ def census_code_to_label(code: str, year: int = 2023) -> str:
     concept = info.get("concept", "")
     label = info.get("label", "")
 
-    # Clean up label - remove "Estimate!!Total:!!" prefix
+    # Clean up label — remove "Estimate!!Total:!!" prefix and parentheticals
     clean_label = label.replace("Estimate!!Total:!!", "").replace("Estimate!!", "")
+    clean_label = re.sub(r"\s*\([^)]*\)", "", clean_label)
+
+    # Split the !! hierarchy and keep only the last 2 meaningful parts
+    parts = [p.strip().rstrip(":") for p in clean_label.split("!!") if p.strip()]
+    if len(parts) > 2:
+        clean_label = ": ".join(parts[-2:])
+    elif parts:
+        clean_label = ": ".join(parts)
 
     if concept:
-        return f"{concept}: {clean_label}"
+        short_concept = _shorten_concept(concept)
+        # Skip label if it's just "Total", empty, or restates the concept
+        if clean_label in ("Total", ""):
+            return short_concept
+        # Check if label is redundant with concept
+        concept_lower = concept.lower()
+        label_lower = clean_label.lower()
+        if label_lower in concept_lower or concept_lower in label_lower:
+            return short_concept
+        concept_words = set(concept_lower.split())
+        label_words = set(label_lower.split())
+        if len(label_words) > 3 and len(concept_words & label_words) / len(label_words) > 0.5:
+            return short_concept
+        return f"{short_concept}: {clean_label}"
     return clean_label
 
 
