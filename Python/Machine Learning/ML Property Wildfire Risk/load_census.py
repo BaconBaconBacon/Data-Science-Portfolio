@@ -131,12 +131,10 @@ def census_code_to_label(code: str, year: int = 2023) -> str:
     clean_label = label.replace("Estimate!!Total:!!", "").replace("Estimate!!", "")
     clean_label = re.sub(r"\s*\([^)]*\)", "", clean_label)
 
-    # Split the !! hierarchy and keep only the last 2 meaningful parts
+    # Split the !! hierarchy and keep only the last meaningful part
     parts = [p.strip().rstrip(":") for p in clean_label.split("!!") if p.strip()]
-    if len(parts) > 2:
-        clean_label = ": ".join(parts[-2:])
-    elif parts:
-        clean_label = ": ".join(parts)
+    if parts:
+        clean_label = parts[-1]
 
     if concept:
         short_concept = _shorten_concept(concept)
@@ -150,10 +148,18 @@ def census_code_to_label(code: str, year: int = 2023) -> str:
             return short_concept
         concept_words = set(concept_lower.split())
         label_words = set(label_lower.split())
-        if len(label_words) > 3 and len(concept_words & label_words) / len(label_words) > 0.5:
+        if (
+            len(label_words) > 3
+            and len(concept_words & label_words) / len(label_words) > 0.5
+        ):
             return short_concept
-        return f"{short_concept}: {clean_label}"
-    return clean_label
+        result = f"{short_concept}: {clean_label}"
+    else:
+        result = clean_label
+
+    if len(result) > 55:
+        result = result[:52] + "..."
+    return result
 
 
 class CensusData:

@@ -407,12 +407,13 @@ def train_xgboost(
     cv: int = 5,
     random_state: int = 77,
     n_jobs: int = 2,
+    device: str = "cpu",
 ) -> RandomizedSearchCV:
     """
     Train XGBoost regressor with randomized hyperparameter search.
 
-    Uses CUDA GPU acceleration. Searches over tree depth, learning rate,
-    regularization, and subsampling parameters.
+    Searches over tree depth, learning rate, regularization, and
+    subsampling parameters.
 
     Parameters
     ----------
@@ -426,6 +427,10 @@ def train_xgboost(
         Number of cross-validation folds.
     random_state
         Random seed for reproducibility.
+    device
+        XGBoost device: "cpu" or "cuda". Use "cpu" when VRAM is limited;
+        CPU with n_jobs parallelism is often faster for datasets that
+        don't fit comfortably in GPU memory.
 
     Returns
     -------
@@ -444,7 +449,7 @@ def train_xgboost(
         "reg_lambda": uniform(0, 1),
     }
     search = RandomizedSearchCV(
-        estimator=XGBRegressor(random_state=random_state, device="cuda"),
+        estimator=XGBRegressor(random_state=random_state, device=device),
         param_distributions=param_dist,
         n_iter=n_iter,
         scoring="neg_mean_squared_error",

@@ -52,6 +52,9 @@ TABLE_NAME_CENSUS_TEST = "census_test"
 TABLE_NAME_CENSUS_PROPS = "props_census"
 TABLE_NAME_CENSUS_PROPS_TEST = "props_census_test"
 
+TEST_SAMPLE_SIZE = 5000
+TEST_N_ITER = 5
+TEST_CV = 3
 
 CENSUS_FEATURES = [
     "B25014",
@@ -116,7 +119,8 @@ PATH_DATA = Path("data")
 PATH_DATA_WILDFIRES = PATH_DATA / "wildfires"
 PATH_DATA_PROPERTIES = PATH_DATA / "properties"
 PATH_DATA_CENSUS = PATH_DATA / "census"
-PATH_DATA_MODELS = PATH_DATA / "models"
+
+PATH_MODELS = Path("models")
 
 
 PROP_TABLE_NAME = "properties"

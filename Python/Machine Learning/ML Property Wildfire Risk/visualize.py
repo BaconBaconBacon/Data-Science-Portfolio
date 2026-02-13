@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Optional
 
+from load_census import census_code_to_label
 from settings import HEADER_GEOM
 
 
@@ -323,14 +324,12 @@ def create_combined_map(
 # ─── Matplotlib Charts ──────────────────────────────────────────────────────────
 
 
-def eda(targets_features: pd.DataFrame):
+def eda(targets_features: pd.DataFrame, target: str = "nearest_fire_km"):
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 4))
     axes = axes.flatten()
     # 1. Target distribution
-    axes[0].hist(
-        targets_features["nearest_fire_km"], bins=30, edgecolor="black", alpha=0.7
-    )
+    axes[0].hist(targets_features[target], bins=30, edgecolor="black", alpha=0.7)
     axes[0].set_xlabel("Distance to Nearest Fire (km)")
     axes[0].set_ylabel("Count")
     axes[0].set_title("Target Distribution")
@@ -349,14 +348,15 @@ def eda(targets_features: pd.DataFrame):
     axes[1].set_ylabel("Number of Features")
     axes[1].set_title(f"Missingness Across {len(census_cols_all)} Census Features")
 
-    # 3. Top 10 correlations with target
-    numeric_cols = targets_features.select_dtypes(include="number").columns
-    corrs = (
-        targets_features[numeric_cols]
-        .corrwith(targets_features["nearest_fire_km"])
-        .drop("nearest_fire_km", errors="ignore")
-    )
+    # 3. Top 10 census feature correlations with target
+    # Only use census columns (B*) — exclude proximity features derived from
+    # the same wildfire data as the target to avoid circular correlations.
+    census_numeric = [c for c in census_cols_all if c in targets_features.select_dtypes(include="number").columns]
+    corrs = targets_features[census_numeric].corrwith(targets_features[target])
     top_corrs = corrs.abs().nlargest(10)
+    top_corrs.index = [
+        census_code_to_label(c) if c.startswith("B") else c for c in top_corrs.index
+    ]
     top_corrs.sort_values().plot.barh(ax=axes[2], color="steelblue")
     axes[2].set_xlabel("|Correlation| with Target")
     axes[2].set_title("Top 10 Correlated Features")
@@ -371,7 +371,7 @@ def eda(targets_features: pd.DataFrame):
     print(f"Census features: {len(census_cols_all)}")
     print(f"Features with missing data: {(missing_pct > 0).sum()}")
     print(
-        f"Target range: {targets_features['nearest_fire_km'].min():.1f} – {targets_features['nearest_fire_km'].max():.1f} km"
+        f"Target range: {targets_features[target].min():.1f} – {targets_features[target].max():.1f} km"
     )
     return fig
 
