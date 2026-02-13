@@ -42,14 +42,29 @@ from functools import lru_cache
 
 @lru_cache(maxsize=4)
 def _fetch_census_labels(year: int) -> dict:
-    """Fetch and cache census variable labels and concepts from API."""
+    """Fetch census variable labels, with local JSON cache to avoid repeat downloads."""
+    cache_dir = Path("data") / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / f"census_labels_{year}.json"
+
+    if cache_file.exists():
+        with open(cache_file, "r") as f:
+            return json.load(f)
+
+    print(f"Fetching census variable labels for {year} from API (~10MB, one-time download)...")
     url = f"https://api.census.gov/data/{year}/acs/acs5/variables.json"
     r = requests.get(url)
     vars_data = r.json()["variables"]
-    return {
+    labels = {
         k: {"label": v.get("label", ""), "concept": v.get("concept", "")}
         for k, v in vars_data.items()
     }
+
+    with open(cache_file, "w") as f:
+        json.dump(labels, f)
+    print(f"Cached labels to {cache_file}")
+
+    return labels
 
 
 def _shorten_concept(concept: str) -> str:

@@ -325,18 +325,20 @@ def create_combined_map(
 
 
 def eda(targets_features: pd.DataFrame, target: str = "nearest_fire_km"):
+    # Work with plain DataFrame — GeoDataFrame column ops are slow on large data
+    df = pd.DataFrame(targets_features.drop(columns="geometry", errors="ignore"))
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 4))
     axes = axes.flatten()
     # 1. Target distribution
-    axes[0].hist(targets_features[target], bins=30, edgecolor="black", alpha=0.7)
+    axes[0].hist(df[target], bins=30, edgecolor="black", alpha=0.7)
     axes[0].set_xlabel("Distance to Nearest Fire (km)")
     axes[0].set_ylabel("Count")
     axes[0].set_title("Target Distribution")
 
     # 2. Missing data summary by feature group
-    census_cols_all = [c for c in targets_features.columns if c.startswith("B")]
-    missing_pct = targets_features[census_cols_all].isna().mean() * 100
+    census_cols_all = [c for c in df.columns if c.startswith("B")]
+    missing_pct = df[census_cols_all].isna().mean() * 100
     axes[1].hist(
         missing_pct[missing_pct > 0],
         bins=20,
@@ -351,8 +353,14 @@ def eda(targets_features: pd.DataFrame, target: str = "nearest_fire_km"):
     # 3. Top 10 census feature correlations with target
     # Only use census columns (B*) — exclude proximity features derived from
     # the same wildfire data as the target to avoid circular correlations.
-    census_numeric = [c for c in census_cols_all if c in targets_features.select_dtypes(include="number").columns]
-    corrs = targets_features[census_numeric].corrwith(targets_features[target])
+    census_numeric = [c for c in census_cols_all if c in df.select_dtypes(include="number").columns]
+    census_arr = df[census_numeric].values
+    target_arr = df[target].values
+    census_centered = census_arr - np.nanmean(census_arr, axis=0)
+    target_centered = target_arr - np.nanmean(target_arr)
+    cov = np.nanmean(census_centered * target_centered[:, None], axis=0)
+    corr_values = cov / (np.nanstd(census_arr, axis=0) * np.nanstd(target_arr))
+    corrs = pd.Series(corr_values, index=census_numeric)
     top_corrs = corrs.abs().nlargest(10)
     top_corrs.index = [
         census_code_to_label(c) if c.startswith("B") else c for c in top_corrs.index
@@ -366,12 +374,12 @@ def eda(targets_features: pd.DataFrame, target: str = "nearest_fire_km"):
     plt.show()
 
     print(
-        f"\nDataset: {targets_features.shape[0]} properties, {targets_features.shape[1]} columns"
+        f"\nDataset: {len(df)} properties, {df.shape[1]} columns"
     )
     print(f"Census features: {len(census_cols_all)}")
     print(f"Features with missing data: {(missing_pct > 0).sum()}")
     print(
-        f"Target range: {targets_features[target].min():.1f} – {targets_features[target].max():.1f} km"
+        f"Target range: {df[target].min():.1f} – {df[target].max():.1f} km"
     )
     return fig
 
