@@ -2,7 +2,7 @@
 
 Predicts wildfire risk for US properties using satellite fire detections and census data. The model takes a property location, calculates its proximity to historical wildfires, enriches it with neighborhood demographics from the Census ACS5, and outputs a risk score.
 
-Built as a portfolio project to demonstrate GIS data pipelines, ML workflows, and AWS deployment.
+Built as a portfolio project to demonstrate GIS data pipelines, and ML workflows.
 
 ## How it works
 
@@ -64,37 +64,14 @@ latitude,longitude
 40.7128,-74.0060
 ```
 
-The pipeline runs properties and census fetching in parallel for faster execution. Use `--sequential` to disable parallelism.
-
-## Training on AWS
-
-For larger runs, train on EC2 instead of locally:
-
-```powershell
-# Check your AWS setup
-.\aws\check_aws.ps1
-
-# Upload code and launch a spot instance
-.\aws\deploy.ps1 -Code -Launch
-```
-
-The EC2 instance runs `train.py`, saves the model to S3, then auto-terminates. Costs ~$0.05-0.10/hr for a c6i.4xlarge spot instance.
-
-```bash
-# train.py usage
-python train.py \
-  --input s3://wildfire-risk-ml/data/model_joined.parquet \
-  --output s3://wildfire-risk-ml/models/best_model.pkl \
-  --n-iter 50 \
-  --model both
-```
+The pipeline runs properties and census fetching in parallel for faster execution.
 
 ## Project structure
 
 ```
 ├── fire_risk_ML.ipynb    # Main notebook — run this
 ├── run_etl_pipeline.py   # CLI for ETL: properties → census → wildfires → proximity
-├── train.py              # Standalone training script (local or AWS)
+├── train.py              # Standalone training script
 ├── test_pipeline.py      # Automated tests (pytest)
 ├── load_properties.py    # Property generation + geocoding
 ├── load_wildfires.py     # NASA FIRMS data ETL
@@ -104,11 +81,6 @@ python train.py \
 ├── sql_funcs.py          # PostgreSQL/PostGIS interface
 ├── missing_analysis.py   # MCAR/MAR missingness detection for imputation
 ├── settings.py           # Config: paths, table names, parameters
-├── aws/
-│   ├── deploy.ps1        # Upload to S3 + launch EC2
-│   ├── check_aws.ps1     # Validate AWS setup
-│   ├── setup_ec2.sh      # EC2 bootstrap script
-│   └── spot-options.json
 └── data/
     ├── wildfires/        # NASA FIRMS shapefiles (not tracked)
     └── *.parquet         # Generated datasets (not tracked)

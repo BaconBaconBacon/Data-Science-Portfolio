@@ -1,9 +1,11 @@
-"""Automated tests for the wildfire risk ML pipeline.
+"""Automated tests for the wildfire risk ETL pipeline.
 
 Run with:
-    pytest test_pipeline.py -v                       # Full suite (~2 min)
-    pytest test_pipeline.py -m "not db and not e2e"  # Fast unit tests (~10s)
-    pytest test_pipeline.py -m "db and not e2e"      # DB tests only (~30s)
+    pytest test_etl_pipeline.py -v                       # Full suite (~2 min)
+    pytest test_etl_pipeline.py -m "not db and not e2e"  # Fast unit tests (~10s)
+    pytest test_etl_pipeline.py -m "db and not e2e"      # DB tests only (~30s)
+
+Shared fixtures (sql_test, small_properties_gdf, small_fires_gdf) are in conftest.py.
 """
 
 import numpy as np
@@ -18,51 +20,6 @@ from shapely.geometry import Point
 # ---------------------------------------------------------------------------
 db = pytest.mark.db
 e2e = pytest.mark.e2e
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-@pytest.fixture(scope="session")
-def sql_test():
-    """Shared test DB connection (session-scoped for speed)."""
-    from sql_funcs import SQL
-
-    SQL.kill_idle(True)
-    obj = SQL(test=True)
-    yield obj
-    obj.disconnect_and_close()
-
-
-@pytest.fixture
-def small_properties_gdf():
-    """10 synthetic property points in EPSG:5070 (CONUS projected CRS)."""
-    rng = np.random.default_rng(42)
-    xs = rng.uniform(500_000, 2_500_000, 10)
-    ys = rng.uniform(200_000, 2_500_000, 10)
-    geom = [Point(x, y) for x, y in zip(xs, ys)]
-    return gpd.GeoDataFrame(
-        {"geoid": [f"geo_{i}" for i in range(10)]},
-        geometry=geom,
-        crs="EPSG:5070",
-    )
-
-
-@pytest.fixture
-def small_fires_gdf():
-    """5 synthetic fire points in EPSG:5070 with required columns."""
-    rng = np.random.default_rng(99)
-    xs = rng.uniform(500_000, 2_500_000, 5)
-    ys = rng.uniform(200_000, 2_500_000, 5)
-    geom = [Point(x, y) for x, y in zip(xs, ys)]
-    return gpd.GeoDataFrame(
-        {
-            "FRP": rng.uniform(1.0, 100.0, 5),
-            "ACQ_DATE": pd.to_datetime(["2024-01-01"] * 5),
-        },
-        geometry=geom,
-        crs="EPSG:5070",
-    )
 
 
 # ===================================================================
@@ -314,7 +271,9 @@ class TestSQLDataRoundTrip:
         sql_test.save_gpd_to_sql(table, gdf)
         result = sql_test.read_gpd_from_sql(table)
 
-        assert "SAT_ID" in result.columns, f"Column case lost. Cols: {result.columns.tolist()}"
+        assert (
+            "SAT_ID" in result.columns
+        ), f"Column case lost. Cols: {result.columns.tolist()}"
         assert "ACQ_DATE" in result.columns
         assert "FRP" in result.columns
         assert result["SAT_ID"].iloc[0] == "J1V-C2"
@@ -412,7 +371,9 @@ class TestMiniPipeline:
         )
         combined = census.merge_census_info(properties_gdf)
         census_cols = [c for c in combined.columns if c.startswith("B")]
-        assert len(census_cols) > 100, f"Expected 100+ census cols, got {len(census_cols)}"
+        assert (
+            len(census_cols) > 100
+        ), f"Expected 100+ census cols, got {len(census_cols)}"
         assert len(combined) == len(properties_gdf)
 
         # 3. Load wildfire data

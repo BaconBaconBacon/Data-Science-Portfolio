@@ -3,11 +3,9 @@ Training module for wildfire risk ML pipeline.
 
 Provides preprocessing with adaptive imputation based on missingness analysis,
 model training with hyperparameter tuning, evaluation, and persistence.
-Supports both local and S3 storage.
 
 Usage:
     python train.py --input data/model_joined.parquet --output Models/model.pkl
-    python train.py --input s3://bucket/data.parquet --output s3://bucket/model.pkl
 """
 
 import argparse
@@ -17,15 +15,9 @@ import pickle
 import tempfile
 import time
 import warnings
-
-import boto3
 import numpy as np
 import pandas as pd
-
-# Suppress XGBoost device mismatch warning (model on CUDA, inference data on CPU)
-warnings.filterwarnings(
-    "ignore", message=".*Falling back to prediction using DMatrix.*"
-)
+import joblib
 
 from pathlib import Path
 from scipy.stats import randint, uniform
@@ -45,6 +37,11 @@ from missing_analysis import (
     print_missingness_report,
 )
 from settings import PATH_DATA
+
+# Suppress XGBoost device mismatch warning (model on CUDA, inference data on CPU)
+warnings.filterwarnings(
+    "ignore", message=".*Falling back to prediction using DMatrix.*"
+)
 
 
 def _generate_preprocess_cache_key(
@@ -578,99 +575,19 @@ def load_model(path: Path) -> dict:
         return pickle.load(f)
 
 
-def upload_to_s3(local_path: str, bucket: str, key: str) -> None:
-    """Upload local file to S3 bucket."""
-    s3 = boto3.client("s3")
-    s3.upload_file(local_path, bucket, key)
-
-
-def download_from_s3(bucket: str, key: str, local_path: str) -> None:
-    """Download file from S3 bucket to local path."""
-    s3 = boto3.client("s3")
-    s3.download_file(bucket, key, local_path)
-
-
-def is_s3_path(path: str) -> bool:
-    """Check if path is an S3 URI (starts with s3://)."""
-    return path.startswith("s3://")
-
-
-def parse_s3_path(s3_path: str) -> tuple[str, str]:
-    """
-    Parse S3 URI into bucket and key components.
-
-    Example: 's3://my-bucket/path/to/file' -> ('my-bucket', 'path/to/file')
-    """
-    path = s3_path.replace("s3://", "")
-    parts = path.split("/", 1)
-    return parts[0], parts[1] if len(parts) > 1 else ""
-
-
-def read_parquet_auto(path: str) -> pd.DataFrame:
-    """
-    Read parquet file from local path or S3.
-
-    Automatically detects S3 URIs and handles temporary file management
-    for S3 downloads.
-    """
-    if is_s3_path(path):
-        bucket, key = parse_s3_path(path)
-        fd, tmp_path = tempfile.mkstemp(suffix=".parquet")
-        os.close(fd)
-        try:
-            print(f"  Downloading from S3: {path}")
-            download_from_s3(bucket, key, tmp_path)
-            return pd.read_parquet(tmp_path)
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-    else:
-        return pd.read_parquet(path)
-
-
-def save_model_auto(
-    model: BaseEstimator,
-    path: str,
-    pipeline: Pipeline | None = None,
-    feature_names: list[str] | None = None,
-) -> None:
-    """
-    Save model to local path or S3.
-
-    Automatically detects S3 URIs and handles temporary file management
-    for S3 uploads.
-    """
-    if is_s3_path(path):
-        bucket, key = parse_s3_path(path)
-        fd, tmp_path = tempfile.mkstemp(suffix=".pkl")
-        os.close(fd)
-        try:
-            save_model(model, Path(tmp_path), pipeline, feature_names)
-            upload_to_s3(tmp_path, bucket, key)
-            print(f"  Model uploaded to {path}")
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-    else:
-        save_model(model, Path(path), pipeline, feature_names)
-        print(f"  Model saved to {path}")
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Train wildfire risk model. Supports local and S3 paths."
-    )
+    parser = argparse.ArgumentParser(description="Train wildfire risk model.")
     parser.add_argument(
         "--input",
         type=str,
         required=True,
-        help="Path to input parquet (local or s3://...)",
+        help="Path to local input parquet",
     )
     parser.add_argument(
         "--output",
         type=str,
         required=True,
-        help="Path for output model (local or s3://...)",
+        help="Path for loacl output model",
     )
     parser.add_argument(
         "--target",
@@ -733,7 +650,7 @@ if __name__ == "__main__":
     print("=" * 60)
 
     print("\n[1/5] Loading data...")
-    df = read_parquet_auto(args.input)
+    df = pd.read_parquet(args.input)
     print(f"  Loaded {len(df)} rows, {len(df.columns)} columns")
 
     print("\n[2/5] Splitting data...")
@@ -814,9 +731,7 @@ if __name__ == "__main__":
     print(f"\n  Best model: {best_name}")
 
     print("\n[5/5] Saving model...")
-    save_model_auto(
-        best_model, args.output, pipeline=pipeline, feature_names=feature_names
-    )
+    joblib.dump(best_model, args.output, pipeline=pipeline, feature_names=feature_names)
 
     print("\n" + "=" * 60)
     print("Training complete!")
