@@ -1,0 +1,12 @@
+# Project-specific ignores (general Python/IDE patterns are in the repo root .gitignore)
+
+# Generated directories
+data/
+models/
+figures/
+
+# Parquet files (large binary data)
+*.parquet
+
+# Jupyter notebook backups
+*.ipynb~

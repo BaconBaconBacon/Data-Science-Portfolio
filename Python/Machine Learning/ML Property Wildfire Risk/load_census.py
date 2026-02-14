@@ -250,9 +250,13 @@ class CensusData:
         self.year = year
         self.verbose = verbose
 
-        self.census = census.Census(
-            os.environ.get("US_CENSUS_API_KEY"), year=self.year
-        ).acs5
+        api_key = os.environ.get("US_CENSUS_API_KEY")
+        if not api_key:
+            raise EnvironmentError(
+                "US_CENSUS_API_KEY environment variable not set. "
+                "Get a free key at https://api.census.gov/data/key_signup.html"
+            )
+        self.census = census.Census(api_key, year=self.year).acs5
 
         self.metadata_filepath = DATA_CENSUS_DIR / f"acs5_variables_{year}.txt"
 
@@ -1254,21 +1258,13 @@ class CensusData:
             raise TypeError("'variable' must be a string or list of strings.")
 
     def get_acs5_fields(self, year=2023):
-        """
-        Cheeky bypass for the census package's fields() method.
-        TODO: Figure out what's wrong with fields(), branch the repo, fix it, send PR
-        """
+        """Fetch all ACS5 variable codes directly from the Census API."""
         url = f"https://api.census.gov/data/{year}/acs/acs5/variables.json"
         r = requests.get(url)
         return r.json()["variables"].keys()
 
     def get_acs5_fields_with_labels(self, year=2023):
-        """
-        Cheeky bypass for the census package's fields() method.
-
-        Gets keys and labels, the labels are used to filter the columns of a given table.
-        TODO: Figure out what's wrong with fields(), branch the repo, fix it, send PR
-        """
+        """Fetch all ACS5 variable codes with their human-readable labels from the Census API."""
         url = f"https://api.census.gov/data/{year}/acs/acs5/variables.json"
         r = requests.get(url)
         vars = r.json()["variables"]

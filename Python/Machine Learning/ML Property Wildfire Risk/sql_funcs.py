@@ -392,10 +392,7 @@ class SQL:
             return string
 
     def create_census_cache_table(self) -> None:
-        """
-        Creates a temporary table to store census information should the API query processes fail part way.
-        TODO: Turn these headers/dtypes into a dict for settings.py
-        """
+        """Create a cache table for census API results to resume interrupted fetches."""
         q = f"""
         CREATE TABLE IF NOT EXISTS {TABLE_NAME_CACHE} (
             state_id INTEGER,

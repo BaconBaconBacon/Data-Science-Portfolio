@@ -37,10 +37,12 @@ GIS_DESIRED_COLS = [
 # Set the coordinate system
 GIS_DEFAULT_CRS = 5070
 
-SQL_ENGINE_STR = os.environ.get(
-    "DATABASE_URL",  # for use with a path variable, the second variable is backup
-    "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project",
-)
+SQL_ENGINE_STR = os.environ.get("DATABASE_URL")
+if not SQL_ENGINE_STR:
+    raise EnvironmentError(
+        "DATABASE_URL environment variable not set. "
+        "Example: DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/wildfire_risk_project"
+    )
 
 
 # Should be stored as a star schema?
