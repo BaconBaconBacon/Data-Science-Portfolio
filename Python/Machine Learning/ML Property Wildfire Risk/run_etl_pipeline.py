@@ -35,10 +35,15 @@ from load_properties import Properties
 from load_census import CensusData
 import load_wildfires
 import gis
-from settings import TABLE_NAME_CENSUS_PROPS, PROP_TABLE_NAME, PROP_TABLE_NAME_TEST, PATH_DATA
+from settings import (
+    TABLE_NAME_CENSUS_PROPS,
+    PROP_TABLE_NAME,
+    PROP_TABLE_NAME_TEST,
+    DATA_DIR,
+)
 
-MERGED_PARQUET_PATH = PATH_DATA / "merged_properties_census.parquet"
-TARGETS_PARQUET_PATH = PATH_DATA / "targets_features.parquet"
+MERGED_PARQUET_PATH = DATA_DIR / "merged_properties_census.parquet"
+TARGETS_PARQUET_PATH = DATA_DIR / "targets_features.parquet"
 
 
 def _save_merged_result(result, label=""):
@@ -327,7 +332,9 @@ def run_wildfires_and_proximity(sql_obj, combined_gdf, n_jobs=5):
 
     TARGETS_PARQUET_PATH.parent.mkdir(parents=True, exist_ok=True)
     targets_features.to_parquet(TARGETS_PARQUET_PATH)
-    print(f"Saved {len(targets_features)} rows x {targets_features.shape[1]} cols to {TARGETS_PARQUET_PATH}")
+    print(
+        f"Saved {len(targets_features)} rows x {targets_features.shape[1]} cols to {TARGETS_PARQUET_PATH}"
+    )
 
     return targets_features
 

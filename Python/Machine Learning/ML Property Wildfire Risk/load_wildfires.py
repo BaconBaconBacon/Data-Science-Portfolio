@@ -15,7 +15,7 @@ import geopandas as gpd
 from settings import (
     GIS_DESIRED_COLS,
     GIS_DEFAULT_CRS,
-    PATH_DATA_WILDFIRES,
+    DATA_WILDFIRES_DIR,
     WILDFIRES_CLUSTER_TIME_SCALE,
     WILDFIRES_CLUSTER_SPATIAL_EPS,
     USA_MAX_LAT,
@@ -58,7 +58,7 @@ class WildfireData:
         self.sql_obj = sql_obj
         self.test_mode = self.sql_obj.test_mode
 
-        self.data_path = PATH_DATA_WILDFIRES
+        self.data_path = DATA_WILDFIRES_DIR
 
         if self.sql_obj.check_table_exists(WILDFIRES_TABLE_NAME) and not self.test_mode:
             self.data = self._read_from_sql()

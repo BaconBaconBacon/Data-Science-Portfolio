@@ -43,7 +43,7 @@ from settings import (
     PROP_ESTIMATE_SAMPLE,
     PROP_PROGRESS_INTERVAL,
     PROP_SAVE_INTERVAL,
-    PATH_DATA_CENSUS,
+    DATA_CENSUS_DIR,
     TIGER_YEAR,
     STATE_FIPS_CODES,
     CONUS_STATE_FIPS,
@@ -260,7 +260,9 @@ class Properties:
             Number of parallel threads (only used if parallel=True).
         """
         if self.test_mode and self.num_properties > 0:
-            print(f"Test mode: {self.num_properties} properties already exist. Skipping generation.")
+            print(
+                f"Test mode: {self.num_properties} properties already exist. Skipping generation."
+            )
             return
 
         # Route to parallel version if requested
@@ -394,7 +396,9 @@ class Properties:
             Useful when caller needs to signal completion before cleanup.
         """
         if self.test_mode and self.num_properties > 0:
-            print(f"Test mode: {self.num_properties} properties already exist. Skipping generation.")
+            print(
+                f"Test mode: {self.num_properties} properties already exist. Skipping generation."
+            )
             return
 
         print(f"Adding {quantity} properties using geography-first approach...")
@@ -484,7 +488,9 @@ class Properties:
             Print progress updates.
         """
         if self.test_mode and self.num_properties > 0:
-            print(f"Test mode: {self.num_properties} properties already exist. Skipping generation.")
+            print(
+                f"Test mode: {self.num_properties} properties already exist. Skipping generation."
+            )
             return
 
         quantity = len(coordinates)
@@ -876,9 +882,7 @@ class Properties:
             if self.verbose:
                 print(f"Adding {PROPERTIES_INIT_COUNT} new properties to table...")
             self.add_random_properties_geo_first(
-                PROPERTIES_INIT_COUNT,
-                granularity="tract",
-                verbose=False
+                PROPERTIES_INIT_COUNT, granularity="tract", verbose=False
             )
             # Reload from SQL to get auto-generated property_ids
             self.properties_gpd = self.sql_obj.read_gpd_from_sql(self.table_name)

@@ -27,7 +27,7 @@ from settings import (
     GIS_SCORING_DEFAULT_POWER,
     GIS_SCORING_DEFAULT_BANDWIDTH_M,
     GIS_SCORING_DEFAULT_RINGS_M,
-    PATH_DATA,
+    DATA_DIR,
 )
 
 
@@ -235,7 +235,9 @@ def calc_buffer_ring_features(
             mask = (dists >= inner) & (dists < outer)
             result[i, j] = mask.sum()
             if weight_col:
-                result[i, len(rings_m) + j] = weights[np.array(neighbor_idx)[mask]].sum()
+                result[i, len(rings_m) + j] = weights[
+                    np.array(neighbor_idx)[mask]
+                ].sum()
 
     return pd.DataFrame(result, index=properties.index, columns=columns)
 
@@ -323,7 +325,7 @@ def calc_all_features(
     _validate_inputs(properties, fires)
 
     # Check cache
-    cache_dir = PATH_DATA / "cache"
+    cache_dir = DATA_DIR / "cache"
     cache_dir.mkdir(exist_ok=True)
     cache_key = _generate_cache_key(
         properties, fires, radius_m, power, bandwidth, rings_m, weight_col
@@ -338,7 +340,6 @@ def calc_all_features(
             return cached.set_index(properties.index)
         else:
             print("Cache size mismatch, recomputing...")
-
 
     print(f"Computing GIS features for {len(properties)} properties...")
     start = time.time()
@@ -395,9 +396,16 @@ def _process_chunk(
         futures = {
             executor.submit(calc_nearest_fire, chunk_props, fires): "nearest",
             executor.submit(calc_kde, chunk_props, fires, bandwidth): "kde",
-            executor.submit(calc_idw, chunk_props, fires, radius_m, power, weight_col): "idw",
             executor.submit(
-                calc_exponential_decay, chunk_props, fires, radius_m, bandwidth, weight_col
+                calc_idw, chunk_props, fires, radius_m, power, weight_col
+            ): "idw",
+            executor.submit(
+                calc_exponential_decay,
+                chunk_props,
+                fires,
+                radius_m,
+                bandwidth,
+                weight_col,
             ): "decay",
             executor.submit(
                 calc_buffer_ring_features, chunk_props, fires, rings_m, weight_col
@@ -409,7 +417,13 @@ def _process_chunk(
             results[name] = future.result()
 
     return pd.concat(
-        [results["idw"], results["kde"], results["decay"], results["rings"], results["nearest"]],
+        [
+            results["idw"],
+            results["kde"],
+            results["decay"],
+            results["rings"],
+            results["nearest"],
+        ],
         axis=1,
     )
 
@@ -453,7 +467,7 @@ def calc_all_features_parallel(
         rings_m = GIS_SCORING_DEFAULT_RINGS_M
 
     # Check cache (same logic as sequential version)
-    cache_dir = PATH_DATA / "cache"
+    cache_dir = DATA_DIR / "cache"
     cache_dir.mkdir(exist_ok=True)
     cache_key = _generate_cache_key(
         properties, fires, radius_m, power, bandwidth, rings_m, weight_col
@@ -468,12 +482,12 @@ def calc_all_features_parallel(
         else:
             print("Cache size mismatch, recomputing...")
 
-
-
     if n_jobs == -1:
         n_jobs = mp.cpu_count()
 
-    print(f"Computing GIS features for {len(properties)} properties ({n_jobs} parallel jobs)...")
+    print(
+        f"Computing GIS features for {len(properties)} properties ({n_jobs} parallel jobs)..."
+    )
     start = time.time()
 
     # Split properties into chunks
@@ -488,7 +502,9 @@ def calc_all_features_parallel(
         # Use iloc slicing instead of np.array_split to avoid GeoDataFrame.swapaxes deprecation
         chunk_size = len(properties) // n_chunks
         chunks = [
-            properties.iloc[i * chunk_size : (i + 1) * chunk_size if i < n_chunks - 1 else None]
+            properties.iloc[
+                i * chunk_size : (i + 1) * chunk_size if i < n_chunks - 1 else None
+            ]
             for i in range(n_chunks)
         ]
 

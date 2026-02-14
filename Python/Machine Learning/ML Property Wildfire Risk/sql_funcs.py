@@ -23,7 +23,7 @@ from settings import (
     TABLE_NAME_CENSUS_PROPS,
     TABLE_NAME_CENSUS_PROPS_TEST,
     HEADER_GEOM,
-    PATH_DATA,
+    DATA_DIR,
 )
 import pandas as pd
 import geopandas as gpd
@@ -95,9 +95,9 @@ class SQL:
             test_conn = test_engine.connect()
 
             # Database exists and is usable - check if PostGIS is installed
-            result = test_conn.execute(s.text(
-                "SELECT 1 FROM pg_extension WHERE extname = 'postgis'"
-            ))
+            result = test_conn.execute(
+                s.text("SELECT 1 FROM pg_extension WHERE extname = 'postgis'")
+            )
             postgis_installed = result.fetchone() is not None
             test_conn.close()
             test_engine.dispose()
@@ -113,7 +113,9 @@ class SQL:
                     db_engine.dispose()
                     print(f"Installed PostGIS extension in '{database_name}'")
                 except Exception as postgis_error:
-                    print(f"Error: Failed to install PostGIS extension: {postgis_error}")
+                    print(
+                        f"Error: Failed to install PostGIS extension: {postgis_error}"
+                    )
                     return False
 
             return True
@@ -122,21 +124,23 @@ class SQL:
 
             # Check if this is a "missing directory" corruption error
             if "does not exist" in error_str and "subdirectory" in error_str:
-                print(f"Detected corrupted database '{database_name}' (missing data directory)")
+                print(
+                    f"Detected corrupted database '{database_name}' (missing data directory)"
+                )
                 print(f"Cleaning up and recreating...")
 
                 # Drop the corrupted database entry
                 try:
-                    system_engine = s.create_engine(
-                        f"{self._base_conn_str}/postgres"
-                    )
+                    system_engine = s.create_engine(f"{self._base_conn_str}/postgres")
                     with system_engine.connect() as conn:
                         conn.connection.connection.set_isolation_level(0)  # Autocommit
                         # Force disconnect any stale connections
-                        conn.execute(s.text(
-                            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                            f"WHERE datname = '{database_name}' AND pid <> pg_backend_pid()"
-                        ))
+                        conn.execute(
+                            s.text(
+                                f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                                f"WHERE datname = '{database_name}' AND pid <> pg_backend_pid()"
+                            )
+                        )
                         # Drop the corrupted database
                         conn.execute(s.text(f"DROP DATABASE IF EXISTS {database_name}"))
                     system_engine.dispose()
@@ -156,9 +160,7 @@ class SQL:
         # At this point, database either doesn't exist or was just dropped
         # Create it fresh
         try:
-            system_engine = s.create_engine(
-                f"{self._base_conn_str}/postgres"
-            )
+            system_engine = s.create_engine(f"{self._base_conn_str}/postgres")
             # Use raw connection with autocommit (CREATE DATABASE cannot run in transaction)
             with system_engine.connect() as conn:
                 conn.connection.connection.set_isolation_level(0)  # Autocommit mode
@@ -171,9 +173,7 @@ class SQL:
 
         # Install PostGIS extension in the new database
         try:
-            db_engine = s.create_engine(
-                f"{self._base_conn_str}/{database_name}"
-            )
+            db_engine = s.create_engine(f"{self._base_conn_str}/{database_name}")
             with db_engine.connect() as conn:
                 conn.execute(s.text("CREATE EXTENSION IF NOT EXISTS postgis"))
                 conn.commit()
@@ -211,9 +211,7 @@ class SQL:
             self.engine = s.create_engine(self.engine_string)
             self.connection = self.engine.connect()
         except Exception as e:
-            raise RuntimeError(
-                f"Failed to connect to database '{db_name}': {e}"
-            )
+            raise RuntimeError(f"Failed to connect to database '{db_name}': {e}")
 
     def disconnect_and_close(self) -> None:
         if self.connection is not None:
@@ -538,18 +536,24 @@ class SQL:
               AND c.variable = '_FAILED_'
             """
         )
-        result = self.connection.execute(
-            q, {"granularity": granularity, "year": year}
-        )
+        result = self.connection.execute(q, {"granularity": granularity, "year": year})
         self.connection.commit()
         deleted = result.rowcount
         if deleted > 0:
             print(f"Removed {deleted} properties in failed geographies")
         return deleted
 
-    def save_df_to_sql(self, table_name: str, df: pd.DataFrame, chunksize: int = 10000) -> None:
+    def save_df_to_sql(
+        self, table_name: str, df: pd.DataFrame, chunksize: int = 10000
+    ) -> None:
         """Save DataFrame to SQL table with chunked inserts to avoid memory issues."""
-        df.to_sql(table_name, self.connection, if_exists="append", index=False, chunksize=chunksize)
+        df.to_sql(
+            table_name,
+            self.connection,
+            if_exists="append",
+            index=False,
+            chunksize=chunksize,
+        )
         self.connection.commit()
 
     def read_df_from_sql(self, query: str):
@@ -638,7 +642,9 @@ class SQL:
         ValueError
             If the props_census table does not exist (pipeline not run yet).
         """
-        table = TABLE_NAME_CENSUS_PROPS_TEST if self.test_mode else TABLE_NAME_CENSUS_PROPS
+        table = (
+            TABLE_NAME_CENSUS_PROPS_TEST if self.test_mode else TABLE_NAME_CENSUS_PROPS
+        )
         if not self.check_table_exists(table):
             raise ValueError(f"Table '{table}' does not exist. Run the pipeline first.")
         return self.read_gpd_from_sql(table)
@@ -774,7 +780,7 @@ class SQL:
             print(f"Table '{table_name}' does not exist, skipping backup.")
             return None
 
-        backup_dir = backup_dir or (PATH_DATA / "backups")
+        backup_dir = backup_dir or (DATA_DIR / "backups")
         backup_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

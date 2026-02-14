@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from load_census import census_code_to_label
-from settings import HEADER_GEOM
+from settings import HEADER_GEOM, FIGURES_DIR
 
 
 def create_wildfire_map(
@@ -324,7 +324,23 @@ def create_combined_map(
 # ─── Matplotlib Charts ──────────────────────────────────────────────────────────
 
 
-def eda(targets_features: pd.DataFrame, target: str = "nearest_fire_km"):
+def eda(
+    targets_features: pd.DataFrame,
+    target: str = "nearest_fire_km",
+    use_cache: bool = True,
+):
+    save_path = FIGURES_DIR / f"eda_summary_{target}.png"
+
+    if use_cache and save_path.exists():
+        print(f"Loading cached EDA figure from {save_path}")
+        img = plt.imread(str(save_path))
+        fig, ax = plt.subplots(figsize=(16, 4), dpi=150)
+        ax.imshow(img)
+        ax.axis("off")
+        plt.tight_layout()
+        plt.show()
+        return fig
+
     # Work with plain DataFrame — GeoDataFrame column ops are slow on large data
     df = pd.DataFrame(targets_features.drop(columns="geometry", errors="ignore"))
 
@@ -353,7 +369,9 @@ def eda(targets_features: pd.DataFrame, target: str = "nearest_fire_km"):
     # 3. Top 10 census feature correlations with target
     # Only use census columns (B*) — exclude proximity features derived from
     # the same wildfire data as the target to avoid circular correlations.
-    census_numeric = [c for c in census_cols_all if c in df.select_dtypes(include="number").columns]
+    census_numeric = [
+        c for c in census_cols_all if c in df.select_dtypes(include="number").columns
+    ]
     census_arr = df[census_numeric].values
     target_arr = df[target].values
     census_centered = census_arr - np.nanmean(census_arr, axis=0)
@@ -370,17 +388,14 @@ def eda(targets_features: pd.DataFrame, target: str = "nearest_fire_km"):
     axes[2].set_title("Top 10 Correlated Features")
 
     plt.tight_layout()
-    plt.savefig("figures/eda_summary.png", dpi=150, bbox_inches="tight")
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path, dpi=150, bbox_inches="tight")
     plt.show()
 
-    print(
-        f"\nDataset: {len(df)} properties, {df.shape[1]} columns"
-    )
+    print(f"\nDataset: {len(df)} properties, {df.shape[1]} columns")
     print(f"Census features: {len(census_cols_all)}")
     print(f"Features with missing data: {(missing_pct > 0).sum()}")
-    print(
-        f"Target range: {df[target].min():.1f} – {df[target].max():.1f} km"
-    )
+    print(f"Target range: {df[target].min():.1f} – {df[target].max():.1f} km")
     return fig
 
 
@@ -417,7 +432,11 @@ def plot_feature_importance(
     # Sort by importance (ascending for horizontal bar chart)
     sorted_imp = importances.sort_values(ascending=True)
 
-    ax.barh(sorted_imp.index, sorted_imp.values, color=color)
+    # Use integer positions so duplicate labels each get their own bar
+    y_pos = range(len(sorted_imp))
+    ax.barh(y_pos, sorted_imp.values, color=color)
+    ax.set_yticks(list(y_pos))
+    ax.set_yticklabels(sorted_imp.index)
     ax.set_xlabel("Importance")
     ax.set_title(title)
     ax.spines["top"].set_visible(False)

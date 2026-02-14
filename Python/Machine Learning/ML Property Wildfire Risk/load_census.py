@@ -25,7 +25,7 @@ import sqlalchemy as s
 from settings import (
     CENSUS_FEATURES,
     GIS_DEFAULT_CRS,
-    PATH_DATA_CENSUS,
+    DATA_CENSUS_DIR,
     CENSUS_VALID_GRANULARITY_LEVELS,
     CENSUS_CHUNK_SIZE,
     TABLE_NAME_CENSUS,
@@ -51,7 +51,9 @@ def _fetch_census_labels(year: int) -> dict:
         with open(cache_file, "r") as f:
             return json.load(f)
 
-    print(f"Fetching census variable labels for {year} from API (~10MB, one-time download)...")
+    print(
+        f"Fetching census variable labels for {year} from API (~10MB, one-time download)..."
+    )
     url = f"https://api.census.gov/data/{year}/acs/acs5/variables.json"
     r = requests.get(url)
     vars_data = r.json()["variables"]
@@ -149,7 +151,19 @@ def census_code_to_label(code: str, year: int = 2023) -> str:
     # Split the !! hierarchy and keep last part, with abbreviated parent for context
     parts = [p.strip().rstrip(":") for p in clean_label.split("!!") if p.strip()]
     if len(parts) >= 2:
-        skip = {"of", "the", "and", "in", "for", "a", "an", "or", "by", "housing", "units"}
+        skip = {
+            "of",
+            "the",
+            "and",
+            "in",
+            "for",
+            "a",
+            "an",
+            "or",
+            "by",
+            "housing",
+            "units",
+        }
         parent_words = [w for w in parts[-2].split() if w.lower() not in skip]
         parent_short = " ".join(parent_words[:2])
         clean_label = f"{parent_short}: {parts[-1]}"
@@ -240,7 +254,7 @@ class CensusData:
             os.environ.get("US_CENSUS_API_KEY"), year=self.year
         ).acs5
 
-        self.metadata_filepath = PATH_DATA_CENSUS / f"acs5_variables_{year}.txt"
+        self.metadata_filepath = DATA_CENSUS_DIR / f"acs5_variables_{year}.txt"
 
         if not self.metadata_filepath.exists():
             self._generate_variable_metadata()

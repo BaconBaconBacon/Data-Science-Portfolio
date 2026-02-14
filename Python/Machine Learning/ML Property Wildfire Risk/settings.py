@@ -115,13 +115,13 @@ CENSUS_SUMMARY_TABLES = {
 CENSUS_VALID_GRANULARITY_LEVELS = {"block_group", "tract", "county"}
 
 
-PATH_DATA = Path("data")
-PATH_DATA_WILDFIRES = PATH_DATA / "wildfires"
-PATH_DATA_PROPERTIES = PATH_DATA / "properties"
-PATH_DATA_CENSUS = PATH_DATA / "census"
+DATA_DIR = Path("data")
+DATA_WILDFIRES_DIR = DATA_DIR / "wildfires"
+DATA_PROPERTIES_DIR = DATA_DIR / "properties"
+DATA_CENSUS_DIR = DATA_DIR / "census"
 
-PATH_MODELS = Path("models")
-
+MODELS_DIR = Path("models")
+FIGURES_DIR = Path("figures")
 
 PROP_TABLE_NAME = "properties"
 PROP_TABLE_NAME_TEST = PROP_TABLE_NAME + "_test"
