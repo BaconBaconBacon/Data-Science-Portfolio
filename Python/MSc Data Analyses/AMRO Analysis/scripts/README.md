@@ -21,7 +21,7 @@ python scripts/run_cleaner.py --datafile-type .dat --verbose
 Run the complete Fourier transform and fitting analysis pipeline.
 
 ```bash
-python scripts/run_etl_pipeline.py --project-name YbPdBi_amro --verbose
+python scripts/run_pipeline.py --project-name YbPdBi_amro --verbose
 ```
 
 **Options:**

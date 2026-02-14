@@ -1,4 +1,4 @@
-"""data handling module"""
+"""Data handling module"""
 
 from .loader import AMROLoader
 from .data_structures import (

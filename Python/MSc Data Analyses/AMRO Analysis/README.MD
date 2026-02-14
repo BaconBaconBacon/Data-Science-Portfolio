@@ -138,7 +138,7 @@ This will:
 Run the full Fourier transform and fitting pipeline:
 
 ```bash
-python scripts/run_etl_pipeline.py --project-name YbPdBi_AMRO --verbose
+python scripts/run_pipeline.py --project-name YbPdBi_AMRO --verbose
 ```
 
 **Options:**
