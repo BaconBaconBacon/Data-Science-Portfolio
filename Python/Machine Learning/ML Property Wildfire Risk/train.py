@@ -10,28 +10,26 @@ Usage:
 
 import argparse
 import hashlib
-import os
 import pickle
-import tempfile
 import time
 import warnings
 import numpy as np
 import pandas as pd
-import joblib
+
+# import joblib
 
 from pathlib import Path
 from scipy.stats import randint, uniform
 from sklearn.base import BaseEstimator
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer, SimpleImputer
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
-from sklearn.metrics import mean_absolute_error, r2_score
-
 from missing_analysis import (
     analyze_missingness,
     get_column_lists,
@@ -87,11 +85,11 @@ def _get_preprocess_cache_path(cache_key: str) -> Path:
 
 
 def full_metrics(model, X_train, X_test, y_train, y_test):
-    y_pred_train = model.predict(X_train)
+    # y_pred_train = model.predict(X_train)
     y_pred_test = model.predict(X_test)
     return {
-        "Train RMSE": np.sqrt(((y_train - y_pred_train) ** 2).mean()),
-        "Test RMSE": np.sqrt(((y_test - y_pred_test) ** 2).mean()),
+        "Train RMSE": rmse(model, X_train, y_train),
+        "Test RMSE": rmse(model, X_test, y_test),
         "Test MAE": mean_absolute_error(y_test, y_pred_test),
         "Test R²": r2_score(y_test, y_pred_test),
     }
@@ -370,50 +368,24 @@ def drop_correlated_features(
     return X_train.drop(columns=to_drop), X_test.drop(columns=to_drop)
 
 
-def build_simple_pipeline() -> Pipeline:
-    """
-    Build basic preprocessing pipeline with median imputation.
-
-    Use for quick experiments. For production, prefer build_adaptive_pipeline()
-    which selects imputation strategy based on missingness mechanism.
-    """
-    return Pipeline(
-        [
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-        ]
-    )
-
-
-def prepare_split(
-    df: pd.DataFrame,
-    target_col: str,
-    drop_cols: list[str],
-    test_size: float = 0.2,
-    random_state: int = 77,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """
-    Split DataFrame into train/test sets after removing non-feature columns.
-    """
-    y = df[target_col]
-    X = df.drop(columns=[target_col] + drop_cols)
-    return train_test_split(X, y, test_size=test_size, random_state=random_state)
-
-
 def train_xgboost(
     X_train: pd.DataFrame,
     y_train: pd.Series,
+    X_eval: pd.DataFrame | None = None,
+    y_eval: pd.Series | None = None,
     n_iter: int = 50,
     cv: int = 5,
     random_state: int = 77,
     n_jobs: int = 2,
     device: str = "cpu",
+    early_stopping_rounds: int = 50,
 ) -> RandomizedSearchCV:
     """
     Train XGBoost regressor with randomized hyperparameter search.
 
     Searches over tree depth, learning rate, regularization, and
-    subsampling parameters.
+    subsampling parameters. When an eval set is provided, early
+    stopping halts tree building when test loss stops improving.
 
     Parameters
     ----------
@@ -421,6 +393,11 @@ def train_xgboost(
         Training features (preprocessed).
     y_train
         Training target values.
+    X_eval
+        Evaluation features for early stopping. If None, early stopping
+        is disabled.
+    y_eval
+        Evaluation target for early stopping.
     n_iter
         Number of random hyperparameter combinations to try.
     cv
@@ -431,12 +408,23 @@ def train_xgboost(
         XGBoost device: "cpu" or "cuda". Use "cpu" when VRAM is limited;
         CPU with n_jobs parallelism is often faster for datasets that
         don't fit comfortably in GPU memory.
+    early_stopping_rounds
+        Stop training if eval loss doesn't improve for this many rounds.
+        Only used when X_eval and y_eval are provided.
 
     Returns
     -------
     RandomizedSearchCV
         Fitted search object with best_estimator_ and cv_results_.
     """
+    estimator_params = {"random_state": random_state, "device": device}
+    fit_params = {}
+
+    if X_eval is not None and y_eval is not None:
+        estimator_params["early_stopping_rounds"] = early_stopping_rounds
+        fit_params["eval_set"] = [(X_eval, y_eval)]
+        fit_params["verbose"] = False
+
     param_dist = {
         "n_estimators": randint(100, 1000),
         "learning_rate": uniform(0.01, 0.29),
@@ -449,7 +437,7 @@ def train_xgboost(
         "reg_lambda": uniform(0, 1),
     }
     search = RandomizedSearchCV(
-        estimator=XGBRegressor(random_state=random_state, device=device),
+        estimator=XGBRegressor(**estimator_params),
         param_distributions=param_dist,
         n_iter=n_iter,
         scoring="neg_mean_squared_error",
@@ -458,7 +446,7 @@ def train_xgboost(
         n_jobs=n_jobs,
         verbose=1,
     )
-    search.fit(X_train, y_train)
+    search.fit(X_train, y_train, **fit_params)
     return search
 
 
@@ -491,7 +479,6 @@ def train_random_forest(
     RandomizedSearchCV
         Fitted search object with best_estimator_ and cv_results_.
     """
-    from sklearn.ensemble import RandomForestRegressor
 
     param_dist = {
         "n_estimators": randint(100, 1000),
@@ -720,7 +707,11 @@ if __name__ == "__main__":
 
     if args.model in ["xgboost", "both"]:
         print("  Training XGBoost...")
-        xgb_search = train_xgboost(X_train, y_train, n_iter=args.n_iter, cv=args.cv)
+        xgb_search = train_xgboost(
+            X_train, y_train,
+            X_eval=X_test, y_eval=y_test,
+            n_iter=args.n_iter, cv=args.cv,
+        )
         xgb_metrics = evaluate_model(
             xgb_search.best_estimator_, X_train, X_test, y_train, y_test
         )
@@ -748,7 +739,7 @@ if __name__ == "__main__":
     print(f"\n  Best model: {best_name}")
 
     print("\n[5/5] Saving model...")
-    joblib.dump(best_model, args.output, pipeline=pipeline, feature_names=feature_names)
+    save_model(best_model, args.output, pipeline=pipeline, feature_names=feature_names)
 
     print("\n" + "=" * 60)
     print("Training complete!")
