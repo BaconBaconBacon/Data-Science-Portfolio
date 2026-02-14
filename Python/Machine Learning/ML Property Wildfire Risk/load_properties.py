@@ -289,7 +289,7 @@ class Properties:
 
             try:
                 block = cg.coordinates(x=long, y=lat)["2020 Census Blocks"][0]
-            except Exception:
+            except (KeyError, IndexError, requests.RequestException):
                 continue  # Retry with new point
 
             prop = {
@@ -517,7 +517,7 @@ class Properties:
                 prop[HEADER_GEOM] = Point(lon, lat)
                 results.append(prop)
 
-            except Exception:
+            except (KeyError, IndexError, requests.RequestException):
                 failed += 1
                 if verbose and failed <= 5:
                     print(f"  Warning: Failed to geocode ({lat}, {lon})")
@@ -584,7 +584,7 @@ class Properties:
             prop[HEADER_GEOM] = Point(long, lat)
             return prop
 
-        except Exception:
+        except (KeyError, IndexError, requests.RequestException):
             return None
 
     @staticmethod
@@ -812,7 +812,7 @@ class Properties:
             # Reverse-geocode to census block
             try:
                 block = cg.coordinates(x=long, y=lat)["2020 Census Blocks"][0]
-            except Exception:
+            except (KeyError, IndexError, requests.RequestException):
                 continue
 
             temp_lst[num_added] = {
