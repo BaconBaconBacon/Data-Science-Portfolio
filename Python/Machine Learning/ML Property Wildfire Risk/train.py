@@ -35,7 +35,7 @@ from missing_analysis import (
     get_column_lists,
     print_missingness_report,
 )
-from settings import PATH_DATA
+from settings import DATA_DIR
 
 # Suppress XGBoost device mismatch warning (model on CUDA, inference data on CPU)
 warnings.filterwarnings(
@@ -79,7 +79,7 @@ def _generate_preprocess_cache_key(
 
 def _get_preprocess_cache_path(cache_key: str) -> Path:
     """Return the cache file path for a given cache key."""
-    cache_dir = PATH_DATA / "cache"
+    cache_dir = DATA_DIR / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / f"preprocess_{cache_key}.pkl"
 
@@ -708,9 +708,12 @@ if __name__ == "__main__":
     if args.model in ["xgboost", "both"]:
         print("  Training XGBoost...")
         xgb_search = train_xgboost(
-            X_train, y_train,
-            X_eval=X_test, y_eval=y_test,
-            n_iter=args.n_iter, cv=args.cv,
+            X_train,
+            y_train,
+            X_eval=X_test,
+            y_eval=y_test,
+            n_iter=args.n_iter,
+            cv=args.cv,
         )
         xgb_metrics = evaluate_model(
             xgb_search.best_estimator_, X_train, X_test, y_train, y_test
