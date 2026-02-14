@@ -146,9 +146,14 @@ def census_code_to_label(code: str, year: int = 2023) -> str:
     clean_label = label.replace("Estimate!!Total:!!", "").replace("Estimate!!", "")
     clean_label = re.sub(r"\s*\([^)]*\)", "", clean_label)
 
-    # Split the !! hierarchy and keep only the last meaningful part
+    # Split the !! hierarchy and keep last part, with abbreviated parent for context
     parts = [p.strip().rstrip(":") for p in clean_label.split("!!") if p.strip()]
-    if parts:
+    if len(parts) >= 2:
+        skip = {"of", "the", "and", "in", "for", "a", "an", "or", "by", "housing", "units"}
+        parent_words = [w for w in parts[-2].split() if w.lower() not in skip]
+        parent_short = " ".join(parent_words[:2])
+        clean_label = f"{parent_short}: {parts[-1]}"
+    elif parts:
         clean_label = parts[-1]
 
     if concept:
