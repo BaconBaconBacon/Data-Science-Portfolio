@@ -36,4 +36,6 @@ TODO.txt
 /anaconda_projects/db
 *.egg-info/
 /Python/Machine Learning/ML PyTorch/
+/Python/Machine Learning/ML Predicting House Sale Prices/
+/Python/Machine Learning/ML Recipe Site Traffic/
 /Python/LLM/

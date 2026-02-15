@@ -118,12 +118,16 @@ CENSUS_VALID_GRANULARITY_LEVELS = {"block_group", "tract", "county"}
 
 
 DATA_DIR = Path("data")
+MODELS_DIR = Path("models")
+FIGURES_DIR = Path("figures")
+
 DATA_WILDFIRES_DIR = DATA_DIR / "wildfires"
 DATA_PROPERTIES_DIR = DATA_DIR / "properties"
 DATA_CENSUS_DIR = DATA_DIR / "census"
 
-MODELS_DIR = Path("models")
-FIGURES_DIR = Path("figures")
+MERGED_PARQUET_PATH = DATA_DIR / "merged_properties_census.parquet"
+TARGETS_PARQUET_PATH = DATA_DIR / "targets_features.parquet"
+
 
 PROP_TABLE_NAME = "properties"
 PROP_TABLE_NAME_TEST = PROP_TABLE_NAME + "_test"

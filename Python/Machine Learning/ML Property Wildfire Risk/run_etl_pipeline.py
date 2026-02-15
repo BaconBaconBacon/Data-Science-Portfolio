@@ -40,10 +40,9 @@ from settings import (
     PROP_TABLE_NAME,
     PROP_TABLE_NAME_TEST,
     DATA_DIR,
+    MERGED_PARQUET_PATH,
+    TARGETS_PARQUET_PATH,
 )
-
-MERGED_PARQUET_PATH = DATA_DIR / "merged_properties_census.parquet"
-TARGETS_PARQUET_PATH = DATA_DIR / "targets_features.parquet"
 
 
 def _save_merged_result(result, label=""):
