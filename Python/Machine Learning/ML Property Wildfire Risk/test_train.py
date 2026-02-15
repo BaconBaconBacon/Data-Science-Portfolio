@@ -7,9 +7,15 @@ Run with:
     pytest test_train.py -v
 """
 
+import os
 import numpy as np
 import pandas as pd
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("DATABASE_URL"),
+    reason="DATABASE_URL not set — skipping DB-dependent training tests",
+)
 
 e2e = pytest.mark.e2e
 

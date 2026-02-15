@@ -38,11 +38,17 @@ GIS_DESIRED_COLS = [
 GIS_DEFAULT_CRS = 5070
 
 SQL_ENGINE_STR = os.environ.get("DATABASE_URL")
-if not SQL_ENGINE_STR:
-    raise EnvironmentError(
-        "DATABASE_URL environment variable not set. "
-        "Example: DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/wildfire_risk_project"
-    )
+_SQL_ENGINE_STR_ERROR = (
+    "DATABASE_URL environment variable not set. "
+    "Example: DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/wildfire_risk_project"
+)
+
+
+def get_sql_engine_str() -> str:
+    """Return the DATABASE_URL, raising if not set."""
+    if not SQL_ENGINE_STR:
+        raise EnvironmentError(_SQL_ENGINE_STR_ERROR)
+    return SQL_ENGINE_STR
 
 
 # Should be stored as a star schema?

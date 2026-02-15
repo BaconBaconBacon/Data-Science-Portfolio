@@ -325,21 +325,23 @@ def calc_all_features(
     _validate_inputs(properties, fires)
 
     # Check cache
-    cache_dir = DATA_DIR / "cache"
-    cache_dir.mkdir(exist_ok=True)
-    cache_key = _generate_cache_key(
-        properties, fires, radius_m, power, bandwidth, rings_m, weight_col
-    )
-    cache_file = cache_dir / f"gis_features_{cache_key}.parquet"
+    cache_file = None
+    if use_cache:
+        cache_dir = DATA_DIR / "cache"
+        cache_dir.mkdir(exist_ok=True, parents=True)
+        cache_key = _generate_cache_key(
+            properties, fires, radius_m, power, bandwidth, rings_m, weight_col
+        )
+        cache_file = cache_dir / f"gis_features_{cache_key}.parquet"
 
-    if use_cache and cache_file.exists():
-        print(f"Loading cached GIS features from {cache_file.name}")
-        cached = pd.read_parquet(cache_file)
-        # Verify row count matches (sanity check)
-        if len(cached) == len(properties):
-            return cached.set_index(properties.index)
-        else:
-            print("Cache size mismatch, recomputing...")
+        if cache_file.exists():
+            print(f"Loading cached GIS features from {cache_file.name}")
+            cached = pd.read_parquet(cache_file)
+            # Verify row count matches (sanity check)
+            if len(cached) == len(properties):
+                return cached.set_index(properties.index)
+            else:
+                print("Cache size mismatch, recomputing...")
 
     print(f"Computing GIS features for {len(properties)} properties...")
     start = time.time()
@@ -374,7 +376,7 @@ def calc_all_features(
     result = pd.concat([idw, kde, decay, rings, nearest], axis=1)
 
     # Save to cache
-    if use_cache:
+    if use_cache and cache_file is not None:
         result.reset_index(drop=True).to_parquet(cache_file)
         print(f"Cached GIS features to {cache_file.name}")
 
@@ -467,20 +469,22 @@ def calc_all_features_parallel(
         rings_m = GIS_SCORING_DEFAULT_RINGS_M
 
     # Check cache (same logic as sequential version)
-    cache_dir = DATA_DIR / "cache"
-    cache_dir.mkdir(exist_ok=True)
-    cache_key = _generate_cache_key(
-        properties, fires, radius_m, power, bandwidth, rings_m, weight_col
-    )
-    cache_file = cache_dir / f"gis_features_{cache_key}.parquet"
+    cache_file = None
+    if use_cache:
+        cache_dir = DATA_DIR / "cache"
+        cache_dir.mkdir(exist_ok=True, parents=True)
+        cache_key = _generate_cache_key(
+            properties, fires, radius_m, power, bandwidth, rings_m, weight_col
+        )
+        cache_file = cache_dir / f"gis_features_{cache_key}.parquet"
 
-    if use_cache and cache_file.exists():
-        print(f"Loading cached GIS features from {cache_file.name}")
-        cached = pd.read_parquet(cache_file)
-        if len(cached) == len(properties):
-            return cached.set_index(properties.index)
-        else:
-            print("Cache size mismatch, recomputing...")
+        if cache_file.exists():
+            print(f"Loading cached GIS features from {cache_file.name}")
+            cached = pd.read_parquet(cache_file)
+            if len(cached) == len(properties):
+                return cached.set_index(properties.index)
+            else:
+                print("Cache size mismatch, recomputing...")
 
     if n_jobs == -1:
         n_jobs = mp.cpu_count()
@@ -527,7 +531,7 @@ def calc_all_features_parallel(
     print(f"  Total: {time.time() - start:.1f}s")
 
     # Save to cache
-    if use_cache:
+    if use_cache and cache_file is not None:
         result.reset_index(drop=True).to_parquet(cache_file)
         print(f"Cached GIS features to {cache_file.name}")
 

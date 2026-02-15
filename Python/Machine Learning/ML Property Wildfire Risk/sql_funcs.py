@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 from settings import (
-    SQL_ENGINE_STR,
+    get_sql_engine_str,
     PROP_LABELS_KEYS_MAP,
     GIS_DEFAULT_CRS,
     TABLE_NAME_CACHE,
@@ -62,7 +62,7 @@ class SQL:
         self.connection = None
         self.engine = None
 
-        self.engine_string = SQL_ENGINE_STR
+        self.engine_string = get_sql_engine_str()
         # Base connection string (without database name) for admin operations
         self._base_conn_str = self.engine_string.rsplit("/", 1)[0]
 
