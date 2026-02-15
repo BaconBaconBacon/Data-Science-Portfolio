@@ -602,7 +602,7 @@ class Experiment:
     wire_sep: float
     cross_section: float
     oscillations_dict: dict = field(default_factory=dict)
-    oscillations_count: float = 0
+    oscillations_count: int = 0
     material: str = None
 
     def add_oscillation(self, oscillation: AMROscillation) -> None:
@@ -680,8 +680,8 @@ class Experiment:
 
         oscillations = []
         for osc in self.oscillations_dict.values():
-            t_matches = (t is None) or (osc.compare_temperature(t))
-            h_matches = (h is None) or (osc.compare_magnetic_field(h))
+            t_matches = (t is None) or np.any(osc.compare_temperature(t))
+            h_matches = (h is None) or np.any(osc.compare_magnetic_field(h))
             if t_matches and h_matches:
                 oscillations.append(osc)
         return oscillations
@@ -725,7 +725,7 @@ class ProjectData:
 
     project_name: str
     experiments_dict: dict = field(default_factory=dict)
-    experiments_count: float = 0
+    experiments_count: int = 0
 
     fit_filter_str: str | None = None
 
