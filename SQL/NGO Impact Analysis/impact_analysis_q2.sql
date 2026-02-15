@@ -3,7 +3,6 @@ WITH total_donat AS (
 	SELECT
 		a.assignment_id,
 		a.assignment_name,
-		-- SUM(d.amount) as sum_donations,
 		COUNT(d.amount) AS num_total_donations
 	FROM
 		assignments as a
@@ -38,4 +37,4 @@ SELECT
 	impact_score,
 	num_total_donations
 FROM assignment_regions
-WHERE rank = 1
+WHERE rank = 1;

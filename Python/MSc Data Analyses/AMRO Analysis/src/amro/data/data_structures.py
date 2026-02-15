@@ -92,7 +92,7 @@ class OscillationKey:
         same_act = self.compare_exp_label(other_key.experiment_label)
         same_temp = self.compare_temperature(other_key.temperature)
         same_field = self.compare_magnetic_field(other_key.magnetic_field)
-        return same_act and same_temp and same_field and same_field
+        return same_act and same_temp and same_field
 
     def get_experiment_label(self) -> str:
         """Return the experiment label."""
@@ -903,11 +903,11 @@ class ProjectData:
                     fourier_result_df = u.query_dataframe(sub_sub_df, h=h)
                     osc = exper.get_oscillation(t=t, h=h)
 
-                    freqs = fourier_result_df[HEADER_FREQ].values
+                    freqs = fourier_result_df[HEADER_PARAM_FREQ_PREFIX].values
 
-                    mags = fourier_result_df[HEADER_MAG].values
-                    phases = fourier_result_df[HEADER_PHASE].values
-                    yf = mags[:, 0] + phases[:, 0] * 1j
+                    mags = fourier_result_df[HEADER_PARAM_AMP_PREFIX].values
+                    phases = fourier_result_df[HEADER_PHASE + "_rads"].values
+                    yf = mags * np.exp(1j * phases)
 
                     osc.add_fourier_result(xf=freqs, yf=yf)
 
@@ -1027,6 +1027,8 @@ class ProjectData:
             experiment = self.experiments_dict[act_label]
             for osc_key in experiment.oscillations_dict.keys():
                 osc = experiment.oscillations_dict[osc_key]
+                if osc.fourier_result is None:
+                    continue
                 fourier_dict = osc.fourier_result.fourier_results_dict
                 for freq in fourier_dict:
                     ft = fourier_dict[freq]

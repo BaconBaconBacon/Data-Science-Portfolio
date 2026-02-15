@@ -15,7 +15,9 @@ def parse_args():
     parser.add_argument("--fit-only", action="store_true")
     parser.add_argument("--min-amp-ratio", type=float, default=0.075)
     parser.add_argument("--max-freq", type=int, default=8)
-    parser.add_argument("--force-symmetry", action="store_true", default=True)
+    parser.add_argument(
+        "--no-force-symmetry", action="store_false", dest="force_symmetry"
+    )
     parser.add_argument("--save-name", default=None)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
@@ -56,7 +58,7 @@ def main():
     if args.verbose:
         print(project_data.get_summary_statistics())
     if not args.fit_only:
-        fourier = Fourier(project_data, args.project_name, verbose=args.verbose)
+        fourier = Fourier(project_data, verbose=args.verbose)
         fourier.fourier_transform_experiments()
         project_data.save_fourier_results_to_csv()
         if args.verbose:
@@ -64,7 +66,6 @@ def main():
     if not args.fourier_only:
         fitter = AMROFitter(
             project_data,
-            save_name=args.project_name,
             min_amp_ratio=args.min_amp_ratio,
             max_freq=args.max_freq,
             force_four_and_two_sym=args.force_symmetry,

@@ -1,4 +1,3 @@
-# -- Flag whether the height of a product is within the control limits
 SELECT
 	b.*,
 	CASE
@@ -10,8 +9,10 @@ SELECT
 FROM (
 	SELECT
 		a.*,
-		a.avg_height + 3*a.stddev_height/SQRT(5) AS ucl,
-		a.avg_height - 3*a.stddev_height/SQRT(5) AS lcl
+		-- UCL/LCL: 3-sigma control limits for subgroup size n=5
+		-- Formula: x̄ ± 3·σ/√n, where 3 = z-score for 99.73% confidence, √5 = subgroup size
+		a.avg_height + 3 * a.stddev_height / SQRT(5) AS ucl,
+		a.avg_height - 3 * a.stddev_height / SQRT(5) AS lcl
 	FROM (
 		SELECT
 			operator,
@@ -27,4 +28,4 @@ FROM (
 		)
 	) AS a
 	WHERE a.row_number >= 5
-) AS b
+) AS b;

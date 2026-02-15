@@ -192,8 +192,7 @@ def sample_experiment():
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
         wire_sep=1.0,
-        width=0.5,
-        height=0.1,
+        cross_section=0.05,
     )
 
 
@@ -210,8 +209,7 @@ def populated_experiment():
         experiment_label=HEADER_EXPERIMENT_PREFIX + "11",
         geometry="perp",
         wire_sep=1.0,
-        width=0.5,
-        height=0.1,
+        cross_section=0.05,
     )
     for t in [2.0, 5.0, 10.0]:
         for h in [3.0, 7.0]:
