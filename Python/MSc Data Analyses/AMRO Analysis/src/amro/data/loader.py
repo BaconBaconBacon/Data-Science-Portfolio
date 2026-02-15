@@ -218,19 +218,6 @@ class AMROLoader:
 
         return experiment_label, osc_keys, geometry, wire_sep, cross_section
 
-    def _convert_degs_to_rads(
-        self, degs: np.ndarray | pd.Series
-    ) -> np.ndarray | pd.Series:
-        """Convert angle values from degrees to radians.
-
-        Args:
-            degs: Angle value(s) in degrees.
-
-        Returns:
-            Angle value(s) converted to radians.
-        """
-        return degs * 2 * np.pi / 360
-
     def _calculate_uohm_cols(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add micro-ohm-cm versions of resistivity columns to the DataFrame.
 

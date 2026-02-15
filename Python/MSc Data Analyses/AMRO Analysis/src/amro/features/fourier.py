@@ -26,7 +26,6 @@ class Fourier:
 
         Args:
             amro_data: ProjectData object containing AMRO experiments and oscillations.
-            save_name: Name for saving results files.
             overwrite_result: If True, overwrite existing Fourier results.
             verbose: If True, print detailed processing information.
         """

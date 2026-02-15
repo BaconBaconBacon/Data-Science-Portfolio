@@ -29,12 +29,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
- "numpy",
- "pandas",
- "scipy",
- "matplotlib",
- "seaborn",
- "lmfit",
+ "numpy>=1.24.0",
+ "pandas>=2.0.0",
+ "scipy>=1.10.0",
+ "matplotlib>=3.7.0",
+ "seaborn>=0.12.0",
+ "lmfit>=1.2.0",
 ]
 
 [project.optional-dependencies]
@@ -43,3 +43,6 @@ dev = [
  "jupyter",
  "ipython",
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]

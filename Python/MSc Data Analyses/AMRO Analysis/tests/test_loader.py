@@ -100,35 +100,6 @@ class TestFilenameValidation:
 
 
 # =============================================================================
-# Degree to Radian Conversion Tests
-# =============================================================================
-
-
-class TestDegreeConversion:
-    def test_convert_zero(self, loader):
-        result = loader._convert_degs_to_rads(np.array([0]))
-        assert result[0] == pytest.approx(0)
-
-    def test_convert_90(self, loader):
-        result = loader._convert_degs_to_rads(np.array([90]))
-        assert result[0] == pytest.approx(np.pi / 2)
-
-    def test_convert_180(self, loader):
-        result = loader._convert_degs_to_rads(np.array([180]))
-        assert result[0] == pytest.approx(np.pi)
-
-    def test_convert_360(self, loader):
-        result = loader._convert_degs_to_rads(np.array([360]))
-        assert result[0] == pytest.approx(2 * np.pi)
-
-    def test_convert_array(self, loader):
-        degs = np.array([0, 90, 180, 270, 360])
-        result = loader._convert_degs_to_rads(degs)
-        expected = np.array([0, np.pi / 2, np.pi, 3 * np.pi / 2, 2 * np.pi])
-        np.testing.assert_array_almost_equal(result, expected)
-
-
-# =============================================================================
 # Microohm Calculation Tests
 # =============================================================================
 

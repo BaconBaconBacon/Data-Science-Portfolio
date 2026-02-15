@@ -444,7 +444,7 @@ class TestFitterIntegration:
         # Check results
         fit_result = osc.fit_result
         assert fit_result is not None
-        assert fit_result.fit_succeeded or fit_result.covar_matrix is None
+        assert fit_result.fit_succeeded
 
         # Mean should be close to original
         assert fit_result.mean == pytest.approx(mean_res, rel=0.1)

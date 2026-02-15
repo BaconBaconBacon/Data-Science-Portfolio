@@ -38,7 +38,6 @@ class AMROFitter:
 
         Args:
             amro_data: ProjectData object containing AMRO experiments with Fourier results.
-            save_name: Name for saving results files.
             min_amp_ratio: Minimum amplitude ratio threshold relative to strongest component.
             max_freq: Maximum frequency to include in fitting (filters noise).
             force_four_and_two_sym: If True, always include 2-fold and 4-fold symmetry terms.
@@ -120,7 +119,6 @@ class AMROFitter:
         print(f"Total fitted: {i}")
         self.project_data.save_fit_results_to_csv()
 
-        # TODO: Get this into the settings.py
         fn = (
             self.project_data.project_name
             + "_fit_results_"

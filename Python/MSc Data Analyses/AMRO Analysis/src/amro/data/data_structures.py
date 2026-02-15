@@ -938,11 +938,8 @@ class ProjectData:
         with open(fp, "rb") as f:
             return pickle.load(f)
 
-    def get_fit_results_as_df(self, filepath: Path | str | None = None) -> pd.DataFrame:
+    def get_fit_results_as_df(self) -> pd.DataFrame:
         """Convert all fit results to a DataFrame with one row per oscillation.
-
-        Args:
-            filepath: Optional file path (not currently used).
 
         Returns:
             DataFrame containing fit parameters and statistics.
@@ -993,7 +990,7 @@ class ProjectData:
                 self.project_name + "_fit_results_" + self.fit_filter_str + ".csv"
             )
 
-        df = self.get_fit_results_as_df(filepath=filepath)
+        df = self.get_fit_results_as_df()
         df.to_csv(filepath, index=False)
         return
 

@@ -84,7 +84,6 @@ class AMROCleaner:
         self.verbose = verbose
         self.datafile_type = datafile_type
         self.experiment_labels = []
-        return
 
     def get_experiment_labels(self) -> list[str]:
         """Return list of experiment labels that were processed.
