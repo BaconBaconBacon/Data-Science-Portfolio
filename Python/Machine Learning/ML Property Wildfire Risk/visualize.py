@@ -142,6 +142,14 @@ def create_property_risk_map(
 
     m = folium.Map(location=center, zoom_start=zoom_start)
 
+    # Downsample large datasets to avoid crashing the browser
+    max_points = 50_000
+    if len(gdf) > max_points:
+        print(
+            f"  Sampling {max_points:,} of {len(gdf):,} properties for map rendering"
+        )
+        gdf = gdf.sample(n=max_points, random_state=42)
+
     # Normalize risk values for coloring
     risk_values = gdf[risk_column].values
     vmin, vmax = np.nanmin(risk_values), np.nanmax(risk_values)
@@ -262,8 +270,17 @@ def create_combined_map(
     fire_coords = fires[["LATITUDE", "LONGITUDE"]].values.tolist()
     FastMarkerCluster(data=fire_coords).add_to(fire_group)
 
+    # Downsample large property datasets to avoid crashing the browser
+    max_points = 50_000
+    if len(props) > max_points:
+        print(
+            f"  Sampling {max_points:,} of {len(props):,} properties for map rendering"
+        )
+        props = props.sample(n=max_points, random_state=42)
+        props["_lat"] = props.geometry.y
+        props["_lon"] = props.geometry.x
+
     # Add property points with risk coloring
-    # Properties are typically fewer, so CircleMarkers are fine
     print(f"Adding {len(props)} property points...")
     if risk_column in props.columns:
         risk_values = props[risk_column].values
