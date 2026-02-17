@@ -643,6 +643,19 @@ class CensusData:
         )
         return set(result["state_id"].tolist())
 
+    def _get_failed_states(self) -> set:
+        """Get set of state_ids previously cached as failed (no data returned)."""
+        q = f"""
+        SELECT DISTINCT state_id FROM {TABLE_NAME_CACHE}
+        WHERE granularity = :granularity AND year = :year AND variable = '_FAILED_'
+        """
+        result = pd.read_sql(
+            s.text(q),
+            self.sql_obj.connection,
+            params={"granularity": self.granularity, "year": self.year},
+        )
+        return set(result["state_id"].tolist())
+
     def _save_state_to_cache(self, state_results: list[dict], merge_cols: list) -> None:
         """Save a state's census data to cache in long format."""
         if not state_results:
@@ -685,6 +698,20 @@ class CensusData:
         if records:
             df = pd.DataFrame(records)
             self.sql_obj.save_df_to_sql(TABLE_NAME_CACHE, df)
+
+    def _cache_failed_state(self, state_id: int) -> None:
+        """Write a sentinel row so this state is not re-fetched on future runs."""
+        sentinel = pd.DataFrame([{
+            "state_id": state_id,
+            "county_id": 0,
+            "tract_id": 0,
+            "block_grp": 0,
+            "granularity": self.granularity,
+            "year": self.year,
+            "variable": "_FAILED_",
+            "value": None,
+        }])
+        self.sql_obj.save_df_to_sql(TABLE_NAME_CACHE, sentinel)
 
     def _load_cached_data_wide(self, state_ids: list, merge_cols: list) -> pd.DataFrame:
         """Load cached census data for given states in wide format, chunked by state."""
@@ -749,8 +776,12 @@ class CensusData:
         total_states = len(unique_states)
 
         # properties_data is already filtered to MISSING geographies only
-        # If a state appears here, its cache is incomplete - must fetch
-        states_to_fetch = unique_states
+        # Skip states previously marked as failed (no Census data available)
+        failed_states = self._get_failed_states()
+        states_to_fetch = [s for s in unique_states if s not in failed_states]
+        if failed_states & set(unique_states):
+            skipped = failed_states & set(unique_states)
+            print(f"Skipping {len(skipped)} previously failed states: {sorted(skipped)}")
 
         print(f"Fetching {len(states_to_fetch)} states with missing geographies...")
 
@@ -779,7 +810,8 @@ class CensusData:
                     )
                     self._save_state_to_cache(state_results, merge_cols)
                 else:
-                    print(f"  No data for state {state_str}")
+                    print(f"  No data for state {state_str}, caching as failed")
+                    self._cache_failed_state(state_id)
 
                 # Progress estimate after first 3 states
                 if completed == min(3, len(states_to_fetch)):

@@ -659,7 +659,10 @@ if __name__ == "__main__":
 
     print("\n[2/5] Splitting data...")
     y = df[args.target]
-    X = df.drop(columns=[args.target])
+    X = df.drop(columns=[args.target]).select_dtypes(include="number")
+    non_numeric = set(df.columns) - set(X.columns) - {args.target}
+    if non_numeric:
+        print(f"  Dropped non-numeric columns: {sorted(non_numeric)}")
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=RANDOM_STATE
     )
