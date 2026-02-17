@@ -37,7 +37,7 @@ GIS_DESIRED_COLS = [
 # Set the coordinate system
 GIS_DEFAULT_CRS = 5070
 
-SQL_ENGINE_STR = os.environ.get("DATABASE_URL")
+SQL_ENGINE_STR = "postgresql+psycopg2://postgres:postgres@localhost:5432/wildfire_risk_project"  # os.environ.get("DATABASE_URL")
 _SQL_ENGINE_STR_ERROR = (
     "DATABASE_URL environment variable not set. "
     "Example: DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/wildfire_risk_project"
@@ -82,14 +82,10 @@ CENSUS_FEATURES = [
     "B25091",
     "B01001",
     "B01002",
-    # "B01003",  # total pop, redundant with b01001_001E
-    # "B01005",  # Ancestry pop, redundant pop total
-    # "B01009",  # pop total, redundant pop total
     "B02001",
     "B03001",
     "B05001",
     "B05002",
-    # "B06001",  # place of birth by age, low wildfire relevance
     "B19001",
     "B19013",
     "B19019",
@@ -98,13 +94,6 @@ CENSUS_FEATURES = [
     "B19301",
     "B19326",
     "B23025",
-    # "B23032",  #Weeks worked by sex, low wf relevance
-    # "B24010",# Sex by occupation, large, low wf relevance
-    # "B24050",#Industry by occupations, low wf relevance
-    # "B08201", transportation, marginal relevance
-    # "B08202", transportation, marginal relevance
-    # "B08203", transportation, marginal relevance
-    # "B08204", transportation, marginal relevance
     "B25031",
 ]
 
@@ -159,7 +148,6 @@ USA_MIN_LON = -124  # °43′37″W 48°23′09″N, Cape Flattery, Washington
 EARTH_RADIUS_KM = 6371.0  # Earth radius in km
 
 
-# SAVENAME_WILDFIRES = "combined_wildfire_data.parquet"
 WILDFIRES_TABLE_NAME = "wildfires"
 
 PROPERTIES_INIT_COUNT = 10
@@ -182,65 +170,6 @@ TIGER_COUNTY_URL = f"{TIGER_BASE_URL}/COUNTY/tl_{{year}}_us_county.zip"
 TIGER_TRACT_URL = f"{TIGER_BASE_URL}/TRACT/tl_{{year}}_{{fips}}_tract.zip"
 TIGER_BG_URL = f"{TIGER_BASE_URL}/BG/tl_{{year}}_{{fips}}_bg.zip"
 
-# US State FIPS codes (50 states + DC + PR)
-STATE_FIPS_CODES = [
-    "01",
-    "02",
-    "04",
-    "05",
-    "06",
-    "08",
-    "09",
-    "10",
-    "11",
-    "12",  # AL-FL
-    "13",
-    "15",
-    "16",
-    "17",
-    "18",
-    "19",
-    "20",
-    "21",
-    "22",
-    "23",  # GA-ME
-    "24",
-    "25",
-    "26",
-    "27",
-    "28",
-    "29",
-    "30",
-    "31",
-    "32",
-    "33",  # MD-NH
-    "34",
-    "35",
-    "36",
-    "37",
-    "38",
-    "39",
-    "40",
-    "41",
-    "42",
-    "44",  # NJ-RI
-    "45",
-    "46",
-    "47",
-    "48",
-    "49",
-    "50",
-    "51",
-    "53",
-    "54",
-    "55",  # SC-WI
-    "56",  # WY
-    # "60",  # American Samoa (uncomment if needed)
-    # "66",  # Guam
-    # "69",  # Northern Mariana Islands
-    "72",  # Puerto Rico
-    # "78",  # US Virgin Islands
-]
 
 # Contiguous US (48 states + DC) - excludes AK (02), HI (15), PR (72), territories
 CONUS_STATE_FIPS = [

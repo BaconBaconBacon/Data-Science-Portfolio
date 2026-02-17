@@ -24,7 +24,6 @@ import sqlalchemy as s
 
 from settings import (
     CENSUS_FEATURES,
-    GIS_DEFAULT_CRS,
     DATA_CENSUS_DIR,
     CENSUS_VALID_GRANULARITY_LEVELS,
     CENSUS_CHUNK_SIZE,
@@ -38,6 +37,9 @@ from settings import (
 
 from sql_funcs import SQL
 from functools import lru_cache
+
+
+CENSUS_MISSING_SENTINEL = -666666666
 
 
 @lru_cache(maxsize=4)
@@ -213,6 +215,9 @@ class CensusData:
     sparse : bool, default True
         If True, fetch only leaf variables (most granular); if False,
         fetch all variables including totals/subtotals.
+    force_drop : bool, default False
+        If True, automatically drop existing tables on granularity mismatch
+        instead of prompting via input(). Useful for non-interactive runs.
 
     Attributes
     ----------
@@ -240,6 +245,7 @@ class CensusData:
         granularity: str = "tract",
         sparse: bool = True,
         verbose: bool = True,
+        force_drop: bool = False,
     ):
         if granularity not in CENSUS_VALID_GRANULARITY_LEVELS:
             raise ValueError(
@@ -262,10 +268,9 @@ class CensusData:
 
         if not self.metadata_filepath.exists():
             self._generate_variable_metadata()
-        else:
-            pass
 
         self.sql_obj = sql_obj
+        self.force_drop = force_drop
         self.test_mode = self.sql_obj.test_mode
 
         if self.test_mode:
@@ -354,7 +359,7 @@ class CensusData:
             unique_geos = len(missing_geos)
             num_states = missing_geos["state_id"].nunique()
 
-            # Threshold: use individual if unique_geos < num_states * 50
+            # Threshold: use individual if unique_geos < num_states * 10
             threshold = num_states * 10
             use_bulk = unique_geos >= threshold
 
@@ -1012,7 +1017,7 @@ class CensusData:
         census_cols = [c for c in df.columns if c.startswith("B")]
 
         # clean  sentinel values
-        df[census_cols] = df[census_cols].replace(-666666666, np.nan)
+        df[census_cols] = df[census_cols].replace(CENSUS_MISSING_SENTINEL, np.nan)
 
         # normalize count tables to percentages of universe total
         for table in CENSUS_FEATURES:
@@ -1024,9 +1029,7 @@ class CensusData:
                 continue
 
             # Reconstruct total from leaves (no extra API call needed)
-            total = (
-                df[table_cols].sum(axis=1).replace(0, np.nan).infer_objects(copy=False)
-            )
+            total = df[table_cols].sum(axis=1).replace(0, np.nan)
             for col in table_cols:
                 df[col] = df[col] / total
 
@@ -1043,30 +1046,7 @@ class CensusData:
         props_table = (
             TABLE_NAME_CENSUS_PROPS_TEST if self.test_mode else TABLE_NAME_CENSUS_PROPS
         )
-        if self.sql_obj.check_table_exists(props_table):
-            existing = self.sql_obj.read_df_from_sql(
-                f"SELECT DISTINCT granularity FROM {props_table} LIMIT 1"
-            )
-            if not existing.empty:
-                existing_gran = existing["granularity"].iloc[0]
-                if existing_gran != self.granularity:
-                    print(
-                        f"\nTable '{props_table}' exists with granularity '{existing_gran}'."
-                    )
-                    print(f"Current run uses granularity '{self.granularity}'.")
-                    response = (
-                        input("Drop existing table and continue? [y/N]: ")
-                        .strip()
-                        .lower()
-                    )
-                    if response == "y":
-                        self.sql_obj.drop_table(props_table, confirm=True)
-                    else:
-                        raise RuntimeError(
-                            f"Cannot insert '{self.granularity}' data into table with '{existing_gran}' schema. "
-                            "Drop the table manually or run with matching granularity."
-                        )
-
+        self._check_table_granularity(props_table)
         merge_cols = self._get_merge_columns()
         census_cols = [c for c in clean_data.columns if c.startswith("B")]
 
@@ -1124,28 +1104,7 @@ class CensusData:
 
         # Check for granularity mismatch in existing census table
         census_table = TABLE_NAME_CENSUS_TEST if self.test_mode else TABLE_NAME_CENSUS
-        if self.sql_obj.check_table_exists(census_table):
-            existing = self.sql_obj.read_df_from_sql(
-                f"SELECT DISTINCT granularity FROM {census_table} LIMIT 1"
-            )
-            if not existing.empty:
-                existing_gran = existing["granularity"].iloc[0]
-                if existing_gran != self.granularity:
-                    print(
-                        f"\nTable '{census_table}' exists with granularity '{existing_gran}'."
-                    )
-                    print(f"Current run uses granularity '{self.granularity}'.")
-                    response = (
-                        input("Drop existing table and continue? [y/N]: ")
-                        .strip()
-                        .lower()
-                    )
-                    if response == "y":
-                        self.sql_obj.drop_table(census_table, confirm=True)
-                    else:
-                        raise RuntimeError(
-                            f"Cannot insert '{self.granularity}' data into table with '{existing_gran}' schema."
-                        )
+        self._check_table_granularity(census_table)
 
         self.sql_obj.save_df_to_sql(census_table, census_long)
 
@@ -1164,15 +1123,20 @@ class CensusData:
         if existing_gran != self.granularity:
             print(f"\nTable '{table_name}' exists with granularity '{existing_gran}'.")
             print(f"Current run uses granularity '{self.granularity}'.")
-            response = (
-                input("Drop existing table and continue? [y/N]: ").strip().lower()
-            )
-            if response == "y":
+            if self.force_drop:
+                print("force_drop=True, dropping table automatically.")
                 self.sql_obj.drop_table(table_name, confirm=True)
             else:
-                raise RuntimeError(
-                    f"Cannot insert '{self.granularity}' data into table with '{existing_gran}' schema."
+                response = (
+                    input("Drop existing table and continue? [y/N]: ").strip().lower()
                 )
+                if response == "y":
+                    self.sql_obj.drop_table(table_name, confirm=True)
+                else:
+                    raise RuntimeError(
+                        f"Cannot insert '{self.granularity}' data into table "
+                        f"with '{existing_gran}' schema."
+                    )
 
     def _check_and_prepare_output_tables(self) -> None:
         """Check granularity for both output tables before processing."""

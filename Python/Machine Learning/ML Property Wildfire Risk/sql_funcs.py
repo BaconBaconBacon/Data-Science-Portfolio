@@ -11,6 +11,8 @@ Requires a running PostgreSQL instance with PostGIS extension enabled.
 Connection string is configured in settings.py.
 """
 
+import re
+
 import sqlalchemy as s
 from datetime import datetime
 from pathlib import Path
@@ -133,7 +135,7 @@ class SQL:
                 try:
                     system_engine = s.create_engine(f"{self._base_conn_str}/postgres")
                     with system_engine.connect() as conn:
-                        conn.connection.connection.set_isolation_level(0)  # Autocommit
+                        conn = conn.execution_options(isolation_level="AUTOCOMMIT")
                         # Force disconnect any stale connections
                         conn.execute(
                             s.text(
@@ -163,7 +165,7 @@ class SQL:
             system_engine = s.create_engine(f"{self._base_conn_str}/postgres")
             # Use raw connection with autocommit (CREATE DATABASE cannot run in transaction)
             with system_engine.connect() as conn:
-                conn.connection.connection.set_isolation_level(0)  # Autocommit mode
+                conn = conn.execution_options(isolation_level="AUTOCOMMIT")
                 conn.execute(s.text(f"CREATE DATABASE {database_name}"))
             system_engine.dispose()
             print(f"Created database '{database_name}'")
@@ -247,7 +249,6 @@ class SQL:
 
     def _execute_string(self, string: str) -> s.engine.Result:
         """Execute string without committing."""
-        string = self._sanitize_string(string)
         result = self.connection.execute(s.text(string))
         return result
 
@@ -286,7 +287,7 @@ class SQL:
                 else:
                     print("Drop success!")
             except Exception as e:
-                raise RuntimeError(f"Failed to drop table: {table_name}': {e}")
+                raise RuntimeError(f"Failed to drop table: '{table_name}': {e}")
 
             result = self.connection.execute(
                 s.text(
@@ -382,14 +383,14 @@ class SQL:
         self.connection.commit()
 
     def execute_string(self, query: str) -> None:
-        query = self._sanitize_string(query)
         self.connection.execute(s.text(query))
 
-    def _sanitize_string(self, string: str) -> str:
-        if "DROP TABLE" in string or "CREATE TABLE" in string:
-            raise ValueError("Invalid SQL string")
-        else:
-            return string
+    @staticmethod
+    def _validate_identifier(name: str) -> str:
+        """Validate that a string is a safe SQL identifier (table/column name)."""
+        if not name or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
+            raise ValueError(f"Invalid SQL identifier: {name!r}")
+        return name
 
     def create_census_cache_table(self) -> None:
         """Create a cache table for census API results to resume interrupted fetches."""
@@ -470,7 +471,7 @@ class SQL:
         int
             Number of rows deleted.
         """
-        table_name = self._sanitize_string(table_name)
+        table_name = self._validate_identifier(table_name)
         q = s.text(
             f"""
             DELETE FROM {table_name}
@@ -508,7 +509,7 @@ class SQL:
         int
             Number of properties deleted.
         """
-        properties_table = self._sanitize_string(properties_table)
+        properties_table = self._validate_identifier(properties_table)
 
         # Check if census_cache table exists
         if not self.check_table_exists(TABLE_NAME_CACHE):
@@ -554,11 +555,10 @@ class SQL:
         self.connection.commit()
 
     def read_df_from_sql(self, query: str):
-        query = self._sanitize_string(query)
         return pd.read_sql(query, self.engine)
 
     def save_gpd_to_sql(self, table_name: str, gdf: gpd.GeoDataFrame) -> None:
-        table_name = self._sanitize_string(table_name)
+        table_name = self._validate_identifier(table_name)
 
         # Drop property_id if present - let PostgreSQL auto-generate it
         if "property_id" in gdf.columns:
@@ -589,35 +589,31 @@ class SQL:
                         col_types[col] = "TEXT"
             self.create_table(table_name, col_types)
 
-        # Insert row by row using raw SQL to ensure DEFAULT/trigger works
+        # Insert row by row using parameterized SQL to ensure DEFAULT/trigger works
         for _, row in gdf.iterrows():
-            values = []
-            for col in cols:
+            placeholders = []
+            params = {}
+            for i, col in enumerate(cols):
                 val = row[col]
                 if col == HEADER_GEOM:
-                    # Convert geometry to WKT and wrap in ST_GeomFromText
-                    values.append(f"ST_GeomFromText('{val.wkt}', {GIS_DEFAULT_CRS})")
+                    placeholders.append(
+                        f"ST_GeomFromText(:geom_{i}, {GIS_DEFAULT_CRS})"
+                    )
+                    params[f"geom_{i}"] = val.wkt
                 elif pd.isna(val):
-                    values.append("NULL")
-                elif isinstance(val, (int, float)):
-                    values.append(str(val))
-                elif isinstance(val, str):
-                    # Escape single quotes
-                    escaped = val.replace("'", "''")
-                    values.append(f"'{escaped}'")
+                    placeholders.append("NULL")
                 else:
-                    # Datetime, Timestamp, and other types need quoting
-                    escaped = str(val).replace("'", "''")
-                    values.append(f"'{escaped}'")
+                    placeholders.append(f":val_{i}")
+                    params[f"val_{i}"] = val if isinstance(val, (int, float, str)) else str(val)
 
-            val_str = ", ".join(values)
-            q = f"INSERT INTO {table_name} ({col_str}) VALUES ({val_str});"
-            self.connection.execute(s.text(q))
+            val_str = ", ".join(placeholders)
+            q = s.text(f"INSERT INTO {table_name} ({col_str}) VALUES ({val_str});")
+            self.connection.execute(q, params)
 
         self.connection.commit()
 
     def read_gpd_from_sql(self, table_name) -> gpd.GeoDataFrame:
-        table_name = self._sanitize_string(table_name)
+        table_name = self._validate_identifier(table_name)
 
         q = f"SELECT * FROM {table_name}"
 
@@ -648,7 +644,7 @@ class SQL:
 
     def initialize_properties_table(self, prop_name: str):
 
-        prop_name = self._sanitize_string(prop_name)
+        prop_name = self._validate_identifier(prop_name)
 
         print(f"Creating empty '{prop_name}' table.")
 
@@ -704,7 +700,7 @@ class SQL:
         int
             Number of duplicate rows removed.
         """
-        table_name = self._sanitize_string(table_name)
+        table_name = self._validate_identifier(table_name)
 
         # Count before
         count_before = self.connection.execute(

@@ -18,14 +18,13 @@ from typing import Optional
 
 from load_census import census_code_to_label
 from settings import HEADER_GEOM, FIGURES_DIR
+from folium.plugins import FastMarkerCluster
 
 
 def create_wildfire_map(
     wildfire_gdf: gpd.GeoDataFrame,
     center: Optional[tuple[float, float]] = None,
     zoom_start: int = 5,
-    radius: int = 3,
-    color: str = "red",
     save_path: Optional[Path] = None,
 ) -> folium.Map:
     """
@@ -54,7 +53,6 @@ def create_wildfire_map(
     folium.Map
         The generated map object.
     """
-    from folium.plugins import FastMarkerCluster
 
     # Convert to WGS84 if needed
     if wildfire_gdf.crs and wildfire_gdf.crs.to_epsg() != 4326:
@@ -234,7 +232,6 @@ def create_combined_map(
     folium.Map
         The generated map object.
     """
-    from folium.plugins import FastMarkerCluster
 
     # Convert to WGS84 if needed
     props = properties_gdf.copy()

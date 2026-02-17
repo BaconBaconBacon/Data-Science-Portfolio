@@ -133,7 +133,7 @@ class WildfireData:
         Remove duplicate wildfire detections using spatiotemporal clustering.
 
         Currently converting overlapping geometries into a centroid and radius, but may be worth
-        including functionatlity to turn it into a wildfire perimeter.
+        including functionality to turn it into a wildfire perimeter.
 
         DBSCAN : https://www.geeksforgeeks.org/machine-learning/dbscan-clustering-in-ml-density-based-clustering/
         """
@@ -179,8 +179,8 @@ class WildfireData:
             .apply(
                 lambda grp: grp.geometry.distance(
                     grp.geometry.unary_union.centroid
-                ).max(),
-                include_groups=False,
+                ).max()
+                # include_groups=False,
             )
             .values
         )

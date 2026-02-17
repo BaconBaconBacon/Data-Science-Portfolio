@@ -25,8 +25,8 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
-from shapely.geometry import Point, Polygon, MultiPolygon
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from shapely.geometry import Point, MultiPolygon
 from sql_funcs import SQL
 from settings import (
     GIS_DEFAULT_CRS,
@@ -43,9 +43,7 @@ from settings import (
     PROP_ESTIMATE_SAMPLE,
     PROP_PROGRESS_INTERVAL,
     PROP_SAVE_INTERVAL,
-    DATA_CENSUS_DIR,
     TIGER_YEAR,
-    STATE_FIPS_CODES,
     CONUS_STATE_FIPS,
     CENSUS_VALID_GRANULARITY_LEVELS,
 )
@@ -53,6 +51,7 @@ from settings import (
 
 # Module-level cache for TIGER shapefiles (in-memory only, not persisted to disk)
 _TIGER_CACHE = {}
+MAX_ATTEMPTS_SCALING = 5
 
 
 def download_tiger_shapefile(
@@ -159,7 +158,7 @@ def _standardize_tiger_columns(
     # Convert ID columns to int where possible
     for col in ["state_id", "county_id", "tract_id", "block_grp"]:
         if col in gdf.columns:
-            gdf[col] = pd.to_numeric(gdf[col], errors="coerce").fillna(0).astype(int)
+            gdf[col] = pd.to_numeric(gdf[col]).astype(int)
 
     return gdf
 
@@ -274,7 +273,7 @@ class Properties:
         temp_lst = []
         num_added = 0
         attempts = 0
-        max_attempts = quantity * 5  # Safety cap
+        max_attempts = quantity * MAX_ATTEMPTS_SCALING  # Safety cap
         last_saved = 0
         start_time = time.time()
         estimate_sample = min(PROP_ESTIMATE_SAMPLE, quantity)
@@ -621,7 +620,7 @@ class Properties:
 
         results = []
         total_attempts = 0
-        max_total_attempts = quantity * 5  # Safety cap
+        max_total_attempts = quantity * MAX_ATTEMPTS_SCALING  # Safety cap
         start_time = time.time()
         estimate_shown = False
         estimate_sample = min(PROP_ESTIMATE_SAMPLE * max_workers, quantity)
@@ -775,7 +774,7 @@ class Properties:
         last_added = 0
         num_added = 0
         attempts = 0
-        max_attempts = quantity * 5
+        max_attempts = quantity * MAX_ATTEMPTS_SCALING
 
         while num_added < quantity and attempts < max_attempts:
             attempts += 1
@@ -826,7 +825,7 @@ class Properties:
             temp_lst[num_added][HEADER_GEOM] = Point(long, lat)
             num_added += 1
 
-            if verbose and not num_added % 50:
+            if verbose and not num_added % 50 and num_added > 0:
                 print(f"Added {num_added}/{quantity} properties...")
                 self._update_gpd_and_sql(temp_lst[:num_added])
                 last_added = num_added

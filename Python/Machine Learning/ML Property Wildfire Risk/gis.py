@@ -146,9 +146,11 @@ def calc_kde(
     _validate_inputs(properties, fires)
 
     fire_coords = np.vstack([fires.geometry.x, fires.geometry.y])
-    kde = gaussian_kde(
-        fire_coords, bw_method=bandwidth / fire_coords.std(axis=1).mean()
-    )
+    fire_mean = fire_coords.std(axis=1).mean()
+    if fire_mean > 0:
+        kde = gaussian_kde(fire_coords, bw_method=bandwidth / fire_mean)
+    else:
+        raise ValueError("Wildfires have no variation!")
 
     prop_coords = np.vstack([properties.geometry.x, properties.geometry.y])
     density = kde(prop_coords)

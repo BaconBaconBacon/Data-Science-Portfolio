@@ -40,6 +40,8 @@ warnings.filterwarnings(
     "ignore", message=".*Falling back to prediction using DMatrix.*"
 )
 
+RANDOM_STATE = 77
+
 
 def _generate_preprocess_cache_key(
     df: pd.DataFrame,
@@ -83,7 +85,6 @@ def _get_preprocess_cache_path(cache_key: str) -> Path:
 
 
 def full_metrics(model, X_train, X_test, y_train, y_test):
-    # y_pred_train = model.predict(X_train)
     y_pred_test = model.predict(X_test)
     return {
         "Train RMSE": rmse(model, X_train, y_train),
@@ -97,7 +98,7 @@ def build_adaptive_pipeline(
     mcar_cols: list[str],
     mar_cols: list[str],
     complete_cols: list[str],
-    random_state: int = 77,
+    random_state: int = RANDOM_STATE,
 ) -> Pipeline:
     """
     Build preprocessing pipeline with adaptive imputation per missingness type.
@@ -155,7 +156,7 @@ def preprocess_with_cache(
     corr_threshold: float = 0.85,
     mar_corr_threshold: float = 0.1,
     test_size: float = 0.2,
-    random_state: int = 77,
+    random_state: int = RANDOM_STATE,
     use_cache: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, pd.Series, pd.Series, list[str], Pipeline]:
     """
@@ -356,7 +357,8 @@ def drop_correlated_features(
     zero-variance columns to avoid division-by-zero in correlation.
     """
     # Filter out zero-variance columns first (prevents NaN in correlation)
-    non_constant = X_train.columns[X_train.std() > 0]
+    stdev = np.std(X_train)
+    non_constant = X_train.columns[stdev > 0]
     X_train = X_train[non_constant]
     X_test = X_test[non_constant]
 
@@ -373,7 +375,7 @@ def train_xgboost(
     y_eval: pd.Series | None = None,
     n_iter: int = 50,
     cv: int = 5,
-    random_state: int = 77,
+    random_state: int = RANDOM_STATE,
     n_jobs: int = 2,
     device: str = "cpu",
     early_stopping_rounds: int = 50,
@@ -453,7 +455,7 @@ def train_random_forest(
     y_train: pd.Series,
     n_iter: int = 50,
     cv: int = 5,
-    random_state: int = 77,
+    random_state: int = RANDOM_STATE,
     n_jobs: int = 2,
 ) -> RandomizedSearchCV:
     """
@@ -659,7 +661,7 @@ if __name__ == "__main__":
     y = df[args.target]
     X = df.drop(columns=[args.target])
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=77
+        X, y, test_size=0.2, random_state=RANDOM_STATE
     )
     print(f"  Train: {X_train.shape}, Test: {X_test.shape}")
 
@@ -682,7 +684,7 @@ if __name__ == "__main__":
     feature_names = mcar_cols + mar_cols + complete_cols
 
     pipeline = build_adaptive_pipeline(
-        mcar_cols, mar_cols, complete_cols, random_state=77
+        mcar_cols, mar_cols, complete_cols, random_state=RANDOM_STATE
     )
     X_train = pipeline.fit_transform(X_train)
     X_test = pipeline.transform(X_test)
