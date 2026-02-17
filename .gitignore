@@ -1,13 +1,18 @@
-
-.ipynb_checkpoints
+# IDE / editor
 .idea
 .virtual_documents
+.ipynb_checkpoints
 __pycache__
-/Python/references
-Car Sales Analysis/
-Magnetization Extrapolation/
+*.egg-info/
 
-# Basic data file types
+# Secrets & credentials
+.env
+*.pem
+*credentials*
+*secret*
+.aws/
+
+# Data files
 *.csv
 *.pkl
 
@@ -18,24 +23,14 @@ Magnetization Extrapolation/
 *.shp
 *.shx
 
-# data/
-# data/
-.env
-Masters Thesis/
+# Excluded projects
+/anaconda_projects/
+/house-sale-price-prediction/
+/recipe-site-traffic/
+/pytorch-experiments/
+/car-sales-analysis/
+/references/
 
-# AWS - never commit these
-*.pem
-*credentials*
-*secret*
-.aws/
-
+# Other
 TODO.txt
 .claude
-/anaconda_projects
-/.idea
-/anaconda_projects/db
-*.egg-info/
-/Python/Machine Learning/ML PyTorch/
-/Python/Machine Learning/ML Predicting House Sale Prices/
-/Python/Machine Learning/ML Recipe Site Traffic/
-/Python/LLM/
